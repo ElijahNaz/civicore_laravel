@@ -1,0 +1,1654 @@
+
+
+
+    
+    
+
+    CiviCORE
+
+    
+
+    /*! tailwindcss v4.1.12 | MIT License | https://tailwindcss.com */@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after,::backdrop{--tw-rotate-x:initial;--tw-rotate-y:initial;--tw-rotate-z:initial;--tw-skew-x:initial;--tw-skew-y:initial;--tw-divide-x-reverse:0;--tw-border-style:solid;--tw-divide-y-reverse:0;--tw-leading:initial;--tw-font-weight:initial;--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000;--tw-blur:initial;--tw-brightness:initial;--tw-contrast:initial;--tw-grayscale:initial;--tw-hue-rotate:initial;--tw-invert:initial;--tw-opacity:initial;--tw-saturate:initial;--tw-sepia:initial;--tw-drop-shadow:initial;--tw-drop-shadow-color:initial;--tw-drop-shadow-alpha:100%;--tw-drop-shadow-size:initial;--tw-duration:initial;--tw-ease:initial;--tw-animation-delay:0s;--tw-animation-direction:normal;--tw-animation-duration:initial;--tw-animation-fill-mode:none;--tw-animation-iteration-count:1;--tw-enter-blur:0;--tw-enter-opacity:1;--tw-enter-rotate:0;--tw-enter-scale:1;--tw-enter-translate-x:0;--tw-enter-translate-y:0;--tw-exit-blur:0;--tw-exit-opacity:1;--tw-exit-rotate:0;--tw-exit-scale:1;--tw-exit-translate-x:0;--tw-exit-translate-y:0;--tw-backdrop-blur:initial;--tw-backdrop-brightness:initial;--tw-backdrop-contrast:initial;--tw-backdrop-grayscale:initial;--tw-backdrop-hue-rotate:initial;--tw-backdrop-invert:initial;--tw-backdrop-opacity:initial;--tw-backdrop-saturate:initial;--tw-backdrop-sepia:initial}}}@layer theme{:root,:host{--font-sans:ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";--font-mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;--color-amber-200:oklch(92.4% .12 95.746);--color-amber-300:oklch(87.9% .169 91.605);--color-amber-500:oklch(76.9% .188 70.08);--color-amber-600:oklch(66.6% .179 58.318);--color-amber-800:oklch(47.3% .137 46.201);--color-amber-900:oklch(41.4% .112 45.904);--color-amber-950:oklch(27.9% .077 45.635);--color-emerald-200:oklch(90.5% .093 164.15);--color-emerald-400:oklch(76.5% .177 163.223);--color-emerald-500:oklch(69.6% .17 162.48);--color-emerald-600:oklch(59.6% .145 163.225);--color-emerald-900:oklch(37.8% .077 168.94);--color-blue-100:oklch(93.2% .032 255.585);--color-blue-300:oklch(80.9% .105 251.813);--color-blue-500:oklch(62.3% .214 259.815);--color-blue-600:oklch(54.6% .245 262.881);--color-blue-700:oklch(48.8% .243 264.376);--color-blue-800:oklch(42.4% .199 265.638);--color-blue-900:oklch(37.9% .146 265.522);--color-blue-950:oklch(28.2% .091 267.935);--color-rose-100:oklch(94.1% .03 12.58);--color-rose-200:oklch(89.2% .058 10.001);--color-rose-500:oklch(64.5% .246 16.439);--color-rose-600:oklch(58.6% .253 17.585);--color-rose-900:oklch(41% .159 10.272);--color-rose-950:oklch(27.1% .105 12.094);--color-neutral-50:oklch(98.5% 0 0);--color-neutral-100:oklch(97% 0 0);--color-neutral-200:oklch(92.2% 0 0);--color-neutral-300:oklch(87% 0 0);--color-neutral-400:oklch(70.8% 0 0);--color-neutral-500:oklch(55.6% 0 0);--color-neutral-600:oklch(43.9% 0 0);--color-neutral-700:oklch(37.1% 0 0);--color-neutral-800:oklch(26.9% 0 0);--color-neutral-900:oklch(20.5% 0 0);--color-neutral-950:oklch(14.5% 0 0);--color-black:#000;--color-white:#fff;--spacing:.25rem;--container-7xl:80rem;--text-xs:.75rem;--text-xs--line-height:calc(1/.75);--text-sm:.875rem;--text-sm--line-height:calc(1.25/.875);--text-base:1rem;--text-base--line-height: 1.5 ;--text-lg:1.125rem;--text-lg--line-height:calc(1.75/1.125);--text-xl:1.25rem;--text-xl--line-height:calc(1.75/1.25);--text-3xl:1.875rem;--text-3xl--line-height: 1.2 ;--font-weight-light:300;--font-weight-medium:500;--font-weight-semibold:600;--radius-md:.375rem;--radius-lg:.5rem;--radius-xl:.75rem;--ease-in-out:cubic-bezier(.4,0,.2,1);--blur-md:12px;--default-transition-duration:.15s;--default-transition-timing-function:cubic-bezier(.4,0,.2,1);--default-font-family:var(--font-sans);--default-mono-font-family:var(--font-mono)}}@layer base{*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}::file-selector-button{box-sizing:border-box;border:0 solid;margin:0;padding:0}html,:host{-webkit-text-size-adjust:100%;tab-size:4;line-height:1.5;font-family:var(--default-font-family,ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji");font-feature-settings:var(--default-font-feature-settings,normal);font-variation-settings:var(--default-font-variation-settings,normal);-webkit-tap-highlight-color:transparent}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;-webkit-text-decoration:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:var(--default-mono-font-family,ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace);font-feature-settings:var(--default-mono-font-feature-settings,normal);font-variation-settings:var(--default-mono-font-variation-settings,normal);font-size:1em}small{font-size:80%}sub,sup{vertical-align:baseline;font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}:-moz-focusring{outline:auto}progress{vertical-align:baseline}summary{display:list-item}ol,ul,menu{list-style:none}img,svg,video,canvas,audio,iframe,embed,object{vertical-align:middle;display:block}img,video{max-width:100%;height:auto}button,input,select,optgroup,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}::file-selector-button{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}:where(select:is([multiple],[size])) optgroup{font-weight:bolder}:where(select:is([multiple],[size])) optgroup option{padding-inline-start:20px}::file-selector-button{margin-inline-end:4px}::placeholder{opacity:1}@supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px){::placeholder{color:currentColor}@supports (color:color-mix(in lab,red,red)){::placeholder{color:color-mix(in oklab,currentcolor 50%,transparent)}}}textarea{resize:vertical}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-date-and-time-value{min-height:1lh;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-datetime-edit{padding-block:0}::-webkit-datetime-edit-year-field{padding-block:0}::-webkit-datetime-edit-month-field{padding-block:0}::-webkit-datetime-edit-day-field{padding-block:0}::-webkit-datetime-edit-hour-field{padding-block:0}::-webkit-datetime-edit-minute-field{padding-block:0}::-webkit-datetime-edit-second-field{padding-block:0}::-webkit-datetime-edit-millisecond-field{padding-block:0}::-webkit-datetime-edit-meridiem-field{padding-block:0}::-webkit-calendar-picker-indicator{line-height:1}:-moz-ui-invalid{box-shadow:none}button,input:where([type=button],[type=reset],[type=submit]){appearance:button}::file-selector-button{appearance:button}::-webkit-inner-spin-button{height:auto}::-webkit-outer-spin-button{height:auto}[hidden]:where(:not([hidden=until-found])){display:none!important}}@layer components;@layer utilities{.collapse{visibility:collapse}.visible{visibility:visible}.absolute{position:absolute}.fixed{position:fixed}.relative{position:relative}.static{position:static}.sticky{position:sticky}.top-\[-1px\]{top:-1px}.right-0{right:calc(var(--spacing)*0)}.bottom-0{bottom:calc(var(--spacing)*0)}.left-0{left:calc(var(--spacing)*0)}.-z-10{z-index:-10}.z-50{z-index:50}.mx-auto{margin-inline:auto}.-mt-3{margin-top:calc(var(--spacing)*-3)}.-mt-5{margin-top:calc(var(--spacing)*-5)}.mr-6{margin-right:calc(var(--spacing)*6)}.mb-8{margin-bottom:calc(var(--spacing)*8)}.block{display:block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.inline{display:inline}.inline-block{display:inline-block}.inline-flex{display:inline-flex}.table{display:table}.size-2{width:calc(var(--spacing)*2);height:calc(var(--spacing)*2)}.size-3{width:calc(var(--spacing)*3);height:calc(var(--spacing)*3)}.h-0{height:calc(var(--spacing)*0)}.h-2\.5{height:calc(var(--spacing)*2.5)}.h-3{height:calc(var(--spacing)*3)}.h-6{height:calc(var(--spacing)*6)}.h-7{height:calc(var(--spacing)*7)}.h-8{height:calc(var(--spacing)*8)}.h-10{height:calc(var(--spacing)*10)}.h-11{height:calc(var(--spacing)*11)}.h-\[18px\]{height:18px}.h-\[56px\]{height:56px}.min-h-dvh{min-height:100dvh}.w-2\.5{width:calc(var(--spacing)*2.5)}.w-3{width:calc(var(--spacing)*3)}.w-6{width:calc(var(--spacing)*6)}.w-8{width:calc(var(--spacing)*8)}.w-\[18px\]{width:18px}.w-fit{width:fit-content}.w-full{width:100%}.max-w-7xl{max-width:var(--container-7xl)}.max-w-full{max-width:100%}.min-w-0{min-width:calc(var(--spacing)*0)}.min-w-5{min-width:calc(var(--spacing)*5)}.min-w-6{min-width:calc(var(--spacing)*6)}.min-w-full{min-width:100%}.flex-1{flex:1}.flex-shrink-0,.shrink-0{flex-shrink:0}.grow{flex-grow:1}.transform{transform:var(--tw-rotate-x,)var(--tw-rotate-y,)var(--tw-rotate-z,)var(--tw-skew-x,)var(--tw-skew-y,)}.transform\!{transform:var(--tw-rotate-x,)var(--tw-rotate-y,)var(--tw-rotate-z,)var(--tw-skew-x,)var(--tw-skew-y,)!important}.cursor-not-allowed\!{cursor:not-allowed!important}.cursor-pointer{cursor:pointer}.resize{resize:both}.flex-col{flex-direction:column}.items-baseline{align-items:baseline}.items-center{align-items:center}.items-start{align-items:flex-start}.justify-between{justify-content:space-between}.justify-center{justify-content:center}.gap-0\.5{gap:calc(var(--spacing)*.5)}.gap-1{gap:calc(var(--spacing)*1)}.gap-1\.5{gap:calc(var(--spacing)*1.5)}.gap-2{gap:calc(var(--spacing)*2)}.gap-2\.5{gap:calc(var(--spacing)*2.5)}.gap-3{gap:calc(var(--spacing)*3)}.gap-4{gap:calc(var(--spacing)*4)}.gap-5{gap:calc(var(--spacing)*5)}.gap-6{gap:calc(var(--spacing)*6)}.gap-8{gap:calc(var(--spacing)*8)}.gap-12{gap:calc(var(--spacing)*12)}:where(.divide-x>:not(:last-child)){--tw-divide-x-reverse:0;border-inline-style:var(--tw-border-style);border-inline-start-width:calc(1px*var(--tw-divide-x-reverse));border-inline-end-width:calc(1px*calc(1 - var(--tw-divide-x-reverse)))}:where(.divide-y>:not(:last-child)){--tw-divide-y-reverse:0;border-bottom-style:var(--tw-border-style);border-top-style:var(--tw-border-style);border-top-width:calc(1px*var(--tw-divide-y-reverse));border-bottom-width:calc(1px*calc(1 - var(--tw-divide-y-reverse)))}:where(.divide-neutral-200>:not(:last-child)){border-color:var(--color-neutral-200)}.truncate{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-x-hidden{overflow-x:hidden}.rounded-full{border-radius:3.40282e38px}.rounded-lg{border-radius:var(--radius-lg)}.rounded-md{border-radius:var(--radius-md)}.rounded-xl{border-radius:var(--radius-xl)}.rounded-t-lg{border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)}.rounded-b-lg{border-bottom-right-radius:var(--radius-lg);border-bottom-left-radius:var(--radius-lg)}.border{border-style:var(--tw-border-style);border-width:1px}.border-x{border-inline-style:var(--tw-border-style);border-inline-width:1px}.border-t{border-top-style:var(--tw-border-style);border-top-width:1px}.border-b-2{border-bottom-style:var(--tw-border-style);border-bottom-width:2px}.border-dashed{--tw-border-style:dashed;border-style:dashed}.border-dotted{--tw-border-style:dotted;border-style:dotted}.border-neutral-100{border-color:var(--color-neutral-100)}.border-neutral-200{border-color:var(--color-neutral-200)}.border-neutral-300{border-color:var(--color-neutral-300)}.bg-amber-200{background-color:var(--color-amber-200)}.bg-amber-600{background-color:var(--color-amber-600)}.bg-black\/8{background-color:#00000014}@supports (color:color-mix(in lab,red,red)){.bg-black\/8{background-color:color-mix(in oklab,var(--color-black)8%,transparent)}}.bg-black\/10{background-color:#0000001a}@supports (color:color-mix(in lab,red,red)){.bg-black\/10{background-color:color-mix(in oklab,var(--color-black)10%,transparent)}}.bg-blue-100{background-color:var(--color-blue-100)}.bg-blue-600{background-color:var(--color-blue-600)}.bg-blue-700{background-color:var(--color-blue-700)}.bg-emerald-200{background-color:var(--color-emerald-200)}.bg-emerald-600{background-color:var(--color-emerald-600)}.bg-neutral-50{background-color:var(--color-neutral-50)}.bg-neutral-600{background-color:var(--color-neutral-600)}.bg-rose-200{background-color:var(--color-rose-200)}.bg-rose-200\!{background-color:var(--color-rose-200)!important}.bg-rose-500{background-color:var(--color-rose-500)}.bg-rose-600{background-color:var(--color-rose-600)}.bg-transparent\!{background-color:#0000!important}.bg-white{background-color:var(--color-white)}.bg-white\/5{background-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){.bg-white\/5{background-color:color-mix(in oklab,var(--color-white)5%,transparent)}}.bg-white\/\[2\%\]{background-color:#ffffff05}@supports (color:color-mix(in lab,red,red)){.bg-white\/\[2\%\]{background-color:color-mix(in oklab,var(--color-white)2%,transparent)}}.p-1{padding:calc(var(--spacing)*1)}.p-2{padding:calc(var(--spacing)*2)}.p-2\.5{padding:calc(var(--spacing)*2.5)}.p-4{padding:calc(var(--spacing)*4)}.p-5{padding:calc(var(--spacing)*5)}.px-1\.5{padding-inline:calc(var(--spacing)*1.5)}.px-2{padding-inline:calc(var(--spacing)*2)}.px-3{padding-inline:calc(var(--spacing)*3)}.px-4{padding-inline:calc(var(--spacing)*4)}.px-6{padding-inline:calc(var(--spacing)*6)}.px-\[6px\]{padding-inline:6px}.py-0{padding-block:calc(var(--spacing)*0)}.py-1{padding-block:calc(var(--spacing)*1)}.py-4{padding-block:calc(var(--spacing)*4)}.pt-8{padding-top:calc(var(--spacing)*8)}.pt-14{padding-top:calc(var(--spacing)*14)}.pr-2\.5{padding-right:calc(var(--spacing)*2.5)}.pb-0{padding-bottom:calc(var(--spacing)*0)}.pl-4{padding-left:calc(var(--spacing)*4)}.text-center{text-align:center}.text-right{text-align:right}.font-mono{font-family:var(--font-mono)}.font-sans{font-family:var(--font-sans)}.text-3xl{font-size:var(--text-3xl);line-height:var(--tw-leading,var(--text-3xl--line-height))}.text-base{font-size:var(--text-base);line-height:var(--tw-leading,var(--text-base--line-height))}.text-lg{font-size:var(--text-lg);line-height:var(--tw-leading,var(--text-lg--line-height))}.text-sm{font-size:var(--text-sm);line-height:var(--tw-leading,var(--text-sm--line-height))}.text-xl{font-size:var(--text-xl);line-height:var(--tw-leading,var(--text-xl--line-height))}.text-xs{font-size:var(--text-xs);line-height:var(--tw-leading,var(--text-xs--line-height))}.text-xs\/none{font-size:var(--text-xs);line-height:1}.text-\[13px\]{font-size:13px}.leading-3{--tw-leading:calc(var(--spacing)*3);line-height:calc(var(--spacing)*3)}.font-light{--tw-font-weight:var(--font-weight-light);font-weight:var(--font-weight-light)}.font-medium{--tw-font-weight:var(--font-weight-medium);font-weight:var(--font-weight-medium)}.font-semibold{--tw-font-weight:var(--font-weight-semibold);font-weight:var(--font-weight-semibold)}.text-amber-900{color:var(--color-amber-900)}.text-blue-500{color:var(--color-blue-500)}.text-blue-900{color:var(--color-blue-900)}.text-emerald-500{color:var(--color-emerald-500)}.text-emerald-900{color:var(--color-emerald-900)}.text-neutral-100{color:var(--color-neutral-100)}.text-neutral-400{color:var(--color-neutral-400)}.text-neutral-500{color:var(--color-neutral-500)}.text-neutral-500\!{color:var(--color-neutral-500)!important}.text-neutral-600{color:var(--color-neutral-600)}.text-neutral-800{color:var(--color-neutral-800)}.text-neutral-900{color:var(--color-neutral-900)}.text-neutral-950{color:var(--color-neutral-950)}.text-rose-900{color:var(--color-rose-900)}.text-white{color:var(--color-white)}.uppercase{text-transform:uppercase}.italic{font-style:italic}.line-through{text-decoration-line:line-through}.overline{text-decoration-line:overline}.underline{text-decoration-line:underline}.decoration-neutral-400{-webkit-text-decoration-color:var(--color-neutral-400);text-decoration-color:var(--color-neutral-400)}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.scheme-light-dark{color-scheme:light dark}.opacity-90{opacity:.9}.shadow-xs{--tw-shadow:0 1px 2px 0 var(--tw-shadow-color,#0000000d);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}.blur{--tw-blur:blur(8px);filter:var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,)}.filter{filter:var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,)}.filter\!{filter:var(--tw-blur,)var(--tw-brightness,)var(--tw-contrast,)var(--tw-grayscale,)var(--tw-hue-rotate,)var(--tw-invert,)var(--tw-saturate,)var(--tw-sepia,)var(--tw-drop-shadow,)!important}.transition{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,visibility,content-visibility,overlay,pointer-events;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.transition-colors{transition-property:color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to;transition-timing-function:var(--tw-ease,var(--default-transition-timing-function));transition-duration:var(--tw-duration,var(--default-transition-duration))}.duration-200{--tw-duration:.2s;transition-duration:.2s}.ease-in-out{--tw-ease:var(--ease-in-out);transition-timing-function:var(--ease-in-out)}@media (hover:hover){.group-hover\:text-blue-500:is(:where(.group):hover *){color:var(--color-blue-500)}}.odd\:bg-white\/2:nth-child(odd){background-color:#ffffff05}@supports (color:color-mix(in lab,red,red)){.odd\:bg-white\/2:nth-child(odd){background-color:color-mix(in oklab,var(--color-white)2%,transparent)}}.even\:bg-white:nth-child(2n){background-color:var(--color-white)}@media (hover:hover){.hover\:bg-neutral-100:hover{background-color:var(--color-neutral-100)}.hover\:bg-neutral-200:hover{background-color:var(--color-neutral-200)}.hover\:bg-white\/50:hover{background-color:#ffffff80}@supports (color:color-mix(in lab,red,red)){.hover\:bg-white\/50:hover{background-color:color-mix(in oklab,var(--color-white)50%,transparent)}}.hover\:underline:hover{text-decoration-line:underline}}@media (min-width:40rem){.sm\:mb-16{margin-bottom:calc(var(--spacing)*16)}.sm\:p-14{padding:calc(var(--spacing)*14)}.sm\:py-0{padding-block:calc(var(--spacing)*0)}.sm\:pt-16{padding-top:calc(var(--spacing)*16)}.sm\:pb-0{padding-bottom:calc(var(--spacing)*0)}}@media (prefers-color-scheme:dark){:where(.dark\:divide-white\/5>:not(:last-child)){border-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){:where(.dark\:divide-white\/5>:not(:last-child)){border-color:color-mix(in oklab,var(--color-white)5%,transparent)}}:where(.dark\:divide-white\/10>:not(:last-child)){border-color:#ffffff1a}@supports (color:color-mix(in lab,red,red)){:where(.dark\:divide-white\/10>:not(:last-child)){border-color:color-mix(in oklab,var(--color-white)10%,transparent)}}.dark\:border{border-style:var(--tw-border-style);border-width:1px}.dark\:border-none{--tw-border-style:none;border-style:none}.dark\:border-amber-500{border-color:var(--color-amber-500)}.dark\:border-amber-800{border-color:var(--color-amber-800)}.dark\:border-blue-600{border-color:var(--color-blue-600)}.dark\:border-blue-800{border-color:var(--color-blue-800)}.dark\:border-emerald-500{border-color:var(--color-emerald-500)}.dark\:border-emerald-600{border-color:var(--color-emerald-600)}.dark\:border-neutral-500{border-color:var(--color-neutral-500)}.dark\:border-neutral-700{border-color:var(--color-neutral-700)}.dark\:border-neutral-800{border-color:var(--color-neutral-800)}.dark\:border-rose-500{border-color:var(--color-rose-500)}.dark\:border-rose-900{border-color:var(--color-rose-900)}.dark\:border-white\/5{border-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){.dark\:border-white\/5{border-color:color-mix(in oklab,var(--color-white)5%,transparent)}}.dark\:border-white\/8{border-color:#ffffff14}@supports (color:color-mix(in lab,red,red)){.dark\:border-white\/8{border-color:color-mix(in oklab,var(--color-white)8%,transparent)}}.dark\:border-white\/10{border-color:#ffffff1a}@supports (color:color-mix(in lab,red,red)){.dark\:border-white\/10{border-color:color-mix(in oklab,var(--color-white)10%,transparent)}}.dark\:border-white\/20{border-color:#fff3}@supports (color:color-mix(in lab,red,red)){.dark\:border-white\/20{border-color:color-mix(in oklab,var(--color-white)20%,transparent)}}.dark\:border-white\/\[9\%\]{border-color:#ffffff17}@supports (color:color-mix(in lab,red,red)){.dark\:border-white\/\[9\%\]{border-color:color-mix(in oklab,var(--color-white)9%,transparent)}}.dark\:bg-\[\#1a1a1a\]{background-color:#1a1a1a}.dark\:bg-amber-600{background-color:var(--color-amber-600)}.dark\:bg-amber-950{background-color:var(--color-amber-950)}.dark\:bg-blue-700{background-color:var(--color-blue-700)}.dark\:bg-blue-950{background-color:var(--color-blue-950)}.dark\:bg-emerald-600{background-color:var(--color-emerald-600)}.dark\:bg-emerald-900\/70{background-color:#004e3bb3}@supports (color:color-mix(in lab,red,red)){.dark\:bg-emerald-900\/70{background-color:color-mix(in oklab,var(--color-emerald-900)70%,transparent)}}.dark\:bg-neutral-400{background-color:var(--color-neutral-400)}.dark\:bg-neutral-600{background-color:var(--color-neutral-600)}.dark\:bg-neutral-700{background-color:var(--color-neutral-700)}.dark\:bg-neutral-800{background-color:var(--color-neutral-800)}.dark\:bg-neutral-900{background-color:var(--color-neutral-900)}.dark\:bg-rose-600{background-color:var(--color-rose-600)}.dark\:bg-rose-900\!{background-color:var(--color-rose-900)!important}.dark\:bg-rose-950{background-color:var(--color-rose-950)}.dark\:bg-transparent{background-color:#0000}.dark\:bg-white{background-color:var(--color-white)}.dark\:bg-white\/1{background-color:#ffffff03}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/1{background-color:color-mix(in oklab,var(--color-white)1%,transparent)}}.dark\:bg-white\/3{background-color:#ffffff08}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/3{background-color:color-mix(in oklab,var(--color-white)3%,transparent)}}.dark\:bg-white\/5{background-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/5{background-color:color-mix(in oklab,var(--color-white)5%,transparent)}}.dark\:bg-white\/10{background-color:#ffffff1a}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/10{background-color:color-mix(in oklab,var(--color-white)10%,transparent)}}.dark\:bg-white\/\[2\%\]{background-color:#ffffff05}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/\[2\%\]{background-color:color-mix(in oklab,var(--color-white)2%,transparent)}}.dark\:bg-white\/\[3\%\]{background-color:#ffffff08}@supports (color:color-mix(in lab,red,red)){.dark\:bg-white\/\[3\%\]{background-color:color-mix(in oklab,var(--color-white)3%,transparent)}}.dark\:text-amber-300{color:var(--color-amber-300)}.dark\:text-blue-300{color:var(--color-blue-300)}.dark\:text-emerald-400{color:var(--color-emerald-400)}.dark\:text-emerald-500{color:var(--color-emerald-500)}.dark\:text-neutral-100{color:var(--color-neutral-100)}.dark\:text-neutral-200{color:var(--color-neutral-200)}.dark\:text-neutral-300{color:var(--color-neutral-300)}.dark\:text-neutral-400{color:var(--color-neutral-400)}.dark\:text-neutral-500{color:var(--color-neutral-500)}.dark\:text-neutral-600{color:var(--color-neutral-600)}.dark\:text-neutral-600\!{color:var(--color-neutral-600)!important}.dark\:text-neutral-900{color:var(--color-neutral-900)}.dark\:text-rose-100{color:var(--color-rose-100)}.dark\:text-white{color:var(--color-white)}.dark\:text-white\!{color:var(--color-white)!important}}@media (hover:hover){@media (prefers-color-scheme:dark){.group-hover\:dark\:text-emerald-500:is(:where(.group):hover *){color:var(--color-emerald-500)}}}@media (prefers-color-scheme:dark){.odd\:dark\:bg-white\/4:nth-child(odd){background-color:#ffffff0a}@supports (color:color-mix(in lab,red,red)){.odd\:dark\:bg-white\/4:nth-child(odd){background-color:color-mix(in oklab,var(--color-white)4%,transparent)}}.even\:dark\:bg-white\/2:nth-child(2n){background-color:#ffffff05}@supports (color:color-mix(in lab,red,red)){.even\:dark\:bg-white\/2:nth-child(2n){background-color:color-mix(in oklab,var(--color-white)2%,transparent)}}@media (hover:hover){.dark\:hover\:bg-white\/2:hover{background-color:#ffffff05}@supports (color:color-mix(in lab,red,red)){.dark\:hover\:bg-white\/2:hover{background-color:color-mix(in oklab,var(--color-white)2%,transparent)}}.dark\:hover\:bg-white\/5:hover{background-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){.dark\:hover\:bg-white\/5:hover{background-color:color-mix(in oklab,var(--color-white)5%,transparent)}}.dark\:hover\:bg-white\/10:hover{background-color:#ffffff1a}@supports (color:color-mix(in lab,red,red)){.dark\:hover\:bg-white\/10:hover{background-color:color-mix(in oklab,var(--color-white)10%,transparent)}}}}@media (hover:hover){@media (prefers-color-scheme:dark){.hover\:dark\:bg-white\/5:hover{background-color:#ffffff0d}@supports (color:color-mix(in lab,red,red)){.hover\:dark\:bg-white\/5:hover{background-color:color-mix(in oklab,var(--color-white)5%,transparent)}}.hover\:dark\:text-white:hover{color:var(--color-white)}}}.\[\&_svg\]\:size-2\.5 svg{width:calc(var(--spacing)*2.5);height:calc(var(--spacing)*2.5)}.\[\&_svg\]\:\!text-white svg{color:var(--color-white)!important}@media (hover:hover){.hover\:\[\&_svg\]\:stroke-emerald-500:hover svg{stroke:var(--color-emerald-500)}}@media (prefers-color-scheme:dark){.dark\:\[\&_svg\]\:\!text-white svg{color:var(--color-white)!important}}}@property --tw-animation-delay{syntax:"*";inherits:false;initial-value:0s}@property --tw-animation-direction{syntax:"*";inherits:false;initial-value:normal}@property --tw-animation-duration{syntax:"*";inherits:false}@property --tw-animation-fill-mode{syntax:"*";inherits:false;initial-value:none}@property --tw-animation-iteration-count{syntax:"*";inherits:false;initial-value:1}@property --tw-enter-blur{syntax:"*";inherits:false;initial-value:0}@property --tw-enter-opacity{syntax:"*";inherits:false;initial-value:1}@property --tw-enter-rotate{syntax:"*";inherits:false;initial-value:0}@property --tw-enter-scale{syntax:"*";inherits:false;initial-value:1}@property --tw-enter-translate-x{syntax:"*";inherits:false;initial-value:0}@property --tw-enter-translate-y{syntax:"*";inherits:false;initial-value:0}@property --tw-exit-blur{syntax:"*";inherits:false;initial-value:0}@property --tw-exit-opacity{syntax:"*";inherits:false;initial-value:1}@property --tw-exit-rotate{syntax:"*";inherits:false;initial-value:0}@property --tw-exit-scale{syntax:"*";inherits:false;initial-value:1}@property --tw-exit-translate-x{syntax:"*";inherits:false;initial-value:0}@property --tw-exit-translate-y{syntax:"*";inherits:false;initial-value:0}.tippy-box[data-animation=fade][data-state=hidden]{opacity:0}[data-tippy-root]{max-width:calc(100vw - 10px)}.tippy-box{color:#fff;white-space:normal;background-color:#333;border-radius:4px;outline:0;font-size:14px;line-height:1.4;transition-property:transform,visibility,opacity;position:relative}.tippy-box[data-placement^=top]>.tippy-arrow{bottom:0}.tippy-box[data-placement^=top]>.tippy-arrow:before{border-width:8px 8px 0;border-top-color:initial;transform-origin:top;bottom:-7px;left:0}.tippy-box[data-placement^=bottom]>.tippy-arrow{top:0}.tippy-box[data-placement^=bottom]>.tippy-arrow:before{border-width:0 8px 8px;border-bottom-color:initial;transform-origin:bottom;top:-7px;left:0}.tippy-box[data-placement^=left]>.tippy-arrow{right:0}.tippy-box[data-placement^=left]>.tippy-arrow:before{border-width:8px 0 8px 8px;border-left-color:initial;transform-origin:0;right:-7px}.tippy-box[data-placement^=right]>.tippy-arrow{left:0}.tippy-box[data-placement^=right]>.tippy-arrow:before{border-width:8px 8px 8px 0;border-right-color:initial;transform-origin:100%;left:-7px}.tippy-box[data-inertia][data-state=visible]{transition-timing-function:cubic-bezier(.54,1.5,.38,1.11)}.tippy-arrow{color:#333;width:16px;height:16px}.tippy-arrow:before{content:"";border-style:solid;border-color:#0000;position:absolute}.tippy-content{z-index:1;padding:5px 9px;position:relative}.tippy-box[data-animation=shift-away][data-state=hidden]{opacity:0}.tippy-box[data-animation=shift-away][data-state=hidden][data-placement^=top]{transform:translateY(10px)}.tippy-box[data-animation=shift-away][data-state=hidden][data-placement^=bottom]{transform:translateY(-10px)}.tippy-box[data-animation=shift-away][data-state=hidden][data-placement^=left]{transform:translate(10px)}.tippy-box[data-animation=shift-away][data-state=hidden][data-placement^=right]{transform:translate(-10px)}[x-cloak]{display:none!important}.tippy-box[data-theme~=laravel]{border-radius:var(--radius-md);border-style:var(--tw-border-style);font-size:var(--text-xs);line-height:var(--tw-leading,var(--text-xs--line-height));--tw-shadow:0 4px 6px -1px var(--tw-shadow-color,#0000001a),0 2px 4px -2px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);--tw-backdrop-blur:blur(var(--blur-md));-webkit-backdrop-filter:var(--tw-backdrop-blur,)var(--tw-backdrop-brightness,)var(--tw-backdrop-contrast,)var(--tw-backdrop-grayscale,)var(--tw-backdrop-hue-rotate,)var(--tw-backdrop-invert,)var(--tw-backdrop-opacity,)var(--tw-backdrop-saturate,)var(--tw-backdrop-sepia,);backdrop-filter:var(--tw-backdrop-blur,)var(--tw-backdrop-brightness,)var(--tw-backdrop-contrast,)var(--tw-backdrop-grayscale,)var(--tw-backdrop-hue-rotate,)var(--tw-backdrop-invert,)var(--tw-backdrop-opacity,)var(--tw-backdrop-saturate,)var(--tw-backdrop-sepia,);border-width:1px;border-color:var(--color-neutral-800);background-color:var(--color-neutral-900);color:var(--color-white);overflow-x:auto;max-width:var(--container-7xl)!important}@media (prefers-color-scheme:dark){.tippy-box[data-theme~=laravel]{border-color:var(--color-neutral-700);background-color:var(--color-neutral-800);color:var(--color-neutral-100)}}.tippy-content[data-theme~=laravel]{padding-inline:calc(var(--spacing)*2);padding-block:calc(var(--spacing)*1)}@media (prefers-color-scheme:dark){.shiki,.shiki span{color:var(--shiki-dark)!important;font-style:var(--shiki-dark-font-style)!important;font-weight:var(--shiki-dark-font-weight)!important;-webkit-text-decoration:var(--shiki-dark-text-decoration)!important;text-decoration:var(--shiki-dark-text-decoration)!important}}@property --tw-rotate-x{syntax:"*";inherits:false}@property --tw-rotate-y{syntax:"*";inherits:false}@property --tw-rotate-z{syntax:"*";inherits:false}@property --tw-skew-x{syntax:"*";inherits:false}@property --tw-skew-y{syntax:"*";inherits:false}@property --tw-divide-x-reverse{syntax:"*";inherits:false;initial-value:0}@property --tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-divide-y-reverse{syntax:"*";inherits:false;initial-value:0}@property --tw-leading{syntax:"*";inherits:false}@property --tw-font-weight{syntax:"*";inherits:false}@property --tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-shadow-color{syntax:"*";inherits:false}@property --tw-shadow-alpha{syntax:"";inherits:false;initial-value:100%}@property --tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-shadow-color{syntax:"*";inherits:false}@property --tw-inset-shadow-alpha{syntax:"";inherits:false;initial-value:100%}@property --tw-ring-color{syntax:"*";inherits:false}@property --tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-ring-color{syntax:"*";inherits:false}@property --tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-ring-inset{syntax:"*";inherits:false}@property --tw-ring-offset-width{syntax:"";inherits:false;initial-value:0}@property --tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-blur{syntax:"*";inherits:false}@property --tw-brightness{syntax:"*";inherits:false}@property --tw-contrast{syntax:"*";inherits:false}@property --tw-grayscale{syntax:"*";inherits:false}@property --tw-hue-rotate{syntax:"*";inherits:false}@property --tw-invert{syntax:"*";inherits:false}@property --tw-opacity{syntax:"*";inherits:false}@property --tw-saturate{syntax:"*";inherits:false}@property --tw-sepia{syntax:"*";inherits:false}@property --tw-drop-shadow{syntax:"*";inherits:false}@property --tw-drop-shadow-color{syntax:"*";inherits:false}@property --tw-drop-shadow-alpha{syntax:"";inherits:false;initial-value:100%}@property --tw-drop-shadow-size{syntax:"*";inherits:false}@property --tw-duration{syntax:"*";inherits:false}@property --tw-ease{syntax:"*";inherits:false}@property --tw-backdrop-blur{syntax:"*";inherits:false}@property --tw-backdrop-brightness{syntax:"*";inherits:false}@property --tw-backdrop-contrast{syntax:"*";inherits:false}@property --tw-backdrop-grayscale{syntax:"*";inherits:false}@property --tw-backdrop-hue-rotate{syntax:"*";inherits:false}@property --tw-backdrop-invert{syntax:"*";inherits:false}@property --tw-backdrop-opacity{syntax:"*";inherits:false}@property --tw-backdrop-saturate{syntax:"*";inherits:false}@property --tw-backdrop-sepia{syntax:"*";inherits:false}
+
+
+
+    
+        
+    
+    const markdown = '# Illuminate\\Database\\QueryException - Internal Server Error\n\nSQLSTATE[HY000]: General error: 1366 Incorrect string value: \u0027\\xFE\\xFF\\x00d\\x00o...\u0027 for column \u0027file_data\u0027 at row 1 (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: civicore_new, SQL: INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (BC-2026-001, unknown, , , 04\/07\/2026, Active, System, 1, null, %PDF-1.7\n1 0 obj\n\u003C\u003C \/Type \/Catalog\n\/Outlines 2 0 R\n\/Pages 3 0 R \u003E\u003E\nendobj\n2 0 obj\n\u003C\u003C \/Type \/Outlines \/Count 0 \u003E\u003E\nendobj\n3 0 obj\n\u003C\u003C \/Type \/Pages\n\/Kids [6 0 R\n]\n\/Count 1\n\/Resources \u003C\u003C\n\/ProcSet 4 0 R\n\/Font \u003C\u003C \n\/F1 8 0 R\n\/F2 9 0 R\n\u003E\u003E\n\/ExtGState \u003C\u003C \n\/GS1 10 0 R\n\/GS2 11 0 R\n\u003E\u003E\n\u003E\u003E\n\/MediaBox [0.000 0.000 595.280 841.890]\n \u003E\u003E\nendobj\n4 0 obj\n[\/PDF \/Text ]\nendobj\n5 0 obj\n\u003C\u003C\n\/Producer (\ufffd\ufffd\u0000d\u0000o\u0000m\u0000p\u0000d\u0000f\u0000 \u00003\u0000.\u00001\u0000.\u00005\u0000 \u0000+\u0000 \u0000C\u0000P\u0000D\u0000F)\n\/CreationDate (D:20260407065720+00\u002700\u0027)\n\/ModDate (D:20260407065720+00\u002700\u0027)\n\/Title (\ufffd\ufffd\u0000C\u0000e\u0000r\u0000t\u0000i\u0000f\u0000i\u0000c\u0000a\u0000t\u0000e\u0000 \u0000-\u0000 \u0000f\u0000i\u0000n\u0000i\u0000s\u0000h\u00002\u0000.\u0000p\u0000n\u0000g)\n\u003E\u003E\nendobj\n6 0 obj\n\u003C\u003C \/Type \/Page\n\/MediaBox [0.000 0.000 595.280 841.890]\n\/Parent 3 0 R\n\/Contents 7 0 R\n\u003E\u003E\nendobj\n7 0 obj\n\u003C\u003C \/Filter \/FlateDecode\n\/Length 762 \u003E\u003E\nstream\nx\ufffd\ufffd\ufffd\ufffdN\ufffd@\u0014\ufffd\ufffd~\ufffd\ufffdl\ufffdj\ufffd\ufffd\ufffd]\ufffd\r\r\u0012I\ufffd\u0018\ufffd\b\ufffd0\ufffd\u0003V\u001d;M\u001c(o\u07f1\ufffd\/\u0022N\tl\ufffd\ufffd_\ufffd\ufffd\\\ufffd\ufffd\ufffdq\ufffdA\ufffdHP\ufffd *\u0004,\ufffd\u0011p%\ufffd \ufffdDT\ufffd^\ufffd\ufffd)\u0014\ufffdJilj\ufffd\u0027d\u000eFX\u0018\ufffd\ufffd`\u001b\ufffd\u0014\u0010\\8\u0004\tx\u0006\f\ufffdp\u000bpg\u031d\ufffda\ufffd\u02e2\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\\L\t\u003Cl\ufffd\/-\ufffd\ufffd\u003E\\\u001a\ufffdq\ufffd\ufffd@\bC\ufffdcPJ j(\ufffds89\ufffd@4\ufffd\u0010.\u0000n\ufffd\ufffd\ufffd\ufffd`\ufffd\u0007\ufffd\u001f\ufffd\ufffd\ufffd;\b}\ufffd\u0006\ufffd\u0000\u00022\u000e\u00afw\u0010^\ufffd\u001f\ufffd\u001c\ufffdro\ufffd.\u0007e\u0002)e@\ufffd]\ufffd*\u0007\u0001\ufffdmw\ufffd\u001cA\ufffd\ufffd\u07a7\ufffd\f\ufffd\u0005\u0014\ufffd1L\u001e\ufffd4Y\ufffd\ufffd,\ufffd4\ue951\ufffd\ufffdS\n\ufffdc\u0108\ufffd1\ufffd\ufffdf\ufffd,YEiR\ufffd\ufffdf\ufffd(\ufffd5\u000e\rQ\ufffd\f\ufffd\ufffd\ufffdD\ufffd\u0495\ufffd\ufffd\ufffdS\ufffd[E\ufffd2\u0004k\ufffd\ufffd\u008e\ufffd\ufffd\u0006\ufffdFK\u0014[\ufffd\u0007\ufffd\ufffd\t\ufffd\ufffd\u001d\ufffd\ufffdr\b\ufffd\ufffd\u001b\ufffd\u001bwS\ufffdB\ufffd\ufffd(m\ufffd\u0006\ufffd,_\ufffd\ufffd\ufffd(I7\ufffd\ufffd\ufffdF\ufffd\ufffd\ufffd\ufffd4v\ufffd\u063d\ufffd\ufffdG!\ufffd7\u0013\ufffd\ufffdcw\ufffd\ufffd)\ufffdD\ufffd\u0027\ufffdd\ufffd\ufffd\ufffd\ufffd\u0007]\ufffd\ufffd\ufffd@\u000bj\ufffdn\u00101\ufffd\ufffd\ufffdu\ufffd;\u02df\ufffd\ufffd\ufffd`6\ufffdR\ufffd}Lo\ufffd\ufffde\/\ufffd;\u000e\u003C\u0018z\u001fh\ufffdq\ufffd5\u003E\ufffd\u0015f\ufffdp\ufffd\ufffd\n9\ufffd\t\u0091\ufffdb\ufffd\t\ufffd=\ufffdV\ufffdn\u003EP\ufffd-\ufffdQ}t\ufffd6\ufffd6\ufffd\ufffd\ufffd\ufffd\u02e6\ufffd\ufffd\ufffd \ufffdM\ufffdX\u03c5*\u0017\ufffd$\u0018\ufffd\ufffdt\ufffd\u0000\ufffd0\ufffd\u0019(yl\u001fe~\u057b\ufffd\u0006\ufffdu\ufffd\u0002V\u07c0b*\ufffd\ufffd\ufffd\ufffd\ufffd\f\ufffd\ufffd\u0010v1\ufffdB\ufffd\u001b\ufffd\u0014\u05a3h\ufffd\ufffd\u001f\ufffd\ufffdQ\ufffd\u6cbb?j\ufffdS\ufffdCH;\u0010\u06b7?\ufffd\ufffd\ufffd:\ufffd\u0015\ufffd\u001c\ufffd\ufffd\u0022_\/\ufffd\u0022\u0273w)\u0576\ufffdX\ufffd}\ufffd~\ufffdC\ufffd8\/\ufffd8\ufffdo z\ufffd+*\ufffdOc\ufffdO\ufffdk\ufffd\f\u0027-\u0005\ufffdM%\ufffd\u0013\ufffdSt\ufffdB\fi)\ufffd\u008e\ufffda\f\ufffd\ufffd\u0014\ufffd\ufffdB\ufffd\u000e\ufffdZ9DAV\ufffdj\ufffd\ufffd6\ufffd\nl\ufffdK^=\ufffd\ufffdy\ufffd\ufffd\ufffd\u0022\ufffd\ufffduT\ufffd\ufffd\u0005\ufffd\ufffd)\ufffdk\u02c7\ufffd\ufffd\u0217\ufffd:v\u0003x\ufffd K[mo\ufffdE\ufffd\u02ebA\u023e\ufffd\ufffd\u03f6\ufffd8+\ufffd{\ufffdy\u003C\ufffd\ufffd\u0012D\u0011f\ufffd6Z\u0176}[\u0017f\ufffd\u0154\u0013mfq\ufffd\u000f\u003E\ufffd\fd\nendstream\nendobj\n8 0 obj\n\u003C\u003C \/Type \/Font\n\/Subtype \/Type1\n\/Name \/F1\n\/BaseFont \/Helvetica\n\/Encoding \/WinAnsiEncoding\n\u003E\u003E\nendobj\n9 0 obj\n\u003C\u003C \/Type \/Font\n\/Subtype \/Type1\n\/Name \/F2\n\/BaseFont \/Helvetica-Bold\n\/Encoding \/WinAnsiEncoding\n\u003E\u003E\nendobj\n10 0 obj\n\u003C\u003C \/Type \/ExtGState\n\/BM \/Normal\n\/CA 1\n\u003E\u003E\nendobj\n11 0 obj\n\u003C\u003C \/Type \/ExtGState\n\/BM \/Normal\n\/ca 1\n\u003E\u003E\nendobj\nxref\n0 12\n0000000000 65535 f \n0000000009 00000 n \n0000000074 00000 n \n0000000120 00000 n \n0000000326 00000 n \n0000000355 00000 n \n0000000566 00000 n \n0000000669 00000 n \n0000001503 00000 n \n0000001610 00000 n \n0000001722 00000 n \n0000001779 00000 n \ntrailer\n\u003C\u003C\n\/Size 12\n\/Root 1 0 R\n\/Info 5 0 R\n\/ID[\u003Ca6385449511b26fa11be7e4f166b6001\u003E\u003Ca6385449511b26fa11be7e4f166b6001\u003E]\n\u003E\u003E\nstartxref\n1836\n%%EOF\n))\n\nPHP 8.3.30\nLaravel 12.53.0\n127.0.0.1:8000\n\n## Stack Trace\n\n0 - vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php:838\n1 - vendor\\laravel\\framework\\src\\Illuminate\\Database\\Connection.php:794\n2 - vendor\\laravel\\framework\\src\\Illuminate\\Database\\MySqlConnection.php:42\n3 - vendor\\laravel\\framework\\src\\Illuminate\\Database\\DatabaseManager.php:491\n4 - vendor\\laravel\\framework\\src\\Illuminate\\Support\\Facades\\Facade.php:363\n5 - app\\Http\\Controllers\\DocumentController.php:219\n6 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\ControllerDispatcher.php:46\n7 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Route.php:265\n8 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Route.php:211\n9 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Router.php:822\n10 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:180\n11 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\VerifyCsrfToken.php:87\n12 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n13 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Middleware\\SubstituteBindings.php:50\n14 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n15 - vendor\\laravel\\framework\\src\\Illuminate\\View\\Middleware\\ShareErrorsFromSession.php:48\n16 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n17 - vendor\\laravel\\framework\\src\\Illuminate\\Session\\Middleware\\StartSession.php:120\n18 - vendor\\laravel\\framework\\src\\Illuminate\\Session\\Middleware\\StartSession.php:63\n19 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n20 - vendor\\laravel\\framework\\src\\Illuminate\\Cookie\\Middleware\\AddQueuedCookiesToResponse.php:36\n21 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n22 - vendor\\laravel\\framework\\src\\Illuminate\\Cookie\\Middleware\\EncryptCookies.php:74\n23 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n24 - vendor\\laravel\\framework\\src\\Illuminate\\Http\\Middleware\\HandleCors.php:74\n25 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n26 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:137\n27 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Router.php:821\n28 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Router.php:800\n29 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Router.php:764\n30 - vendor\\laravel\\framework\\src\\Illuminate\\Routing\\Router.php:753\n31 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Kernel.php:200\n32 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:180\n33 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest.php:21\n34 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\ConvertEmptyStringsToNull.php:31\n35 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n36 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\TransformsRequest.php:21\n37 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\TrimStrings.php:51\n38 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n39 - vendor\\laravel\\framework\\src\\Illuminate\\Http\\Middleware\\ValidatePostSize.php:27\n40 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n41 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\PreventRequestsDuringMaintenance.php:109\n42 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n43 - vendor\\laravel\\framework\\src\\Illuminate\\Http\\Middleware\\HandleCors.php:74\n44 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n45 - vendor\\laravel\\framework\\src\\Illuminate\\Http\\Middleware\\TrustProxies.php:58\n46 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n47 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Middleware\\InvokeDeferredCallbacks.php:22\n48 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n49 - vendor\\laravel\\framework\\src\\Illuminate\\Http\\Middleware\\ValidatePathEncoding.php:26\n50 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:219\n51 - vendor\\laravel\\framework\\src\\Illuminate\\Pipeline\\Pipeline.php:137\n52 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Kernel.php:175\n53 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Http\\Kernel.php:144\n54 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\Application.php:1220\n55 - public\\index.php:20\n56 - vendor\\laravel\\framework\\src\\Illuminate\\Foundation\\resources\\server.php:23\n\n## Request\n\nPUT \/api\/documents\/1\n\n## Headers\n\n* **host**: 127.0.0.1:8000\n* **user-agent**: curl\/8.13.0\n* **accept**: *\/*\n* **content-type**: application\/json\n* **content-length**: 96\n\n## Route Context\n\ncontroller: App\\Http\\Controllers\\DocumentController@update\nmiddleware: api, web\n\n## Route Parameters\n\n{\n    \u0022id\u0022: \u00221\u0022\n}\n\n## Database Queries\n\n* mysql - UPDATE documents SET extracted_fields = \u0027null\u0027, personName = \u0027\u0027, barangay = \u0027\u0027, status = \u0027Processed\u0027, parental_consent = 0, encoded_by = \u0027System\u0027 WHERE id = \u00271\u0027 (30.07 ms)\n* mysql - SELECT * FROM documents WHERE id = \u00271\u0027 (1.28 ms)\n* mysql - SELECT certNumber FROM issuances WHERE type = \u0027unknown\u0027 AND certNumber LIKE \u0027BC-2026%\u0027 ORDER BY id DESC LIMIT 1 (0.74 ms)\n'
+
+
+
+    
+        
+            
+                
+                
+            
+        
+        
+            Internal Server Error
+        
+    
+
+    
+        
+  
+    
+  
+  
+    
+      
+    
+  
+
+        
+    
+
+        
+    
+
+
+
+    
+    
+
+
+    
+    
+    
+        Illuminate\Database\QueryException
+        
+    
+                    vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+            
+
+        
+            SQLSTATE[HY000]: General error: 1366 Incorrect string value: &#039;\xFE\xFF\x00d\x00o...&#039; for column &#039;file_data&#039; at row 1 (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: civicore_new, SQL: INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (BC-2026-001, unknown, , , 04/07/2026, Active, System, 1, null, %PDF-1.7
+1 0 obj
+&lt;&lt; /Type /Catalog
+/Outlines 2 0 R
+/Pages 3 0 R &gt;&gt;
+endobj
+2 0 obj
+&lt;&lt; /Type /Outlines /Count 0 &gt;&gt;
+endobj
+3 0 obj
+&lt;&lt; /Type /Pages
+/Kids [6 0 R
+]
+/Count 1
+/Resources &lt;&lt;
+/ProcSet 4 0 R
+/Font &lt;&lt; 
+/F1 8 0 R
+/F2 9 0 R
+&gt;&gt;
+/ExtGState &lt;&lt; 
+/GS1 10 0 R
+/GS2 11 0 R
+&gt;&gt;
+&gt;&gt;
+/MediaBox [0.000 0.000 595.280 841.890]
+ &gt;&gt;
+endobj
+4 0 obj
+[/PDF /Text ]
+endobj
+5 0 obj
+&lt;&lt;
+/Producer (��dompdf 3.1.5 + CPDF)
+/CreationDate (D:20260407065720+00&#039;00&#039;)
+/ModDate (D:20260407065720+00&#039;00&#039;)
+/Title (��Certificate - finish2.png)
+&gt;&gt;
+endobj
+6 0 obj
+&lt;&lt; /Type /Page
+/MediaBox [0.000 0.000 595.280 841.890]
+/Parent 3 0 R
+/Contents 7 0 R
+&gt;&gt;
+endobj
+7 0 obj
+&lt;&lt; /Filter /FlateDecode
+/Length 762 &gt;&gt;
+stream
+x����N�@��~��l�j���]�I���0�V;M(o߱�/&quot;N	l��_��\���q�A�HP� *,�p%� �DT�^��)�Jilj�&#039;dFX��`�\8	x�ppg̝�a�ˢ�������\L	&lt;l�/-��&gt;\�q��@C�cPJ j(�s89�@4�.n����`�����;}��2¯w^���ro�.e)e@�]�*�mw�A��ާ���1L�4Y��,�4��S
+�cĈ�1��f�,YEiR��f�(�5Q����D�ҕ���S�[E�2k�����FK[���	����r���wS�B��(m��,_���(I7���F����4v�ؽ��G!�7��cw��)�D�&#039;�d����]���@j�n1���u�;˟���`6�R�}Lo��e/�;&lt;zh�q�5&gt;�f�p��
+9�	�b�	�=�V�n&gt;P�-�Q}t�6�6����˦��� �M�Xυ*�$��t��0�(yle~ջ��u�V߀b*�������v1�B��֣h����Q�治?j�S�CH;ڷ?���:����&quot;_/�&quot;ɳw)ն�X�}�~�C�8/�8�o z�+*�Oc�O�k�&#039;-�M%��St�Bi)��a����B��Z9DAV�j��6�
+l�K^=��y���&quot;��uT����)�kˇ��ȗ�:vx� K[mo�E�˫AȾ��϶�8+�{�y&lt;��Df�6ZŶ}[f�Ŕmfq�&gt;�d
+endstream
+endobj
+8 0 obj
+&lt;&lt; /Type /Font
+/Subtype /Type1
+/Name /F1
+/BaseFont /Helvetica
+/Encoding /WinAnsiEncoding
+&gt;&gt;
+endobj
+9 0 obj
+&lt;&lt; /Type /Font
+/Subtype /Type1
+/Name /F2
+/BaseFont /Helvetica-Bold
+/Encoding /WinAnsiEncoding
+&gt;&gt;
+endobj
+10 0 obj
+&lt;&lt; /Type /ExtGState
+/BM /Normal
+/CA 1
+&gt;&gt;
+endobj
+11 0 obj
+&lt;&lt; /Type /ExtGState
+/BM /Normal
+/ca 1
+&gt;&gt;
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000074 00000 n 
+0000000120 00000 n 
+0000000326 00000 n 
+0000000355 00000 n 
+0000000566 00000 n 
+0000000669 00000 n 
+0000001503 00000 n 
+0000001610 00000 n 
+0000001722 00000 n 
+0000001779 00000 n 
+trailer
+&lt;&lt;
+/Size 12
+/Root 1 0 R
+/Info 5 0 R
+/ID[&lt;a6385449511b26fa11be7e4f166b6001&gt;&lt;a6385449511b26fa11be7e4f166b6001&gt;]
+&gt;&gt;
+startxref
+1836
+%%EOF
+))
+        
+    
+
+    
+        
+            
+                LARAVEL
+                12.53.0
+            
+            
+                PHP
+                8.3.30
+            
+        
+        
+    
+    
+        
+    
+    
+        
+            
+        
+    
+
+            UNHANDLED
+
+        
+    CODE HY000
+
+    
+
+    
+    
+        
+    
+    
+        
+    
+    
+        
+            
+        
+    
+
+            500
+
+        
+    
+    
+    
+    
+
+    PUT
+
+        
+            
+                http://127.0.0.1:8000/api/documents/1
+            
+        
+        
+            
+  
+    
+  
+  
+    
+      
+    
+  
+
+            
+    
+
+        
+    
+
+
+
+
+    
+    
+
+
+    
+    
+    
+        
+            
+    
+        
+    
+    
+        
+            
+        
+    
+
+        
+        Exception trace
+    
+
+    
+                                    
+    
+        
+    
+    
+    
+
+        
+    
+        
+        
+    
+    
+        
+            
+        
+    
+
+
+        
+            5 vendor frames
+        
+
+        
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+        
+    
+
+    
+                    
+                
+            
+            
+    
+    Illuminate\Database\Connection-&gt;runQueryCallback(string, array, object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Database\Connection-&gt;runQueryCallback(string, array, object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Database\Connection.php:794
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Database\Connection-&gt;run(string, array, object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Database\MySqlConnection.php:42
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Database\MySqlConnection-&gt;insert(string, array)
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Database\DatabaseManager.php:491
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Database\DatabaseManager-&gt;__call(string, array)
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:363
+            
+
+
+            
+            
+
+                                                                    
+    
+        
+        
+          
+        
+
+        
+            
+    
+    Illuminate\Support\Facades\Facade::__callStatic(string, array)
+
+            
+    
+                    app\Http\Controllers\DocumentController.php:219
+            
+
+        
+
+        
+            
+                
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+                
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+            
+        
+    
+
+            
+    
+    
+    214                $pdf = app(&#039;dompdf.wrapper&#039;);215                $pdf-&gt;loadView(&#039;pdf.certificate&#039;, [&#039;doc&#039; =&gt; $doc[0], &#039;fields&#039; =&gt; $extractedFields]);216                $pdfData = $pdf-&gt;output();217218                // insert issuance with file_data219                DB::insert(&quot;INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;, 220                    [$certNumber, $docType, $personName, $barangay, $issuanceDate, &#039;Active&#039;, $encodedBy, $id, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData]);221            }222        }223224        return response()-&gt;json([&#039;success&#039; =&gt; true]);225    }226227    /**228     * Delete document229     */230    public function destroy($id)231
+
+
+    
+                                                                
+    
+        
+    
+    
+    
+
+        
+    
+        
+        
+    
+    
+        
+            
+        
+    
+
+
+        
+            49 vendor frames
+        
+
+        
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+        
+    
+
+    
+                    
+                
+            
+            
+    
+    App\Http\Controllers\DocumentController-&gt;update(object(Illuminate\Http\Request), string)
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\ControllerDispatcher.php:46
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\ControllerDispatcher-&gt;dispatch(object(Illuminate\Routing\Route), object(App\Http\Controllers\DocumentController), string)
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Route.php:265
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Route-&gt;runController()
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Route.php:211
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Route-&gt;run()
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Router.php:822
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Router-&gt;Illuminate\Routing\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:180
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken.php:87
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\VerifyCsrfToken-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Middleware\SubstituteBindings.php:50
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Middleware\SubstituteBindings-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\View\Middleware\ShareErrorsFromSession.php:48
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\View\Middleware\ShareErrorsFromSession-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Session\Middleware\StartSession.php:120
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Session\Middleware\StartSession-&gt;handleStatefulRequest(object(Illuminate\Http\Request), object(Illuminate\Session\Store), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Session\Middleware\StartSession.php:63
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Session\Middleware\StartSession-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse.php:36
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Cookie\Middleware\EncryptCookies.php:74
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Cookie\Middleware\EncryptCookies-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Http\Middleware\HandleCors.php:74
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Http\Middleware\HandleCors-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:137
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;then(object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Router.php:821
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Router-&gt;runRouteWithinStack(object(Illuminate\Routing\Route), object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Router.php:800
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Router-&gt;runRoute(object(Illuminate\Http\Request), object(Illuminate\Routing\Route))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Router.php:764
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Router-&gt;dispatchToRoute(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Routing\Router.php:753
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Routing\Router-&gt;dispatch(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php:200
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Kernel-&gt;Illuminate\Foundation\Http\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:180
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TransformsRequest.php:21
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\TransformsRequest-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull.php:31
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TransformsRequest.php:21
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\TransformsRequest-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\TrimStrings.php:51
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\TrimStrings-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Http\Middleware\ValidatePostSize.php:27
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Http\Middleware\ValidatePostSize-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance.php:109
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Http\Middleware\HandleCors.php:74
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Http\Middleware\HandleCors-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Http\Middleware\TrustProxies.php:58
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Http\Middleware\TrustProxies-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks.php:22
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Http\Middleware\ValidatePathEncoding.php:26
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Http\Middleware\ValidatePathEncoding-&gt;handle(object(Illuminate\Http\Request), object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:219
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Pipeline\Pipeline.php:137
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Pipeline\Pipeline-&gt;then(object(Closure))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php:175
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Kernel-&gt;sendRequestThroughRouter(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Http\Kernel.php:144
+            
+
+
+            
+                    
+                
+            
+            
+    
+    Illuminate\Foundation\Http\Kernel-&gt;handle(object(Illuminate\Http\Request))
+
+        
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\Application.php:1220
+            
+
+
+            
+            
+
+                                                                    
+    
+        
+        
+          
+        
+
+        
+            
+    
+    Illuminate\Foundation\Application-&gt;handleRequest(object(Illuminate\Http\Request))
+
+            
+    
+                    public\index.php:20
+            
+
+        
+
+        
+            
+                
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+                
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+            
+        
+    
+
+            
+    
+    
+    1516// Bootstrap Laravel and handle the request...17/** @var Application $app */18$app = require_once __DIR__.&#039;/../bootstrap/app.php&#039;;1920$app-&gt;handleRequest(Request::capture());21
+
+
+    
+                                                                
+    
+        
+    
+    
+    
+
+        
+    
+        
+        
+    
+    
+        
+            
+        
+    
+
+
+        
+            1 vendor frame
+        
+
+        
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+            
+  
+    
+    
+  
+  
+    
+      
+    
+  
+
+        
+    
+
+    
+                    
+                
+            Entrypoint
+    
+    
+    
+                    vendor\laravel\framework\src\Illuminate\Foundation\resources\server.php:23
+            
+
+
+            
+            
+
+                        
+
+
+        
+    
+        
+            
+                
+    
+
+            
+            Queries
+        
+        
+            
+                    
+    
+
+    
+                
+            
+                
+                    
+    
+
+                    mysql
+                
+                
+    
+    UPDATE documents SET extracted_fields = &#039;null&#039;, personName = &#039;&#039;, barangay = &#039;&#039;, status = &#039;Processed&#039;, parental_consent = 0, encoded_by = &#039;System&#039; WHERE id = &#039;1&#039;
+
+            
+            30.07ms
+        
+                
+            
+                
+                    
+    
+
+                    mysql
+                
+                
+    
+    SELECT * FROM documents WHERE id = &#039;1&#039;
+
+            
+            1.28ms
+        
+                
+            
+                
+                    
+    
+
+                    mysql
+                
+                
+    
+    SELECT certNumber FROM issuances WHERE type = &#039;unknown&#039; AND certNumber LIKE &#039;BC-2026%&#039; ORDER BY id DESC LIMIT 1
+
+            
+            0.74ms
+        
+            
+
+    
+    
+        
+        
+            
+    
+    
+
+        
+
+        
+        
+            
+    
+
+        
+
+        
+        
+            
+                
+                    ...
+                
+                
+                    
+                
+            
+        
+
+        
+        
+            
+    
+
+        
+
+        
+        
+            
+    
+    
+
+        
+    
+
+
+
+    
+    
+
+
+    
+    
+    Headers
+    
+                
+            host
+            
+            
+                
+                    127.0.0.1:8000
+                
+            
+        
+                
+            user-agent
+            
+            
+                
+                    curl/8.13.0
+                
+            
+        
+                
+            accept
+            
+            
+                
+                    */*
+                
+            
+        
+                
+            content-type
+            
+            
+                
+                    application/json
+                
+            
+        
+                
+            content-length
+            
+            
+                
+                    96
+                
+            
+        
+            
+
+
+        
+    Body
+        
+    // No request body
+
+    
+
+        
+    Routing
+    
+                
+            controller
+            
+            
+                
+                    App\Http\Controllers\DocumentController@update
+                
+            
+        
+                
+            middleware
+            
+            
+                
+                    api, web
+                
+            
+        
+            
+
+
+        
+    Routing parameters
+        
+        
+    
+    {
+    &quot;id&quot;: &quot;1&quot;
+}
+
+    
+    
+
+
+    
+    
+
+
+            
+    
+    
+        
+
+
+
+
+
+
+(()=>{
+const d="10A212.9A|AB2AB2AB2A212.2AB2AB2AB|6AB3A212.4AB4A|2ABAB3ABA212.AB4AB2A|10A212.3AB4AB|AB2ABAB3A212.AB3AB3A|8ABA212.7ABA|ABAB2AB3A212.2ABAB4A|10A212.6AB2A|2AB2ABAB2A32.9A61.9A73.9A19.AB2AB4A|9AB28.5AB2AB2AB4A3.10A6.25A10.5AB2AB2AB4A4.9A4.9A20.11A9.5AB2AB2AB5A15.7ABA|ABABAB4A25.4ABAB9AB4A.2AB3AB2AB6.2AB2AB2ABAB2AB2ABAB2AB3A7.4ABAB9AB5A.2AB2AB2AB4.2AB2AB2ABA18.2AB2AB2AB2A7.4AB11AB2AB3A12.ABABAB3A|7AB2A23.3AB7ABABABAB3AB8AB3A6.4AB10AB7ABA5.3AB7ABABAB4AB2AB5AB4A5.5AB4A17.7AB2A6.3AB4ABABABABAB10A10.8AB|2AB2AB3AB21.3AB3AB2AB14ABABAB4ABA6.AB4AB2ABABAB4ABAB4A3.3AB3AB2AB8AB7ABAB3AB2A6.AB5ABA16.2ABABAB3A6.2AB3AB13AB2ABAB4A8.2AB3AB2A|10A20.2AB10AB7.ABAB7AB4A6.3AB12AB5AB2A2.2AB10AB7.2ABAB10AB6.3AB6A14.11A4.10AB11.7AB3A7.4AB4A|ABAB2ABABA19.6ABABAB14.3AB2AB3AB2A6.AB3ABAB2A16.6ABABAB14.3AB2ABAB4A7.4ABAB3A13.ABAB2AB2AB4.2ABABABABA15.AB2AB2AB2A6.AB5ABA|10A19.AB2AB5A16.12A6.9AB15.2AB2AB5A16.9AB2A8.AB5AB2A11.10A4.10A17.10A5.3AB2AB2A|2ABABAB3A18.4AB3ABA18.AB2ABAB2ABA6.2ABAB2AB2A15.4AB3ABA18.ABAB2AB3AB8.4AB5A10.2AB2ABABABA4.ABAB2AB3A18.AB2ABAB2A5.AB7A|8ABA17.2AB4AB3A19.10A6.10A15.AB4AB2A20.10A9.AB3AB2ABA9.10A4.9AB27AB5.4AB2ABA|AB2AB5A17.4AB5A20.AB2ABABABA6.AB2ABAB2AB14.4AB5A20.2AB2ABAB2A10.10A7.2ABAB2AB2A5.AB2ABAB4AB2AB2AB2ABAB2ABABABABAB5A4.2AB6A|6ABABA17.AB4AB2AB20.10A6.10A14.2AB4AB2A21.8AB11.ABABAB2AB6.11A5.8AB7AB18AB3A4.4ABAB2A|ABAB6A17.3AB6A20.2ABAB2AB2A6.ABAB2ABABA14.5AB4A20.2ABAB2AB2A11.10A4.2ABAB2ABABA6.2AB2AB4ABABAB3AB2ABAB2AB2AB2AB4ABA4.AB6AB|5AB2ABA18.4AB2AB2A19.10A6.10A15.AB4AB2A20.10A12.2AB2AB2ABA3.10A7.7AB2A33.3AB2AB2A|2AB7A18.AB8A18.2AB2ABABABA6.2AB2AB2ABA15.3AB4ABA18.2AB2ABAB2AB12.11A.2AB2ABAB2A9.ABAB6A32.AB7A|4ABAB3A19.2ABABAB4A15.2AB9A6.10A15.5AB6A15.2AB9A13.ABABAB2AB5AB5AB9.5ABAB3A17.4A10.4AB2ABA|AB6ABA19.8AB4A11.2AB3AB2AB3AB6.ABABABAB2A16.AB4AB2AB3A10.3AB4AB2ABABA14.9ABAB4AB2A11.2AB5AB2A14.3AB5A7.2AB6A|3AB2AB20A3.2AB2AB3AB7A.16AB2A6.10A17.2AB7AB5A2.10AB8A14.3ABAB8AB3A13.4AB8A8.4AB3AB5A5.5ABABA|AB7AB2ABAB2AB2ABAB2ABA5.8ABAB2AB3AB2ABAB2AB2ABAB4A6.2AB2AB2ABA19.2ABAB5AB2AB3AB2ABAB5ABAB2ABA15.6ABAB2AB5A15.4AB2ABAB10AB8ABA7.ABAB5A|4AB2AB11AB7A6.2ABAB9AB11AB5ABA6.10A20.5ABAB15ABAB8A16.AB11ABA17.AB8AB2AB2AB4ABABAB2A9.6AB2A|2AB6ABAB2ABAB5ABAB2A9.8AB2ABABABABA2.5ABAB2A6.ABAB2ABABA22.8AB2ABABABAB3A2.4ABAB2A16.3ABAB2AB2AB2A20.2ABAB8AB2AB7A11.2AB5AB|5ABAB10AB8A12.7AB6A4.AB5AB2A6.10A26.AB12A5.2AB6A17.9AB3A24.2AB2ABAB6ABA15.4ABAB2A",
+s=document.currentScript.previousElementSibling,
+ns="http://www.w3.org/2000/svg";
+const ox=0.32415,oy=7.3223,cw=5.4907,rh=10.0,zx=1.923,zy=0.0915;
+d.split("|").forEach((r,ri)=>{const g=document.createElementNS(ns,"g");g.setAttribute("transform","translate(0,"+(oy+ri*rh)+")");let col=0;for(let i=0;i="0"&&c{let r=gt(a);return e._x_effects||(e._x_effects=new Set,e._x_runEffects=()=>{e._x_effects.forEach(i=>i())}),e._x_effects.add(r),t=()=>{r!==void 0&&(e._x_effects.delete(r),Dt(r))},r},()=>{t()}]}function ro(e,t){let n=!0,a,r=gt(()=>{let i=e();JSON.stringify(i),n?a=i:queueMicrotask(()=>{t(i,a),a=i}),n=!1});return()=>Dt(r)}var io=[],so=[],oo=[];function tu(e){oo.push(e)}function Vr(e,t){typeof t=="function"?(e._x_cleanups||(e._x_cleanups=[]),e._x_cleanups.push(t)):(t=e,so.push(t))}function co(e){io.push(e)}function lo(e,t,n){e._x_attributeCleanups||(e._x_attributeCleanups={}),e._x_attributeCleanups[t]||(e._x_attributeCleanups[t]=[]),e._x_attributeCleanups[t].push(n)}function uo(e,t){e._x_attributeCleanups&&Object.entries(e._x_attributeCleanups).forEach(([n,a])=>{(t===void 0||t.includes(n))&&(a.forEach(r=>r()),delete e._x_attributeCleanups[n])})}function nu(e){for(e._x_effects?.forEach(Yl);e._x_cleanups?.length;)e._x_cleanups.pop()()}var Zr=new MutationObserver(Qr),Yr=!1;function Xr(){Zr.observe(document,{subtree:!0,childList:!0,attributes:!0,attributeOldValue:!0}),Yr=!0}function po(){au(),Zr.disconnect(),Yr=!1}var Kt=[];function au(){let e=Zr.takeRecords();Kt.push(()=>e.length>0&&Qr(e));let t=Kt.length;queueMicrotask(()=>{if(Kt.length===t)for(;Kt.length>0;)Kt.shift()()})}function z(e){if(!Yr)return e();po();let t=e();return Xr(),t}var Kr=!1,ia=[];function ru(){Kr=!0}function iu(){Kr=!1,Qr(ia),ia=[]}function Qr(e){if(Kr){ia=ia.concat(e);return}let t=[],n=new Set,a=new Map,r=new Map;for(let i=0;i{s.nodeType===1&&s._x_marker&&n.add(s)}),e[i].addedNodes.forEach(s=>{if(s.nodeType===1){if(n.has(s)){n.delete(s);return}s._x_marker||t.push(s)}})),e[i].type==="attributes")){let s=e[i].target,o=e[i].attributeName,c=e[i].oldValue,l=()=>{a.has(s)||a.set(s,[]),a.get(s).push({name:o,value:s.getAttribute(o)})},u=()=>{r.has(s)||r.set(s,[]),r.get(s).push(o)};s.hasAttribute(o)&&c===null?l():s.hasAttribute(o)?(u(),l()):u()}r.forEach((i,s)=>{uo(s,i)}),a.forEach((i,s)=>{io.forEach(o=>o(s,i))});for(let i of n)t.some(s=>s.contains(i))||so.forEach(s=>s(i));for(let i of t)i.isConnected&&oo.forEach(s=>s(i));t=null,n=null,a=null,r=null}function mo(e){return wn(At(e))}function vn(e,t,n){return e._x_dataStack=[t,...At(n||e)],()=>{e._x_dataStack=e._x_dataStack.filter(a=>a!==t)}}function At(e){return e._x_dataStack?e._x_dataStack:typeof ShadowRoot=="function"&&e instanceof ShadowRoot?At(e.host):e.parentNode?At(e.parentNode):[]}function wn(e){return new Proxy({objects:e},su)}var su={ownKeys({objects:e}){return Array.from(new Set(e.flatMap(t=>Object.keys(t))))},has({objects:e},t){return t==Symbol.unscopables?!1:e.some(n=>Object.prototype.hasOwnProperty.call(n,t)||Reflect.has(n,t))},get({objects:e},t,n){return t=="toJSON"?ou:Reflect.get(e.find(a=>Reflect.has(a,t))||{},t,n)},set({objects:e},t,n,a){const r=e.find(s=>Object.prototype.hasOwnProperty.call(s,t))||e[e.length-1],i=Object.getOwnPropertyDescriptor(r,t);return i?.set&&i?.get?i.set.call(a,n)||!0:Reflect.set(r,t,n)}};function ou(){return Reflect.ownKeys(this).reduce((t,n)=>(t[n]=Reflect.get(this,n),t),{})}function ho(e){let t=a=>typeof a=="object"&&!Array.isArray(a)&&a!==null,n=(a,r="")=>{Object.entries(Object.getOwnPropertyDescriptors(a)).forEach(([i,{value:s,enumerable:o}])=>{if(o===!1||s===void 0||typeof s=="object"&&s!==null&&s.__v_skip)return;let c=r===""?i:`${r}.${i}`;typeof s=="object"&&s!==null&&s._x_interceptor?a[i]=s.initialize(e,c,i):t(s)&&s!==a&&!(s instanceof Element)&&n(s,c)})};return n(e)}function go(e,t=()=>{}){let n={initialValue:void 0,_x_interceptor:!0,initialize(a,r,i){return e(this.initialValue,()=>cu(a,r),s=>dr(a,r,s),r,i)}};return t(n),a=>{if(typeof a=="object"&&a!==null&&a._x_interceptor){let r=n.initialize.bind(n);n.initialize=(i,s,o)=>{let c=a.initialize(i,s,o);return n.initialValue=c,r(i,s,o)}}else n.initialValue=a;return n}}function cu(e,t){return t.split(".").reduce((n,a)=>n[a],e)}function dr(e,t,n){if(typeof t=="string"&&(t=t.split(".")),t.length===1)e[t[0]]=n;else{if(t.length===0)throw error;return e[t[0]]||(e[t[0]]={}),dr(e[t[0]],t.slice(1),n)}}var fo={};function ve(e,t){fo[e]=t}function mr(e,t){let n=lu(t);return Object.entries(fo).forEach(([a,r])=>{Object.defineProperty(e,`$${a}`,{get(){return r(t,n)},enumerable:!1})}),e}function lu(e){let[t,n]=xo(e),a={interceptor:go,...t};return Vr(e,n),a}function uu(e,t,n,...a){try{return n(...a)}catch(r){dn(r,e,t)}}function dn(e,t,n=void 0){e=Object.assign(e??{message:"No error message given."},{el:t,expression:n}),console.warn(`Alpine Expression Error: ${e.message}
+
+${n?'Expression: "'+n+`"
+
+`:""}`,t),setTimeout(()=>{throw e},0)}var Jn=!0;function bo(e){let t=Jn;Jn=!1;let n=e();return Jn=t,n}function ct(e,t,n={}){let a;return ne(e,t)(r=>a=r,n),a}function ne(...e){return _o(...e)}var _o=yo;function pu(e){_o=e}function yo(e,t){let n={};mr(n,e);let a=[n,...At(e)],r=typeof t=="function"?du(a,t):hu(a,t,e);return uu.bind(null,e,t,r)}function du(e,t){return(n=()=>{},{scope:a={},params:r=[]}={})=>{let i=t.apply(wn([a,...e]),r);sa(n,i)}}var Ma={};function mu(e,t){if(Ma[e])return Ma[e];let n=Object.getPrototypeOf(async function(){}).constructor,a=/^[\n\s]*if.*\(.*\)/.test(e.trim())||/^(let|const)\s/.test(e.trim())?`(async()=>{ ${e} })()`:e,i=(()=>{try{let s=new n(["__self","scope"],`with (scope) { __self.result = ${a} }; __self.finished = true; return __self.result;`);return Object.defineProperty(s,"name",{value:`[Alpine] ${e}`}),s}catch(s){return dn(s,t,e),Promise.resolve()}})();return Ma[e]=i,i}function hu(e,t,n){let a=mu(t,n);return(r=()=>{},{scope:i={},params:s=[]}={})=>{a.result=void 0,a.finished=!1;let o=wn([i,...e]);if(typeof a=="function"){let c=a(a,o).catch(l=>dn(l,n,t));a.finished?(sa(r,a.result,o,s,n),a.result=void 0):c.then(l=>{sa(r,l,o,s,n)}).catch(l=>dn(l,n,t)).finally(()=>a.result=void 0)}}}function sa(e,t,n,a,r){if(Jn&&typeof t=="function"){let i=t.apply(n,a);i instanceof Promise?i.then(s=>sa(e,s,n,a)).catch(s=>dn(s,r,t)):e(i)}else typeof t=="object"&&t instanceof Promise?t.then(i=>e(i)):e(t)}var Jr="x-";function Mt(e=""){return Jr+e}function gu(e){Jr=e}var oa={};function W(e,t){return oa[e]=t,{before(n){if(!oa[n]){console.warn(String.raw`Cannot find directive \`${n}\`. \`${e}\` will use the default order of execution`);return}const a=rt.indexOf(n);rt.splice(a>=0?a:rt.indexOf("DEFAULT"),0,e)}}}function fu(e){return Object.keys(oa).includes(e)}function ei(e,t,n){if(t=Array.from(t),e._x_virtualDirectives){let i=Object.entries(e._x_virtualDirectives).map(([o,c])=>({name:o,value:c})),s=vo(i);i=i.map(o=>s.find(c=>c.name===o.name)?{name:`x-bind:${o.name}`,value:`"${o.value}"`}:o),t=t.concat(i)}let a={};return t.map(Eo((i,s)=>a[i]=s)).filter($o).map(yu(a,n)).sort(vu).map(i=>_u(e,i))}function vo(e){return Array.from(e).map(Eo()).filter(t=>!$o(t))}var hr=!1,nn=new Map,wo=Symbol();function bu(e){hr=!0;let t=Symbol();wo=t,nn.set(t,[]);let n=()=>{for(;nn.get(t).length;)nn.get(t).shift()();nn.delete(t)},a=()=>{hr=!1,n()};e(n),a()}function xo(e){let t=[],n=o=>t.push(o),[a,r]=eu(e);return t.push(r),[{Alpine:xn,effect:a,cleanup:n,evaluateLater:ne.bind(ne,e),evaluate:ct.bind(ct,e)},()=>t.forEach(o=>o())]}function _u(e,t){let n=()=>{},a=oa[t.type]||n,[r,i]=xo(e);lo(e,t.original,i);let s=()=>{e._x_ignore||e._x_ignoreSelf||(a.inline&&a.inline(e,t,r),a=a.bind(a,e,t,r),hr?nn.get(wo).push(a):a())};return s.runCleanups=i,s}var ko=(e,t)=>({name:n,value:a})=>(n.startsWith(e)&&(n=n.replace(e,t)),{name:n,value:a}),Co=e=>e;function Eo(e=()=>{}){return({name:t,value:n})=>{let{name:a,value:r}=Fo.reduce((i,s)=>s(i),{name:t,value:n});return a!==t&&e(a,t),{name:a,value:r}}}var Fo=[];function ti(e){Fo.push(e)}function $o({name:e}){return jo().test(e)}var jo=()=>new RegExp(`^${Jr}([^:^.]+)\\b`);function yu(e,t){return({name:n,value:a})=>{let r=n.match(jo()),i=n.match(/:([a-zA-Z0-9\-_:]+)/),s=n.match(/\.[^.\]]+(?=[^\]]*$)/g)||[],o=t||e[n]||n;return{type:r?r[1]:null,value:i?i[1]:null,modifiers:s.map(c=>c.replace(".","")),expression:a,original:o}}}var gr="DEFAULT",rt=["ignore","ref","data","id","anchor","bind","init","for","model","modelable","transition","show","if",gr,"teleport"];function vu(e,t){let n=rt.indexOf(e.type)===-1?gr:e.type,a=rt.indexOf(t.type)===-1?gr:t.type;return rt.indexOf(n)-rt.indexOf(a)}function rn(e,t,n={}){e.dispatchEvent(new CustomEvent(t,{detail:n,bubbles:!0,composed:!0,cancelable:!0}))}function dt(e,t){if(typeof ShadowRoot=="function"&&e instanceof ShadowRoot){Array.from(e.children).forEach(r=>dt(r,t));return}let n=!1;if(t(e,()=>n=!0),n)return;let a=e.firstElementChild;for(;a;)dt(a,t),a=a.nextElementSibling}function pe(e,...t){console.warn(`Alpine Warning: ${e}`,...t)}var Di=!1;function wu(){Di&&pe("Alpine has already been initialized on this page. Calling Alpine.start() more than once can cause problems."),Di=!0,document.body||pe("Unable to initialize. Trying to load Alpine before `` is available. Did you forget to add `defer` in Alpine's `` tag?"),rn(document,"alpine:init"),rn(document,"alpine:initializing"),Xr(),tu(t=>Pe(t,dt)),Vr(t=>zt(t)),co((t,n)=>{ei(t,n).forEach(a=>a())});let e=t=>!ka(t.parentElement,!0);Array.from(document.querySelectorAll(To().join(","))).filter(e).forEach(t=>{Pe(t)}),rn(document,"alpine:initialized"),setTimeout(()=>{Eu()})}var ni=[],So=[];function Ao(){return ni.map(e=>e())}function To(){return ni.concat(So).map(e=>e())}function Ro(e){ni.push(e)}function Oo(e){So.push(e)}function ka(e,t=!1){return qt(e,n=>{if((t?To():Ao()).some(r=>n.matches(r)))return!0})}function qt(e,t){if(e){if(t(e))return e;if(e._x_teleportBack&&(e=e._x_teleportBack),!!e.parentElement)return qt(e.parentElement,t)}}function xu(e){return Ao().some(t=>e.matches(t))}var Io=[];function ku(e){Io.push(e)}var Cu=1;function Pe(e,t=dt,n=()=>{}){qt(e,a=>a._x_ignore)||bu(()=>{t(e,(a,r)=>{a._x_marker||(n(a,r),Io.forEach(i=>i(a,r)),ei(a,a.attributes).forEach(i=>i()),a._x_ignore||(a._x_marker=Cu++),a._x_ignore&&r())})})}function zt(e,t=dt){t(e,n=>{nu(n),uo(n),delete n._x_marker})}function Eu(){[["ui","dialog",["[x-dialog], [x-popover]"]],["anchor","anchor",["[x-anchor]"]],["sort","sort",["[x-sort]"]]].forEach(([t,n,a])=>{fu(n)||a.some(r=>{if(document.querySelector(r))return pe(`found "${r}", but missing ${t} plugin`),!0})})}var fr=[],ai=!1;function ri(e=()=>{}){return queueMicrotask(()=>{ai||setTimeout(()=>{br()})}),new Promise(t=>{fr.push(()=>{e(),t()})})}function br(){for(ai=!1;fr.length;)fr.shift()()}function Fu(){ai=!0}function ii(e,t){return Array.isArray(t)?Mi(e,t.join(" ")):typeof t=="object"&&t!==null?$u(e,t):typeof t=="function"?ii(e,t()):Mi(e,t)}function Mi(e,t){let n=r=>r.split(" ").filter(i=>!e.classList.contains(i)).filter(Boolean),a=r=>(e.classList.add(...r),()=>{e.classList.remove(...r)});return t=t===!0?t="":t||"",a(n(t))}function $u(e,t){let n=o=>o.split(" ").filter(Boolean),a=Object.entries(t).flatMap(([o,c])=>c?n(o):!1).filter(Boolean),r=Object.entries(t).flatMap(([o,c])=>c?!1:n(o)).filter(Boolean),i=[],s=[];return r.forEach(o=>{e.classList.contains(o)&&(e.classList.remove(o),s.push(o))}),a.forEach(o=>{e.classList.contains(o)||(e.classList.add(o),i.push(o))}),()=>{s.forEach(o=>e.classList.add(o)),i.forEach(o=>e.classList.remove(o))}}function Ca(e,t){return typeof t=="object"&&t!==null?ju(e,t):Su(e,t)}function ju(e,t){let n={};return Object.entries(t).forEach(([a,r])=>{n[a]=e.style[a],a.startsWith("--")||(a=Au(a)),e.style.setProperty(a,r)}),setTimeout(()=>{e.style.length===0&&e.removeAttribute("style")}),()=>{Ca(e,n)}}function Su(e,t){let n=e.getAttribute("style",t);return e.setAttribute("style",t),()=>{e.setAttribute("style",n||"")}}function Au(e){return e.replace(/([a-z])([A-Z])/g,"$1-$2").toLowerCase()}function _r(e,t=()=>{}){let n=!1;return function(){n?t.apply(this,arguments):(n=!0,e.apply(this,arguments))}}W("transition",(e,{value:t,modifiers:n,expression:a},{evaluate:r})=>{typeof a=="function"&&(a=r(a)),a!==!1&&(!a||typeof a=="boolean"?Ru(e,n,t):Tu(e,a,t))});function Tu(e,t,n){No(e,ii,""),{enter:r=>{e._x_transition.enter.during=r},"enter-start":r=>{e._x_transition.enter.start=r},"enter-end":r=>{e._x_transition.enter.end=r},leave:r=>{e._x_transition.leave.during=r},"leave-start":r=>{e._x_transition.leave.start=r},"leave-end":r=>{e._x_transition.leave.end=r}}[n](t)}function Ru(e,t,n){No(e,Ca);let a=!t.includes("in")&&!t.includes("out")&&!n,r=a||t.includes("in")||["enter"].includes(n),i=a||t.includes("out")||["leave"].includes(n);t.includes("in")&&!a&&(t=t.filter((b,_)=>__>t.indexOf("out")));let s=!t.includes("opacity")&&!t.includes("scale"),o=s||t.includes("opacity"),c=s||t.includes("scale"),l=o?0:1,u=c?Qt(t,"scale",95)/100:1,p=Qt(t,"delay",0)/1e3,d=Qt(t,"origin","center"),m="opacity, transform",g=Qt(t,"duration",150)/1e3,v=Qt(t,"duration",75)/1e3,f="cubic-bezier(0.4, 0.0, 0.2, 1)";r&&(e._x_transition.enter.during={transformOrigin:d,transitionDelay:`${p}s`,transitionProperty:m,transitionDuration:`${g}s`,transitionTimingFunction:f},e._x_transition.enter.start={opacity:l,transform:`scale(${u})`},e._x_transition.enter.end={opacity:1,transform:"scale(1)"}),i&&(e._x_transition.leave.during={transformOrigin:d,transitionDelay:`${p}s`,transitionProperty:m,transitionDuration:`${v}s`,transitionTimingFunction:f},e._x_transition.leave.start={opacity:1,transform:"scale(1)"},e._x_transition.leave.end={opacity:l,transform:`scale(${u})`})}function No(e,t,n={}){e._x_transition||(e._x_transition={enter:{during:n,start:n,end:n},leave:{during:n,start:n,end:n},in(a=()=>{},r=()=>{}){yr(e,t,{during:this.enter.during,start:this.enter.start,end:this.enter.end},a,r)},out(a=()=>{},r=()=>{}){yr(e,t,{during:this.leave.during,start:this.leave.start,end:this.leave.end},a,r)}})}window.Element.prototype._x_toggleAndCascadeWithTransitions=function(e,t,n,a){const r=document.visibilityState==="visible"?requestAnimationFrame:setTimeout;let i=()=>r(n);if(t){e._x_transition&&(e._x_transition.enter||e._x_transition.leave)?e._x_transition.enter&&(Object.entries(e._x_transition.enter.during).length||Object.entries(e._x_transition.enter.start).length||Object.entries(e._x_transition.enter.end).length)?e._x_transition.in(n):i():e._x_transition?e._x_transition.in(n):i();return}e._x_hidePromise=e._x_transition?new Promise((s,o)=>{e._x_transition.out(()=>{},()=>s(a)),e._x_transitioning&&e._x_transitioning.beforeCancel(()=>o({isFromCancelledTransition:!0}))}):Promise.resolve(a),queueMicrotask(()=>{let s=Lo(e);s?(s._x_hideChildren||(s._x_hideChildren=[]),s._x_hideChildren.push(e)):r(()=>{let o=c=>{let l=Promise.all([c._x_hidePromise,...(c._x_hideChildren||[]).map(o)]).then(([u])=>u?.());return delete c._x_hidePromise,delete c._x_hideChildren,l};o(e).catch(c=>{if(!c.isFromCancelledTransition)throw c})})})};function Lo(e){let t=e.parentNode;if(t)return t._x_hidePromise?t:Lo(t)}function yr(e,t,{during:n,start:a,end:r}={},i=()=>{},s=()=>{}){if(e._x_transitioning&&e._x_transitioning.cancel(),Object.keys(n).length===0&&Object.keys(a).length===0&&Object.keys(r).length===0){i(),s();return}let o,c,l;Ou(e,{start(){o=t(e,a)},during(){c=t(e,n)},before:i,end(){o(),l=t(e,r)},after:s,cleanup(){c(),l()}})}function Ou(e,t){let n,a,r,i=_r(()=>{z(()=>{n=!0,a||t.before(),r||(t.end(),br()),t.after(),e.isConnected&&t.cleanup(),delete e._x_transitioning})});e._x_transitioning={beforeCancels:[],beforeCancel(s){this.beforeCancels.push(s)},cancel:_r(function(){for(;this.beforeCancels.length;)this.beforeCancels.shift()();i()}),finish:i},z(()=>{t.start(),t.during()}),Fu(),requestAnimationFrame(()=>{if(n)return;let s=Number(getComputedStyle(e).transitionDuration.replace(/,.*/,"").replace("s",""))*1e3,o=Number(getComputedStyle(e).transitionDelay.replace(/,.*/,"").replace("s",""))*1e3;s===0&&(s=Number(getComputedStyle(e).animationDuration.replace("s",""))*1e3),z(()=>{t.before()}),a=!0,requestAnimationFrame(()=>{n||(z(()=>{t.end()}),br(),setTimeout(e._x_transitioning.finish,s+o),r=!0)})})}function Qt(e,t,n){if(e.indexOf(t)===-1)return n;const a=e[e.indexOf(t)+1];if(!a||t==="scale"&&isNaN(a))return n;if(t==="duration"||t==="delay"){let r=a.match(/([0-9]+)ms/);if(r)return r[1]}return t==="origin"&&["top","right","left","center","bottom"].includes(e[e.indexOf(t)+2])?[a,e[e.indexOf(t)+2]].join(" "):a}var He=!1;function Ve(e,t=()=>{}){return(...n)=>He?t(...n):e(...n)}function Iu(e){return(...t)=>He&&e(...t)}var Po=[];function Ea(e){Po.push(e)}function Nu(e,t){Po.forEach(n=>n(e,t)),He=!0,Do(()=>{Pe(t,(n,a)=>{a(n,()=>{})})}),He=!1}var vr=!1;function Lu(e,t){t._x_dataStack||(t._x_dataStack=e._x_dataStack),He=!0,vr=!0,Do(()=>{Pu(t)}),He=!1,vr=!1}function Pu(e){let t=!1;Pe(e,(a,r)=>{dt(a,(i,s)=>{if(t&&xu(i))return s();t=!0,r(i,s)})})}function Do(e){let t=gt;Pi((n,a)=>{let r=t(n);return Dt(r),()=>{}}),e(),Pi(t)}function Mo(e,t,n,a=[]){switch(e._x_bindings||(e._x_bindings=Pt({})),e._x_bindings[t]=n,t=a.includes("camel")?Hu(t):t,t){case"value":Du(e,n);break;case"style":qu(e,n);break;case"class":Mu(e,n);break;case"selected":case"checked":zu(e,t,n);break;default:qo(e,t,n);break}}function Du(e,t){if(Uo(e))e.attributes.value===void 0&&(e.value=t),window.fromModel&&(typeof t=="boolean"?e.checked=ea(e.value)===t:e.checked=qi(e.value,t));else if(si(e))Number.isInteger(t)?e.value=t:!Array.isArray(t)&&typeof t!="boolean"&&![null,void 0].includes(t)?e.value=String(t):Array.isArray(t)?e.checked=t.some(n=>qi(n,e.value)):e.checked=!!t;else if(e.tagName==="SELECT")Gu(e,t);else{if(e.value===t)return;e.value=t===void 0?"":t}}function Mu(e,t){e._x_undoAddedClasses&&e._x_undoAddedClasses(),e._x_undoAddedClasses=ii(e,t)}function qu(e,t){e._x_undoAddedStyles&&e._x_undoAddedStyles(),e._x_undoAddedStyles=Ca(e,t)}function zu(e,t,n){qo(e,t,n),Uu(e,t,n)}function qo(e,t,n){[null,void 0,!1].includes(n)&&Vu(t)?e.removeAttribute(t):(zo(t)&&(n=t),Bu(e,t,n))}function Bu(e,t,n){e.getAttribute(t)!=n&&e.setAttribute(t,n)}function Uu(e,t,n){e[t]!==n&&(e[t]=n)}function Gu(e,t){const n=[].concat(t).map(a=>a+"");Array.from(e.options).forEach(a=>{a.selected=n.includes(a.value)})}function Hu(e){return e.toLowerCase().replace(/-(\w)/g,(t,n)=>n.toUpperCase())}function qi(e,t){return e==t}function ea(e){return[1,"1","true","on","yes",!0].includes(e)?!0:[0,"0","false","off","no",!1].includes(e)?!1:e?!!e:null}var Wu=new Set(["allowfullscreen","async","autofocus","autoplay","checked","controls","default","defer","disabled","formnovalidate","inert","ismap","itemscope","loop","multiple","muted","nomodule","novalidate","open","playsinline","readonly","required","reversed","selected","shadowrootclonable","shadowrootdelegatesfocus","shadowrootserializable"]);function zo(e){return Wu.has(e)}function Vu(e){return!["aria-pressed","aria-checked","aria-expanded","aria-selected"].includes(e)}function Zu(e,t,n){return e._x_bindings&&e._x_bindings[t]!==void 0?e._x_bindings[t]:Bo(e,t,n)}function Yu(e,t,n,a=!0){if(e._x_bindings&&e._x_bindings[t]!==void 0)return e._x_bindings[t];if(e._x_inlineBindings&&e._x_inlineBindings[t]!==void 0){let r=e._x_inlineBindings[t];return r.extract=a,bo(()=>ct(e,r.expression))}return Bo(e,t,n)}function Bo(e,t,n){let a=e.getAttribute(t);return a===null?typeof n=="function"?n():n:a===""?!0:zo(t)?!![t,"true"].includes(a):a}function si(e){return e.type==="checkbox"||e.localName==="ui-checkbox"||e.localName==="ui-switch"}function Uo(e){return e.type==="radio"||e.localName==="ui-radio"}function Go(e,t){var n;return function(){var a=this,r=arguments,i=function(){n=null,e.apply(a,r)};clearTimeout(n),n=setTimeout(i,t)}}function Ho(e,t){let n;return function(){let a=this,r=arguments;n||(e.apply(a,r),n=!0,setTimeout(()=>n=!1,t))}}function Wo({get:e,set:t},{get:n,set:a}){let r=!0,i,s=gt(()=>{let o=e(),c=n();if(r)a(qa(o)),r=!1;else{let l=JSON.stringify(o),u=JSON.stringify(c);l!==i?a(qa(o)):l!==u&&t(qa(c))}i=JSON.stringify(e()),JSON.stringify(n())});return()=>{Dt(s)}}function qa(e){return typeof e=="object"?JSON.parse(JSON.stringify(e)):e}function Xu(e){(Array.isArray(e)?e:[e]).forEach(n=>n(xn))}var et={},zi=!1;function Ku(e,t){if(zi||(et=Pt(et),zi=!0),t===void 0)return et[e];et[e]=t,ho(et[e]),typeof t=="object"&&t!==null&&t.hasOwnProperty("init")&&typeof t.init=="function"&&et[e].init()}function Qu(){return et}var Vo={};function Ju(e,t){let n=typeof t!="function"?()=>t:t;return e instanceof Element?Zo(e,n()):(Vo[e]=n,()=>{})}function ep(e){return Object.entries(Vo).forEach(([t,n])=>{Object.defineProperty(e,t,{get(){return(...a)=>n(...a)}})}),e}function Zo(e,t,n){let a=[];for(;a.length;)a.pop()();let r=Object.entries(t).map(([s,o])=>({name:s,value:o})),i=vo(r);return r=r.map(s=>i.find(o=>o.name===s.name)?{name:`x-bind:${s.name}`,value:`"${s.value}"`}:s),ei(e,r,n).map(s=>{a.push(s.runCleanups),s()}),()=>{for(;a.length;)a.pop()()}}var Yo={};function tp(e,t){Yo[e]=t}function np(e,t){return Object.entries(Yo).forEach(([n,a])=>{Object.defineProperty(e,n,{get(){return(...r)=>a.bind(t)(...r)},enumerable:!1})}),e}var ap={get reactive(){return Pt},get release(){return Dt},get effect(){return gt},get raw(){return ao},version:"3.14.9",flushAndStopDeferringMutations:iu,dontAutoEvaluateFunctions:bo,disableEffectScheduling:Ql,startObservingMutations:Xr,stopObservingMutations:po,setReactivityEngine:Jl,onAttributeRemoved:lo,onAttributesAdded:co,closestDataStack:At,skipDuringClone:Ve,onlyDuringClone:Iu,addRootSelector:Ro,addInitSelector:Oo,interceptClone:Ea,addScopeToNode:vn,deferMutations:ru,mapAttributes:ti,evaluateLater:ne,interceptInit:ku,setEvaluator:pu,mergeProxies:wn,extractProp:Yu,findClosest:qt,onElRemoved:Vr,closestRoot:ka,destroyTree:zt,interceptor:go,transition:yr,setStyles:Ca,mutateDom:z,directive:W,entangle:Wo,throttle:Ho,debounce:Go,evaluate:ct,initTree:Pe,nextTick:ri,prefixed:Mt,prefix:gu,plugin:Xu,magic:ve,store:Ku,start:wu,clone:Lu,cloneNode:Nu,bound:Zu,$data:mo,watch:ro,walk:dt,data:tp,bind:Ju},xn=ap;function rp(e,t){const n=Object.create(null),a=e.split(",");for(let r=0;r!!n[r]}var ip=Object.freeze({}),sp=Object.prototype.hasOwnProperty,Fa=(e,t)=>sp.call(e,t),lt=Array.isArray,sn=e=>Xo(e)==="[object Map]",op=e=>typeof e=="string",oi=e=>typeof e=="symbol",$a=e=>e!==null&&typeof e=="object",cp=Object.prototype.toString,Xo=e=>cp.call(e),Ko=e=>Xo(e).slice(8,-1),ci=e=>op(e)&&e!=="NaN"&&e[0]!=="-"&&""+parseInt(e,10)===e,lp=e=>{const t=Object.create(null);return n=>t[n]||(t[n]=e(n))},up=lp(e=>e.charAt(0).toUpperCase()+e.slice(1)),Qo=(e,t)=>e!==t&&(e===e||t===t),wr=new WeakMap,Jt=[],Ee,ut=Symbol("iterate"),xr=Symbol("Map key iterate");function pp(e){return e&&e._isEffect===!0}function dp(e,t=ip){pp(e)&&(e=e.raw);const n=gp(e,t);return t.lazy||n(),n}function mp(e){e.active&&(Jo(e),e.options.onStop&&e.options.onStop(),e.active=!1)}var hp=0;function gp(e,t){const n=function(){if(!n.active)return e();if(!Jt.includes(n)){Jo(n);try{return bp(),Jt.push(n),Ee=n,e()}finally{Jt.pop(),ec(),Ee=Jt[Jt.length-1]}}};return n.id=hp++,n.allowRecurse=!!t.allowRecurse,n._isEffect=!0,n.active=!0,n.raw=e,n.deps=[],n.options=t,n}function Jo(e){const{deps:t}=e;if(t.length){for(let n=0;n{u&&u.forEach(p=>{(p!==Ee||p.allowRecurse)&&o.add(p)})};if(t==="clear")s.forEach(c);else if(n==="length"&&lt(e))s.forEach((u,p)=>{(p==="length"||p>=a)&&c(u)});else switch(n!==void 0&&c(s.get(n)),t){case"add":lt(e)?ci(n)&&c(s.get("length")):(c(s.get(ut)),sn(e)&&c(s.get(xr)));break;case"delete":lt(e)||(c(s.get(ut)),sn(e)&&c(s.get(xr)));break;case"set":sn(e)&&c(s.get(ut));break}const l=u=>{u.options.onTrigger&&u.options.onTrigger({effect:u,target:e,key:n,type:t,newValue:a,oldValue:r,oldTarget:i}),u.options.scheduler?u.options.scheduler(u):u()};o.forEach(l)}var _p=rp("__proto__,__v_isRef,__isVue"),tc=new Set(Object.getOwnPropertyNames(Symbol).map(e=>Symbol[e]).filter(oi)),yp=nc(),vp=nc(!0),Bi=wp();function wp(){const e={};return["includes","indexOf","lastIndexOf"].forEach(t=>{e[t]=function(...n){const a=M(this);for(let i=0,s=this.length;i{e[t]=function(...n){fp();const a=M(this)[t].apply(this,n);return ec(),a}}),e}function nc(e=!1,t=!1){return function(a,r,i){if(r==="__v_isReactive")return!e;if(r==="__v_isReadonly")return e;if(r==="__v_raw"&&i===(e?t?Np:sc:t?Ip:ic).get(a))return a;const s=lt(a);if(!e&&s&&Fa(Bi,r))return Reflect.get(Bi,r,i);const o=Reflect.get(a,r,i);return(oi(r)?tc.has(r):_p(r))||(e||ye(a,"get",r),t)?o:kr(o)?!s||!ci(r)?o.value:o:$a(o)?e?oc(o):mi(o):o}}var xp=kp();function kp(e=!1){return function(n,a,r,i){let s=n[a];if(!e&&(r=M(r),s=M(s),!lt(n)&&kr(s)&&!kr(r)))return s.value=r,!0;const o=lt(n)&&ci(a)?Number(a)$a(e)?mi(e):e,pi=e=>$a(e)?oc(e):e,di=e=>e,ja=e=>Reflect.getPrototypeOf(e);function qn(e,t,n=!1,a=!1){e=e.__v_raw;const r=M(e),i=M(t);t!==i&&!n&&ye(r,"get",t),!n&&ye(r,"get",i);const{has:s}=ja(r),o=a?di:n?pi:ui;if(s.call(r,t))return o(e.get(t));if(s.call(r,i))return o(e.get(i));e!==r&&e.get(t)}function zn(e,t=!1){const n=this.__v_raw,a=M(n),r=M(e);return e!==r&&!t&&ye(a,"has",e),!t&&ye(a,"has",r),e===r?n.has(e):n.has(e)||n.has(r)}function Bn(e,t=!1){return e=e.__v_raw,!t&&ye(M(e),"iterate",ut),Reflect.get(e,"size",e)}function Ui(e){e=M(e);const t=M(this);return ja(t).has.call(t,e)||(t.add(e),We(t,"add",e,e)),this}function Gi(e,t){t=M(t);const n=M(this),{has:a,get:r}=ja(n);let i=a.call(n,e);i?rc(n,a,e):(e=M(e),i=a.call(n,e));const s=r.call(n,e);return n.set(e,t),i?Qo(t,s)&&We(n,"set",e,t,s):We(n,"add",e,t),this}function Hi(e){const t=M(this),{has:n,get:a}=ja(t);let r=n.call(t,e);r?rc(t,n,e):(e=M(e),r=n.call(t,e));const i=a?a.call(t,e):void 0,s=t.delete(e);return r&&We(t,"delete",e,void 0,i),s}function Wi(){const e=M(this),t=e.size!==0,n=sn(e)?new Map(e):new Set(e),a=e.clear();return t&&We(e,"clear",void 0,void 0,n),a}function Un(e,t){return function(a,r){const i=this,s=i.__v_raw,o=M(s),c=t?di:e?pi:ui;return!e&&ye(o,"iterate",ut),s.forEach((l,u)=>a.call(r,c(l),c(u),i))}}function Gn(e,t,n){return function(...a){const r=this.__v_raw,i=M(r),s=sn(i),o=e==="entries"||e===Symbol.iterator&&s,c=e==="keys"&&s,l=r[e](...a),u=n?di:t?pi:ui;return!t&&ye(i,"iterate",c?xr:ut),{next(){const{value:p,done:d}=l.next();return d?{value:p,done:d}:{value:o?[u(p[0]),u(p[1])]:u(p),done:d}},[Symbol.iterator](){return this}}}}function ze(e){return function(...t){{const n=t[0]?`on key "${t[0]}" `:"";console.warn(`${up(e)} operation ${n}failed: target is readonly.`,M(this))}return e==="delete"?!1:this}}function Sp(){const e={get(i){return qn(this,i)},get size(){return Bn(this)},has:zn,add:Ui,set:Gi,delete:Hi,clear:Wi,forEach:Un(!1,!1)},t={get(i){return qn(this,i,!1,!0)},get size(){return Bn(this)},has:zn,add:Ui,set:Gi,delete:Hi,clear:Wi,forEach:Un(!1,!0)},n={get(i){return qn(this,i,!0)},get size(){return Bn(this,!0)},has(i){return zn.call(this,i,!0)},add:ze("add"),set:ze("set"),delete:ze("delete"),clear:ze("clear"),forEach:Un(!0,!1)},a={get(i){return qn(this,i,!0,!0)},get size(){return Bn(this,!0)},has(i){return zn.call(this,i,!0)},add:ze("add"),set:ze("set"),delete:ze("delete"),clear:ze("clear"),forEach:Un(!0,!0)};return["keys","values","entries",Symbol.iterator].forEach(i=>{e[i]=Gn(i,!1,!1),n[i]=Gn(i,!0,!1),t[i]=Gn(i,!1,!0),a[i]=Gn(i,!0,!0)}),[e,n,t,a]}var[Ap,Tp,w_,x_]=Sp();function ac(e,t){const n=e?Tp:Ap;return(a,r,i)=>r==="__v_isReactive"?!e:r==="__v_isReadonly"?e:r==="__v_raw"?a:Reflect.get(Fa(n,r)&&r in a?n:a,r,i)}var Rp={get:ac(!1)},Op={get:ac(!0)};function rc(e,t,n){const a=M(n);if(a!==n&&t.call(e,a)){const r=Ko(e);console.warn(`Reactive ${r} contains both the raw and reactive versions of the same object${r==="Map"?" as keys":""}, which can lead to inconsistencies. Avoid differentiating between the raw and reactive versions of an object and only use the reactive version if possible.`)}}var ic=new WeakMap,Ip=new WeakMap,sc=new WeakMap,Np=new WeakMap;function Lp(e){switch(e){case"Object":case"Array":return 1;case"Map":case"Set":case"WeakMap":case"WeakSet":return 2;default:return 0}}function Pp(e){return e.__v_skip||!Object.isExtensible(e)?0:Lp(Ko(e))}function mi(e){return e&&e.__v_isReadonly?e:cc(e,!1,$p,Rp,ic)}function oc(e){return cc(e,!0,jp,Op,sc)}function cc(e,t,n,a,r){if(!$a(e))return console.warn(`value cannot be made reactive: ${String(e)}`),e;if(e.__v_raw&&!(t&&e.__v_isReactive))return e;const i=r.get(e);if(i)return i;const s=Pp(e);if(s===0)return e;const o=new Proxy(e,s===2?a:n);return r.set(e,o),o}function M(e){return e&&M(e.__v_raw)||e}function kr(e){return!!(e&&e.__v_isRef===!0)}ve("nextTick",()=>ri);ve("dispatch",e=>rn.bind(rn,e));ve("watch",(e,{evaluateLater:t,cleanup:n})=>(a,r)=>{let i=t(a),o=ro(()=>{let c;return i(l=>c=l),c},r);n(o)});ve("store",Qu);ve("data",e=>mo(e));ve("root",e=>ka(e));ve("refs",e=>(e._x_refs_proxy||(e._x_refs_proxy=wn(Dp(e))),e._x_refs_proxy));function Dp(e){let t=[];return qt(e,n=>{n._x_refs&&t.push(n._x_refs)}),t}var za={};function lc(e){return za[e]||(za[e]=0),++za[e]}function Mp(e,t){return qt(e,n=>{if(n._x_ids&&n._x_ids[t])return!0})}function qp(e,t){e._x_ids||(e._x_ids={}),e._x_ids[t]||(e._x_ids[t]=lc(t))}ve("id",(e,{cleanup:t})=>(n,a=null)=>{let r=`${n}${a?`-${a}`:""}`;return zp(e,r,t,()=>{let i=Mp(e,n),s=i?i._x_ids[n]:lc(n);return a?`${n}-${s}-${a}`:`${n}-${s}`})});Ea((e,t)=>{e._x_id&&(t._x_id=e._x_id)});function zp(e,t,n,a){if(e._x_id||(e._x_id={}),e._x_id[t])return e._x_id[t];let r=a();return e._x_id[t]=r,n(()=>{delete e._x_id[t]}),r}ve("el",e=>e);uc("Focus","focus","focus");uc("Persist","persist","persist");function uc(e,t,n){ve(t,a=>pe(`You can't use [$${t}] without first installing the "${e}" plugin here: https://alpinejs.dev/plugins/${n}`,a))}W("modelable",(e,{expression:t},{effect:n,evaluateLater:a,cleanup:r})=>{let i=a(t),s=()=>{let u;return i(p=>u=p),u},o=a(`${t} = __placeholder`),c=u=>o(()=>{},{scope:{__placeholder:u}}),l=s();c(l),queueMicrotask(()=>{if(!e._x_model)return;e._x_removeModelListeners.default();let u=e._x_model.get,p=e._x_model.set,d=Wo({get(){return u()},set(m){p(m)}},{get(){return s()},set(m){c(m)}});r(d)})});W("teleport",(e,{modifiers:t,expression:n},{cleanup:a})=>{e.tagName.toLowerCase()!=="template"&&pe("x-teleport can only be used on a  tag",e);let r=Vi(n),i=e.content.cloneNode(!0).firstElementChild;e._x_teleport=i,i._x_teleportBack=e,e.setAttribute("data-teleport-template",!0),i.setAttribute("data-teleport-target",!0),e._x_forwardEvents&&e._x_forwardEvents.forEach(o=>{i.addEventListener(o,c=>{c.stopPropagation(),e.dispatchEvent(new c.constructor(c.type,c))})}),vn(i,{},e);let s=(o,c,l)=>{l.includes("prepend")?c.parentNode.insertBefore(o,c):l.includes("append")?c.parentNode.insertBefore(o,c.nextSibling):c.appendChild(o)};z(()=>{s(i,r,t),Ve(()=>{Pe(i)})()}),e._x_teleportPutBack=()=>{let o=Vi(n);z(()=>{s(e._x_teleport,o,t)})},a(()=>z(()=>{i.remove(),zt(i)}))});var Bp=document.createElement("div");function Vi(e){let t=Ve(()=>document.querySelector(e),()=>Bp)();return t||pe(`Cannot find x-teleport element for selector: "${e}"`),t}var pc=()=>{};pc.inline=(e,{modifiers:t},{cleanup:n})=>{t.includes("self")?e._x_ignoreSelf=!0:e._x_ignore=!0,n(()=>{t.includes("self")?delete e._x_ignoreSelf:delete e._x_ignore})};W("ignore",pc);W("effect",Ve((e,{expression:t},{effect:n})=>{n(ne(e,t))}));function Cr(e,t,n,a){let r=e,i=c=>a(c),s={},o=(c,l)=>u=>l(c,u);if(n.includes("dot")&&(t=Up(t)),n.includes("camel")&&(t=Gp(t)),n.includes("passive")&&(s.passive=!0),n.includes("capture")&&(s.capture=!0),n.includes("window")&&(r=window),n.includes("document")&&(r=document),n.includes("debounce")){let c=n[n.indexOf("debounce")+1]||"invalid-wait",l=ca(c.split("ms")[0])?Number(c.split("ms")[0]):250;i=Go(i,l)}if(n.includes("throttle")){let c=n[n.indexOf("throttle")+1]||"invalid-wait",l=ca(c.split("ms")[0])?Number(c.split("ms")[0]):250;i=Ho(i,l)}return n.includes("prevent")&&(i=o(i,(c,l)=>{l.preventDefault(),c(l)})),n.includes("stop")&&(i=o(i,(c,l)=>{l.stopPropagation(),c(l)})),n.includes("once")&&(i=o(i,(c,l)=>{c(l),r.removeEventListener(t,i,s)})),(n.includes("away")||n.includes("outside"))&&(r=document,i=o(i,(c,l)=>{e.contains(l.target)||l.target.isConnected!==!1&&(e.offsetWidth{Vp(l,n)||c(l)})),r.addEventListener(t,i,s),()=>{r.removeEventListener(t,i,s)}}function Up(e){return e.replace(/-/g,".")}function Gp(e){return e.toLowerCase().replace(/-(\w)/g,(t,n)=>n.toUpperCase())}function ca(e){return!Array.isArray(e)&&!isNaN(e)}function Hp(e){return[" ","_"].includes(e)?e:e.replace(/([a-z])([A-Z])/g,"$1-$2").replace(/[_\s]/,"-").toLowerCase()}function Wp(e){return["keydown","keyup"].includes(e)}function dc(e){return["contextmenu","click","mouse"].some(t=>e.includes(t))}function Vp(e,t){let n=t.filter(i=>!["window","document","prevent","stop","once","capture","self","away","outside","passive"].includes(i));if(n.includes("debounce")){let i=n.indexOf("debounce");n.splice(i,ca((n[i+1]||"invalid-wait").split("ms")[0])?2:1)}if(n.includes("throttle")){let i=n.indexOf("throttle");n.splice(i,ca((n[i+1]||"invalid-wait").split("ms")[0])?2:1)}if(n.length===0||n.length===1&&Zi(e.key).includes(n[0]))return!1;const r=["ctrl","shift","alt","meta","cmd","super"].filter(i=>n.includes(i));return n=n.filter(i=>!r.includes(i)),!(r.length>0&&r.filter(s=>((s==="cmd"||s==="super")&&(s="meta"),e[`${s}Key`])).length===r.length&&(dc(e.type)||Zi(e.key).includes(n[0])))}function Zi(e){if(!e)return[];e=Hp(e);let t={ctrl:"control",slash:"/",space:" ",spacebar:" ",cmd:"meta",esc:"escape",up:"arrow-up",down:"arrow-down",left:"arrow-left",right:"arrow-right",period:".",comma:",",equal:"=",minus:"-",underscore:"_"};return t[e]=e,Object.keys(t).map(n=>{if(t[n]===e)return n}).filter(n=>n)}W("model",(e,{modifiers:t,expression:n},{effect:a,cleanup:r})=>{let i=e;t.includes("parent")&&(i=e.parentNode);let s=ne(i,n),o;typeof n=="string"?o=ne(i,`${n} = __placeholder`):typeof n=="function"&&typeof n()=="string"?o=ne(i,`${n()} = __placeholder`):o=()=>{};let c=()=>{let d;return s(m=>d=m),Yi(d)?d.get():d},l=d=>{let m;s(g=>m=g),Yi(m)?m.set(d):o(()=>{},{scope:{__placeholder:d}})};typeof n=="string"&&e.type==="radio"&&z(()=>{e.hasAttribute("name")||e.setAttribute("name",n)});var u=e.tagName.toLowerCase()==="select"||["checkbox","radio"].includes(e.type)||t.includes("lazy")?"change":"input";let p=He?()=>{}:Cr(e,u,t,d=>{l(Ba(e,t,d,c()))});if(t.includes("fill")&&([void 0,null,""].includes(c())||si(e)&&Array.isArray(c())||e.tagName.toLowerCase()==="select"&&e.multiple)&&l(Ba(e,t,{target:e},c())),e._x_removeModelListeners||(e._x_removeModelListeners={}),e._x_removeModelListeners.default=p,r(()=>e._x_removeModelListeners.default()),e.form){let d=Cr(e.form,"reset",[],m=>{ri(()=>e._x_model&&e._x_model.set(Ba(e,t,{target:e},c())))});r(()=>d())}e._x_model={get(){return c()},set(d){l(d)}},e._x_forceModelUpdate=d=>{d===void 0&&typeof n=="string"&&n.match(/\./)&&(d=""),window.fromModel=!0,z(()=>Mo(e,"value",d)),delete window.fromModel},a(()=>{let d=c();t.includes("unintrusive")&&document.activeElement.isSameNode(e)||e._x_forceModelUpdate(d)})});function Ba(e,t,n,a){return z(()=>{if(n instanceof CustomEvent&&n.detail!==void 0)return n.detail!==null&&n.detail!==void 0?n.detail:n.target.value;if(si(e))if(Array.isArray(a)){let r=null;return t.includes("number")?r=Ua(n.target.value):t.includes("boolean")?r=ea(n.target.value):r=n.target.value,n.target.checked?a.includes(r)?a:a.concat([r]):a.filter(i=>!Zp(i,r))}else return n.target.checked;else{if(e.tagName.toLowerCase()==="select"&&e.multiple)return t.includes("number")?Array.from(n.target.selectedOptions).map(r=>{let i=r.value||r.text;return Ua(i)}):t.includes("boolean")?Array.from(n.target.selectedOptions).map(r=>{let i=r.value||r.text;return ea(i)}):Array.from(n.target.selectedOptions).map(r=>r.value||r.text);{let r;return Uo(e)?n.target.checked?r=n.target.value:r=a:r=n.target.value,t.includes("number")?Ua(r):t.includes("boolean")?ea(r):t.includes("trim")?r.trim():r}}})}function Ua(e){let t=e?parseFloat(e):null;return Yp(t)?t:e}function Zp(e,t){return e==t}function Yp(e){return!Array.isArray(e)&&!isNaN(e)}function Yi(e){return e!==null&&typeof e=="object"&&typeof e.get=="function"&&typeof e.set=="function"}W("cloak",e=>queueMicrotask(()=>z(()=>e.removeAttribute(Mt("cloak")))));Oo(()=>`[${Mt("init")}]`);W("init",Ve((e,{expression:t},{evaluate:n})=>typeof t=="string"?!!t.trim()&&n(t,{},!1):n(t,{},!1)));W("text",(e,{expression:t},{effect:n,evaluateLater:a})=>{let r=a(t);n(()=>{r(i=>{z(()=>{e.textContent=i})})})});W("html",(e,{expression:t},{effect:n,evaluateLater:a})=>{let r=a(t);n(()=>{r(i=>{z(()=>{e.innerHTML=i,e._x_ignoreSelf=!0,Pe(e),delete e._x_ignoreSelf})})})});ti(ko(":",Co(Mt("bind:"))));var mc=(e,{value:t,modifiers:n,expression:a,original:r},{effect:i,cleanup:s})=>{if(!t){let c={};ep(c),ne(e,a)(u=>{Zo(e,u,r)},{scope:c});return}if(t==="key")return Xp(e,a);if(e._x_inlineBindings&&e._x_inlineBindings[t]&&e._x_inlineBindings[t].extract)return;let o=ne(e,a);i(()=>o(c=>{c===void 0&&typeof a=="string"&&a.match(/\./)&&(c=""),z(()=>Mo(e,t,c,n))})),s(()=>{e._x_undoAddedClasses&&e._x_undoAddedClasses(),e._x_undoAddedStyles&&e._x_undoAddedStyles()})};mc.inline=(e,{value:t,modifiers:n,expression:a})=>{t&&(e._x_inlineBindings||(e._x_inlineBindings={}),e._x_inlineBindings[t]={expression:a,extract:!1})};W("bind",mc);function Xp(e,t){e._x_keyExpression=t}Ro(()=>`[${Mt("data")}]`);W("data",(e,{expression:t},{cleanup:n})=>{if(Kp(e))return;t=t===""?"{}":t;let a={};mr(a,e);let r={};np(r,a);let i=ct(e,t,{scope:r});(i===void 0||i===!0)&&(i={}),mr(i,e);let s=Pt(i);ho(s);let o=vn(e,s);s.init&&ct(e,s.init),n(()=>{s.destroy&&ct(e,s.destroy),o()})});Ea((e,t)=>{e._x_dataStack&&(t._x_dataStack=e._x_dataStack,t.setAttribute("data-has-alpine-state",!0))});function Kp(e){return He?vr?!0:e.hasAttribute("data-has-alpine-state"):!1}W("show",(e,{modifiers:t,expression:n},{effect:a})=>{let r=ne(e,n);e._x_doHide||(e._x_doHide=()=>{z(()=>{e.style.setProperty("display","none",t.includes("important")?"important":void 0)})}),e._x_doShow||(e._x_doShow=()=>{z(()=>{e.style.length===1&&e.style.display==="none"?e.removeAttribute("style"):e.style.removeProperty("display")})});let i=()=>{e._x_doHide(),e._x_isShown=!1},s=()=>{e._x_doShow(),e._x_isShown=!0},o=()=>setTimeout(s),c=_r(p=>p?s():i(),p=>{typeof e._x_toggleAndCascadeWithTransitions=="function"?e._x_toggleAndCascadeWithTransitions(e,p,s,i):p?o():i()}),l,u=!0;a(()=>r(p=>{!u&&p===l||(t.includes("immediate")&&(p?o():i()),c(p),l=p,u=!1)}))});W("for",(e,{expression:t},{effect:n,cleanup:a})=>{let r=Jp(t),i=ne(e,r.items),s=ne(e,e._x_keyExpression||"index");e._x_prevKeys=[],e._x_lookup={},n(()=>Qp(e,r,i,s)),a(()=>{Object.values(e._x_lookup).forEach(o=>z(()=>{zt(o),o.remove()})),delete e._x_prevKeys,delete e._x_lookup})});function Qp(e,t,n,a){let r=s=>typeof s=="object"&&!Array.isArray(s),i=e;n(s=>{ed(s)&&s>=0&&(s=Array.from(Array(s).keys(),f=>f+1)),s===void 0&&(s=[]);let o=e._x_lookup,c=e._x_prevKeys,l=[],u=[];if(r(s))s=Object.entries(s).map(([f,b])=>{let _=Xi(t,b,f,s);a(w=>{u.includes(w)&&pe("Duplicate key on x-for",e),u.push(w)},{scope:{index:f,..._}}),l.push(_)});else for(let f=0;f{u.includes(_)&&pe("Duplicate key on x-for",e),u.push(_)},{scope:{index:f,...b}}),l.push(b)}let p=[],d=[],m=[],g=[];for(let f=0;f!m.includes(f));let v="template";for(let f=0;f{$[N]=I})},z(()=>{w.after(k),Ve(()=>Pe(k))()}),typeof C=="object"&&pe("x-for key cannot be an object, it must be a string or an integer",i),o[C]=k}for(let f=0;fs.trim()).forEach((s,o)=>{r[s]=t[o]}):/^\{.*\}$/.test(e.item)&&!Array.isArray(t)&&typeof t=="object"?e.item.replace("{","").replace("}","").split(",").map(s=>s.trim()).forEach(s=>{r[s]=t[s]}):r[e.item]=t,e.index&&(r[e.index]=n),e.collection&&(r[e.collection]=a),r}function ed(e){return!Array.isArray(e)&&!isNaN(e)}function hc(){}hc.inline=(e,{expression:t},{cleanup:n})=>{let a=ka(e);a._x_refs||(a._x_refs={}),a._x_refs[t]=e,n(()=>delete a._x_refs[t])};W("ref",hc);W("if",(e,{expression:t},{effect:n,cleanup:a})=>{e.tagName.toLowerCase()!=="template"&&pe("x-if can only be used on a  tag",e);let r=ne(e,t),i=()=>{if(e._x_currentIfEl)return e._x_currentIfEl;let o=e.content.cloneNode(!0).firstElementChild;return vn(o,{},e),z(()=>{e.after(o),Ve(()=>Pe(o))()}),e._x_currentIfEl=o,e._x_undoIf=()=>{z(()=>{zt(o),o.remove()}),delete e._x_currentIfEl},o},s=()=>{e._x_undoIf&&(e._x_undoIf(),delete e._x_undoIf)};n(()=>r(o=>{o?i():s()})),a(()=>e._x_undoIf&&e._x_undoIf())});W("id",(e,{expression:t},{evaluate:n})=>{n(t).forEach(r=>qp(e,r))});Ea((e,t)=>{e._x_ids&&(t._x_ids=e._x_ids)});ti(ko("@",Co(Mt("on:"))));W("on",Ve((e,{value:t,modifiers:n,expression:a},{cleanup:r})=>{let i=a?ne(e,a):()=>{};e.tagName.toLowerCase()==="template"&&(e._x_forwardEvents||(e._x_forwardEvents=[]),e._x_forwardEvents.includes(t)||e._x_forwardEvents.push(t));let s=Cr(e,t,n,o=>{i(()=>{},{scope:{$event:o},params:[o]})});r(()=>s())}));Sa("Collapse","collapse","collapse");Sa("Intersect","intersect","intersect");Sa("Focus","trap","focus");Sa("Mask","mask","mask");function Sa(e,t,n){W(t,a=>pe(`You can't use [x-${t}] without first installing the "${e}" plugin here: https://alpinejs.dev/plugins/${n}`,a))}xn.setEvaluator(yo);xn.setReactivityEngine({reactive:mi,effect:dp,release:mp,raw:M});var td=xn,gc=td,ae="top",he="bottom",ge="right",re="left",hi="auto",kn=[ae,he,ge,re],Rt="start",mn="end",nd="clippingParents",fc="viewport",en="popper",ad="reference",Ki=kn.reduce(function(e,t){return e.concat([t+"-"+Rt,t+"-"+mn])},[]),bc=[].concat(kn,[hi]).reduce(function(e,t){return e.concat([t,t+"-"+Rt,t+"-"+mn])},[]),rd="beforeRead",id="read",sd="afterRead",od="beforeMain",cd="main",ld="afterMain",ud="beforeWrite",pd="write",dd="afterWrite",md=[rd,id,sd,od,cd,ld,ud,pd,dd];function je(e){return e?(e.nodeName||"").toLowerCase():null}function oe(e){if(e==null)return window;if(e.toString()!=="[object Window]"){var t=e.ownerDocument;return t&&t.defaultView||window}return e}function mt(e){var t=oe(e).Element;return e instanceof t||e instanceof Element}function me(e){var t=oe(e).HTMLElement;return e instanceof t||e instanceof HTMLElement}function gi(e){if(typeof ShadowRoot>"u")return!1;var t=oe(e).ShadowRoot;return e instanceof t||e instanceof ShadowRoot}function hd(e){var t=e.state;Object.keys(t.elements).forEach(function(n){var a=t.styles[n]||{},r=t.attributes[n]||{},i=t.elements[n];!me(i)||!je(i)||(Object.assign(i.style,a),Object.keys(r).forEach(function(s){var o=r[s];o===!1?i.removeAttribute(s):i.setAttribute(s,o===!0?"":o)}))})}function gd(e){var t=e.state,n={popper:{position:t.options.strategy,left:"0",top:"0",margin:"0"},arrow:{position:"absolute"},reference:{}};return Object.assign(t.elements.popper.style,n.popper),t.styles=n,t.elements.arrow&&Object.assign(t.elements.arrow.style,n.arrow),function(){Object.keys(t.elements).forEach(function(a){var r=t.elements[a],i=t.attributes[a]||{},s=Object.keys(t.styles.hasOwnProperty(a)?t.styles[a]:n[a]),o=s.reduce(function(c,l){return c[l]="",c},{});!me(r)||!je(r)||(Object.assign(r.style,o),Object.keys(i).forEach(function(c){r.removeAttribute(c)}))})}}const _c={name:"applyStyles",enabled:!0,phase:"write",fn:hd,effect:gd,requires:["computeStyles"]};function $e(e){return e.split("-")[0]}var pt=Math.max,la=Math.min,Ot=Math.round;function Er(){var e=navigator.userAgentData;return e!=null&&e.brands&&Array.isArray(e.brands)?e.brands.map(function(t){return t.brand+"/"+t.version}).join(" "):navigator.userAgent}function yc(){return!/^((?!chrome|android).)*safari/i.test(Er())}function It(e,t,n){t===void 0&&(t=!1),n===void 0&&(n=!1);var a=e.getBoundingClientRect(),r=1,i=1;t&&me(e)&&(r=e.offsetWidth>0&&Ot(a.width)/e.offsetWidth||1,i=e.offsetHeight>0&&Ot(a.height)/e.offsetHeight||1);var s=mt(e)?oe(e):window,o=s.visualViewport,c=!yc()&&n,l=(a.left+(c&&o?o.offsetLeft:0))/r,u=(a.top+(c&&o?o.offsetTop:0))/i,p=a.width/r,d=a.height/i;return{width:p,height:d,top:u,right:l+p,bottom:u+d,left:l,x:l,y:u}}function fi(e){var t=It(e),n=e.offsetWidth,a=e.offsetHeight;return Math.abs(t.width-n)n?n:a}function wc(){return{top:0,right:0,bottom:0,left:0}}function xc(e){return Object.assign({},wc(),e)}function kc(e,t){return t.reduce(function(n,a){return n[a]=e,n},{})}var yd=function(t,n){return t=typeof t=="function"?t(Object.assign({},n.rects,{placement:n.placement})):t,xc(typeof t!="number"?t:kc(t,kn))};function vd(e){var t,n=e.state,a=e.name,r=e.options,i=n.elements.arrow,s=n.modifiersData.popperOffsets,o=$e(n.placement),c=bi(o),l=[re,ge].indexOf(o)>=0,u=l?"height":"width";if(!(!i||!s)){var p=yd(r.padding,n),d=fi(i),m=c==="y"?ae:re,g=c==="y"?he:ge,v=n.rects.reference[u]+n.rects.reference[c]-s[c]-n.rects.popper[u],f=s[c]-n.rects.reference[c],b=Cn(i),_=b?c==="y"?b.clientHeight||0:b.clientWidth||0:0,w=v/2-f/2,h=p[m],C=_-d[u]-p[g],k=_/2-d[u]/2+w,$=on(h,k,C),T=c;n.modifiersData[a]=(t={},t[T]=$,t.centerOffset=$-k,t)}}function wd(e){var t=e.state,n=e.options,a=n.element,r=a===void 0?"[data-popper-arrow]":a;r!=null&&(typeof r=="string"&&(r=t.elements.popper.querySelector(r),!r)||vc(t.elements.popper,r)&&(t.elements.arrow=r))}const xd={name:"arrow",enabled:!0,phase:"main",fn:vd,effect:wd,requires:["popperOffsets"],requiresIfExists:["preventOverflow"]};function Nt(e){return e.split("-")[1]}var kd={top:"auto",right:"auto",bottom:"auto",left:"auto"};function Cd(e,t){var n=e.x,a=e.y,r=t.devicePixelRatio||1;return{x:Ot(n*r)/r||0,y:Ot(a*r)/r||0}}function Ji(e){var t,n=e.popper,a=e.popperRect,r=e.placement,i=e.variation,s=e.offsets,o=e.position,c=e.gpuAcceleration,l=e.adaptive,u=e.roundOffsets,p=e.isFixed,d=s.x,m=d===void 0?0:d,g=s.y,v=g===void 0?0:g,f=typeof u=="function"?u({x:m,y:v}):{x:m,y:v};m=f.x,v=f.y;var b=s.hasOwnProperty("x"),_=s.hasOwnProperty("y"),w=re,h=ae,C=window;if(l){var k=Cn(n),$="clientHeight",T="clientWidth";if(k===oe(n)&&(k=Ze(n),De(k).position!=="static"&&o==="absolute"&&($="scrollHeight",T="scrollWidth")),k=k,r===ae||(r===re||r===ge)&&i===mn){h=he;var N=p&&k===C&&C.visualViewport?C.visualViewport.height:k[$];v-=N-a.height,v*=c?1:-1}if(r===re||(r===ae||r===he)&&i===mn){w=ge;var I=p&&k===C&&C.visualViewport?C.visualViewport.width:k[T];m-=I-a.width,m*=c?1:-1}}var D=Object.assign({position:o},l&&kd),R=u===!0?Cd({x:m,y:v},oe(n)):{x:m,y:v};if(m=R.x,v=R.y,c){var L;return Object.assign({},D,(L={},L[h]=_?"0":"",L[w]=b?"0":"",L.transform=(C.devicePixelRatio||1)=0?e.ownerDocument.body:me(e)&&vi(e)?e:Cc(Aa(e))}function cn(e,t){var n;t===void 0&&(t=[]);var a=Cc(e),r=a===((n=e.ownerDocument)==null?void 0:n.body),i=oe(a),s=r?[i].concat(i.visualViewport||[],vi(a)?a:[]):a,o=t.concat(s);return r?o:o.concat(cn(Aa(s)))}function Fr(e){return Object.assign({},e,{left:e.x,top:e.y,right:e.x+e.width,bottom:e.y+e.height})}function Od(e,t){var n=It(e,!1,t==="fixed");return n.top=n.top+e.clientTop,n.left=n.left+e.clientLeft,n.bottom=n.top+e.clientHeight,n.right=n.left+e.clientWidth,n.width=e.clientWidth,n.height=e.clientHeight,n.x=n.left,n.y=n.top,n}function ts(e,t,n){return t===fc?Fr(Td(e,n)):mt(t)?Od(t,n):Fr(Rd(Ze(e)))}function Id(e){var t=cn(Aa(e)),n=["absolute","fixed"].indexOf(De(e).position)>=0,a=n&&me(e)?Cn(e):e;return mt(a)?t.filter(function(r){return mt(r)&&vc(r,a)&&je(r)!=="body"}):[]}function Nd(e,t,n,a){var r=t==="clippingParents"?Id(e):[].concat(t),i=[].concat(r,[n]),s=i[0],o=i.reduce(function(c,l){var u=ts(e,l,a);return c.top=pt(u.top,c.top),c.right=la(u.right,c.right),c.bottom=la(u.bottom,c.bottom),c.left=pt(u.left,c.left),c},ts(e,s,a));return o.width=o.right-o.left,o.height=o.bottom-o.top,o.x=o.left,o.y=o.top,o}function Ec(e){var t=e.reference,n=e.element,a=e.placement,r=a?$e(a):null,i=a?Nt(a):null,s=t.x+t.width/2-n.width/2,o=t.y+t.height/2-n.height/2,c;switch(r){case ae:c={x:s,y:t.y-n.height};break;case he:c={x:s,y:t.y+t.height};break;case ge:c={x:t.x+t.width,y:o};break;case re:c={x:t.x-n.width,y:o};break;default:c={x:t.x,y:t.y}}var l=r?bi(r):null;if(l!=null){var u=l==="y"?"height":"width";switch(i){case Rt:c[l]=c[l]-(t[u]/2-n[u]/2);break;case mn:c[l]=c[l]+(t[u]/2-n[u]/2);break}}return c}function hn(e,t){t===void 0&&(t={});var n=t,a=n.placement,r=a===void 0?e.placement:a,i=n.strategy,s=i===void 0?e.strategy:i,o=n.boundary,c=o===void 0?nd:o,l=n.rootBoundary,u=l===void 0?fc:l,p=n.elementContext,d=p===void 0?en:p,m=n.altBoundary,g=m===void 0?!1:m,v=n.padding,f=v===void 0?0:v,b=xc(typeof f!="number"?f:kc(f,kn)),_=d===en?ad:en,w=e.rects.popper,h=e.elements[g?_:d],C=Nd(mt(h)?h:h.contextElement||Ze(e.elements.popper),c,u,s),k=It(e.elements.reference),$=Ec({reference:k,element:w,placement:r}),T=Fr(Object.assign({},w,$)),N=d===en?T:k,I={top:C.top-N.top+b.top,bottom:N.bottom-C.bottom+b.bottom,left:C.left-N.left+b.left,right:N.right-C.right+b.right},D=e.modifiersData.offset;if(d===en&&D){var R=D[r];Object.keys(I).forEach(function(L){var q=[ge,he].indexOf(L)>=0?1:-1,U=[ae,he].indexOf(L)>=0?"y":"x";I[L]+=R[U]*q})}return I}function Ld(e,t){t===void 0&&(t={});var n=t,a=n.placement,r=n.boundary,i=n.rootBoundary,s=n.padding,o=n.flipVariations,c=n.allowedAutoPlacements,l=c===void 0?bc:c,u=Nt(a),p=u?o?Ki:Ki.filter(function(g){return Nt(g)===u}):kn,d=p.filter(function(g){return l.indexOf(g)>=0});d.length===0&&(d=p);var m=d.reduce(function(g,v){return g[v]=hn(e,{placement:v,boundary:r,rootBoundary:i,padding:s})[$e(v)],g},{});return Object.keys(m).sort(function(g,v){return m[g]-m[v]})}function Pd(e){if($e(e)===hi)return[];var t=ta(e);return[es(e),t,es(t)]}function Dd(e){var t=e.state,n=e.options,a=e.name;if(!t.modifiersData[a]._skip){for(var r=n.mainAxis,i=r===void 0?!0:r,s=n.altAxis,o=s===void 0?!0:s,c=n.fallbackPlacements,l=n.padding,u=n.boundary,p=n.rootBoundary,d=n.altBoundary,m=n.flipVariations,g=m===void 0?!0:m,v=n.allowedAutoPlacements,f=t.options.placement,b=$e(f),_=b===f,w=c||(_||!g?[ta(f)]:Pd(f)),h=[f].concat(w).reduce(function(Se,fe){return Se.concat($e(fe)===hi?Ld(t,{placement:fe,boundary:u,rootBoundary:p,padding:l,flipVariations:g,allowedAutoPlacements:v}):fe)},[]),C=t.rects.reference,k=t.rects.popper,$=new Map,T=!0,N=h[0],I=0;I=0,U=q?"width":"height",G=hn(t,{placement:D,boundary:u,rootBoundary:p,altBoundary:d,padding:l}),Q=q?L?ge:re:L?he:ae;C[U]>k[U]&&(Q=ta(Q));var K=ta(Q),we=[];if(i&&we.push(G[R]=0?-1:1,i=typeof n=="function"?n(Object.assign({},t,{placement:e})):n,s=i[0],o=i[1];return s=s||0,o=(o||0)*r,[re,ge].indexOf(a)>=0?{x:o,y:s}:{x:s,y:o}}function Ud(e){var t=e.state,n=e.options,a=e.name,r=n.offset,i=r===void 0?[0,0]:r,s=bc.reduce(function(u,p){return u[p]=Bd(p,t.rects,i),u},{}),o=s[t.placement],c=o.x,l=o.y;t.modifiersData.popperOffsets!=null&&(t.modifiersData.popperOffsets.x+=c,t.modifiersData.popperOffsets.y+=l),t.modifiersData[a]=s}const Gd={name:"offset",enabled:!0,phase:"main",requires:["popperOffsets"],fn:Ud};function Hd(e){var t=e.state,n=e.name;t.modifiersData[n]=Ec({reference:t.rects.reference,element:t.rects.popper,placement:t.placement})}const Wd={name:"popperOffsets",enabled:!0,phase:"read",fn:Hd,data:{}};function Vd(e){return e==="x"?"y":"x"}function Zd(e){var t=e.state,n=e.options,a=e.name,r=n.mainAxis,i=r===void 0?!0:r,s=n.altAxis,o=s===void 0?!1:s,c=n.boundary,l=n.rootBoundary,u=n.altBoundary,p=n.padding,d=n.tether,m=d===void 0?!0:d,g=n.tetherOffset,v=g===void 0?0:g,f=hn(t,{boundary:c,rootBoundary:l,padding:p,altBoundary:u}),b=$e(t.placement),_=Nt(t.placement),w=!_,h=bi(b),C=Vd(h),k=t.modifiersData.popperOffsets,$=t.rects.reference,T=t.rects.popper,N=typeof v=="function"?v(Object.assign({},t.rects,{placement:t.placement})):v,I=typeof N=="number"?{mainAxis:N,altAxis:N}:Object.assign({mainAxis:0,altAxis:0},N),D=t.modifiersData.offset?t.modifiersData.offset[t.placement]:null,R={x:0,y:0};if(k){if(i){var L,q=h==="y"?ae:re,U=h==="y"?he:ge,G=h==="y"?"height":"width",Q=k[h],K=Q+f[q],we=Q-f[U],xe=m?-T[G]/2:0,Ye=_===Rt?$[G]:T[G],ke=_===Rt?-T[G]:-$[G],Xe=t.elements.arrow,Se=m&&Xe?fi(Xe):{width:0,height:0},fe=t.modifiersData["arrow#persistent"]?t.modifiersData["arrow#persistent"].padding:wc(),Ae=fe[q],bt=fe[U],Te=on(0,$[G],Se[G]),_t=w?$[G]/2-xe-Te-Ae-I.mainAxis:Ye-Te-Ae-I.mainAxis,Me=w?-$[G]/2+xe+Te+bt+I.mainAxis:ke+Te+bt+I.mainAxis,yt=t.elements.arrow&&Cn(t.elements.arrow),Sn=yt?h==="y"?yt.clientTop||0:yt.clientLeft||0:0,Wt=(L=D?.[h])!=null?L:0,An=Q+_t-Wt-Sn,Tn=Q+Me-Wt,Vt=on(m?la(K,An):K,Q,m?pt(we,Tn):we);k[h]=Vt,R[h]=Vt-Q}if(o){var Zt,Rn=h==="x"?ae:re,On=h==="x"?he:ge,Re=k[C],qe=C==="y"?"height":"width",Yt=Re+f[Rn],Ke=Re-f[On],Xt=[ae,re].indexOf(b)!==-1,In=(Zt=D?.[C])!=null?Zt:0,Nn=Xt?Yt:Re-$[qe]-T[qe]-In+I.altAxis,Ln=Xt?Re+$[qe]+T[qe]-In-I.altAxis:Ke,Pn=m&&Xt?_d(Nn,Re,Ln):on(m?Nn:Yt,Re,m?Ln:Ke);k[C]=Pn,R[C]=Pn-Re}t.modifiersData[a]=R}}const Yd={name:"preventOverflow",enabled:!0,phase:"main",fn:Zd,requiresIfExists:["offset"]};function Xd(e){return{scrollLeft:e.scrollLeft,scrollTop:e.scrollTop}}function Kd(e){return e===oe(e)||!me(e)?_i(e):Xd(e)}function Qd(e){var t=e.getBoundingClientRect(),n=Ot(t.width)/e.offsetWidth||1,a=Ot(t.height)/e.offsetHeight||1;return n!==1||a!==1}function Jd(e,t,n){n===void 0&&(n=!1);var a=me(t),r=me(t)&&Qd(t),i=Ze(t),s=It(e,r,n),o={scrollLeft:0,scrollTop:0},c={x:0,y:0};return(a||!a&&!n)&&((je(t)!=="body"||vi(i))&&(o=Kd(t)),me(t)?(c=It(t,!0),c.x+=t.clientLeft,c.y+=t.clientTop):i&&(c.x=yi(i))),{x:s.left+o.scrollLeft-c.x,y:s.top+o.scrollTop-c.y,width:s.width,height:s.height}}function em(e){var t=new Map,n=new Set,a=[];e.forEach(function(i){t.set(i.name,i)});function r(i){n.add(i.name);var s=[].concat(i.requires||[],i.requiresIfExists||[]);s.forEach(function(o){if(!n.has(o)){var c=t.get(o);c&&r(c)}}),a.push(i)}return e.forEach(function(i){n.has(i.name)||r(i)}),a}function tm(e){var t=em(e);return md.reduce(function(n,a){return n.concat(t.filter(function(r){return r.phase===a}))},[])}function nm(e){var t;return function(){return t||(t=new Promise(function(n){Promise.resolve().then(function(){t=void 0,n(e())})})),t}}function am(e){var t=e.reduce(function(n,a){var r=n[a.name];return n[a.name]=r?Object.assign({},r,a,{options:Object.assign({},r.options,a.options),data:Object.assign({},r.data,a.data)}):a,n},{});return Object.keys(t).map(function(n){return t[n]})}var rs={placement:"bottom",modifiers:[],strategy:"absolute"};function is(){for(var e=arguments.length,t=new Array(e),n=0;nc,f=a-i.bottom-d>c,b=i.left-n+m>c,_=n-i.right-g>c;return v||f||b||_})}function Wa(e,t,n){var a=t+"EventListener";["transitionend","webkitTransitionEnd"].forEach(function(r){e[a](r,n)})}function us(e,t){for(var n=t;n;){var a;if(e.contains(n))return!0;n=n.getRootNode==null||(a=n.getRootNode())==null?void 0:a.host}return!1}var Fe={isTouch:!1},ps=0;function _m(){Fe.isTouch||(Fe.isTouch=!0,window.performance&&document.addEventListener("mousemove",Tc))}function Tc(){var e=performance.now();e-ps=0&&h.props.trigger.indexOf("click")>=0&&["mouseleave","mousemove"].indexOf(y.type)>=0&&s)){var E=G(!1);E?r=setTimeout(function(){h.state.isVisible&&h.hide()},E):i=requestAnimationFrame(function(){h.hide()})}}function Xt(){h.state.isEnabled=!0}function In(){h.hide(),h.state.isEnabled=!1}function Nn(){clearTimeout(a),clearTimeout(r),cancelAnimationFrame(i)}function Ln(y){if(!h.state.isDestroyed){K("onBeforeUpdate",[h,y]),Sn();var E=h.props,F=ds(e,Object.assign({},E,cs(y),{ignoreAttributes:!0}));h.props=F,yt(),E.interactiveDebounce!==F.interactiveDebounce&&(Ye(),g=ss(An,F.interactiveDebounce)),E.triggerTarget&&!F.triggerTarget?Ct(E.triggerTarget).forEach(function(O){O.removeAttribute("aria-expanded")}):F.triggerTarget&&e.removeAttribute("aria-expanded"),xe(),Q(),$&&$(E,F),h.popperInstance&&(Rn(),qe().forEach(function(O){requestAnimationFrame(O._tippy.popperInstance.forceUpdate)})),K("onAfterUpdate",[h,y])}}function Pn(y){h.setProps({content:y})}function zl(){var y=h.state.isVisible,E=h.state.isDestroyed,F=!h.state.isEnabled,O=Fe.isTouch&&!h.props.touch,A=Ga(h.props.duration,0,_e.duration);if(!(y||E||F||O)&&!L().hasAttribute("disabled")&&(K("onShow",[h],!1),h.props.onShow(h)!==!1)){if(h.state.isVisible=!0,R()&&(k.style.visibility="visible"),Q(),fe(),h.state.isMounted||(k.style.transition="none"),R()){var te=U(),ce=te.box,vt=te.content;Ha([ce,vt],0)}d=function(){var Qe;if(!(!h.state.isVisible||l)){if(l=!0,k.offsetHeight,k.style.transition=h.props.moveTransition,R()&&h.props.animation){var Pa=U(),Dn=Pa.box,wt=Pa.content;Ha([Dn,wt],A),ls([Dn,wt],"visible")}we(),xe(),os(Va,h),(Qe=h.popperInstance)==null||Qe.forceUpdate(),K("onMount",[h]),h.props.animation&&R()&&Te(A,function(){h.state.isShown=!0,K("onShown",[h])})}},Re()}}function Bl(){var y=!h.state.isVisible,E=h.state.isDestroyed,F=!h.state.isEnabled,O=Ga(h.props.duration,1,_e.duration);if(!(y||E||F)&&(K("onHide",[h],!1),h.props.onHide(h)!==!1)){if(h.state.isVisible=!1,h.state.isShown=!1,l=!1,s=!1,R()&&(k.style.visibility="hidden"),Ye(),Ae(),Q(!0),R()){var A=U(),te=A.box,ce=A.content;h.props.animation&&(Ha([te,ce],O),ls([te,ce],"hidden"))}we(),xe(),h.props.animation?R()&&bt(O,h.unmount):h.unmount()}}function Ul(y){q().addEventListener("mousemove",g),os(Wn,g),g(y)}function Gl(){h.state.isVisible&&h.hide(),h.state.isMounted&&(On(),qe().forEach(function(y){y._tippy.unmount()}),k.parentNode&&k.parentNode.removeChild(k),Va=Va.filter(function(y){return y!==h}),h.state.isMounted=!1,K("onHidden",[h]))}function Hl(){h.state.isDestroyed||(h.clearDelayTimeouts(),h.unmount(),Sn(),delete e._tippy,h.state.isDestroyed=!0,K("onDestroy",[h]))}}function En(e,t){t===void 0&&(t={});var n=_e.plugins.concat(t.plugins||[]);vm();var a=Object.assign({},t,{plugins:n}),r=gm(e),i=r.reduce(function(s,o){var c=o&&Am(o,a);return c&&s.push(c),s},[]);return Ta(e)?i[0]:i}En.defaultProps=_e;En.setDefaultProps=Fm;En.currentInput=Fe;Object.assign({},_c,{effect:function(t){var n=t.state,a={popper:{position:n.options.strategy,left:"0",top:"0",margin:"0"},arrow:{position:"absolute"},reference:{}};Object.assign(n.elements.popper.style,a.popper),n.styles=a,n.elements.arrow&&Object.assign(n.elements.arrow.style,a.arrow)}});En.setDefaultProps({render:Oc});let Y=class extends Error{constructor(t){super(t),this.name="ShikiError"}};function Tm(e){return xi(e)}function xi(e){return Array.isArray(e)?Rm(e):e instanceof RegExp?e:typeof e=="object"?Om(e):e}function Rm(e){let t=[];for(let n=0,a=e.length;n{for(let a in n)e[a]=n[a]}),e}function Nc(e){const t=~e.lastIndexOf("/")||~e.lastIndexOf("\\");return t===0?e:~t===e.length-1?Nc(e.substring(0,e.length-1)):e.substr(~t+1)}var Za=/\$(\d+)|\${(\d+):\/(downcase|upcase)}/g,Vn=class{static hasCaptures(e){return e===null?!1:(Za.lastIndex=0,Za.test(e))}static replaceCaptures(e,t,n){return e.replace(Za,(a,r,i,s)=>{let o=n[parseInt(r||i,10)];if(o){let c=t.substring(o.start,o.end);for(;c[0]===".";)c=c.substring(1);switch(s){case"downcase":return c.toLowerCase();case"upcase":return c.toUpperCase();default:return c}}else return a})}};function Lc(e,t){return et?1:0}function Pc(e,t){if(e===null&&t===null)return 0;if(!e)return-1;if(!t)return 1;let n=e.length,a=t.length;if(n===a){for(let r=0;rthis._root.match(e));getColorMap(){return this._colorMap.getColorMap()}getDefaults(){return this._defaults}match(e){if(e===null)return this._defaults;const t=e.scopeName,a=this._cachedMatchRoot.get(t).find(r=>Im(e.parent,r.parentScopes));return a?new qc(a.fontStyle,a.foreground,a.background):null}},Ya=class na{constructor(t,n){this.parent=t,this.scopeName=n}static push(t,n){for(const a of n)t=new na(t,a);return t}static from(...t){let n=null;for(let a=0;a=1&&e[0].scope==="";){let c=e.shift();c.fontStyle!==-1&&(n=c.fontStyle),c.foreground!==null&&(a=c.foreground),c.background!==null&&(r=c.background)}let i=new Mm(t),s=new qc(n,i.getId(a),i.getId(r)),o=new zm(new Sr(0,null,-1,0,0),[]);for(let c=0,l=e.length;c=t.parentScopes.length||r>=n.parentScopes.length);){const i=n.parentScopes[r].length-t.parentScopes[a].length;if(i!==0)return i;a++,r++}return n.parentScopes.length-t.parentScopes.length}match(t){if(t!==""){let a=t.indexOf("."),r,i;if(a===-1?(r=t,i=""):(r=t.substring(0,a),i=t.substring(a+1)),this._children.hasOwnProperty(r))return this._children[r].match(i)}const n=this._rulesWithParentScopes.concat(this._mainRule);return n.sort(Ar._cmpBySpecificity),n}insert(t,n,a,r,i,s){if(n===""){this._doInsertHere(t,a,r,i,s);return}let o=n.indexOf("."),c,l;o===-1?(c=n,l=""):(c=n.substring(0,o),l=n.substring(o+1));let u;this._children.hasOwnProperty(c)?u=this._children[c]:(u=new Ar(this._mainRule.clone(),Sr.cloneArr(this._rulesWithParentScopes)),this._children[c]=u),u.insert(t+1,l,a,r,i,s)}_doInsertHere(t,n,a,r,i){if(n===null){this._mainRule.acceptOverwrite(t,a,r,i);return}for(let s=0,o=this._rulesWithParentScopes.length;s>>0}static getTokenType(t){return(t&768)>>>8}static containsBalancedBrackets(t){return(t&1024)!==0}static getFontStyle(t){return(t&30720)>>>11}static getForeground(t){return(t&16744448)>>>15}static getBackground(t){return(t&4278190080)>>>24}static set(t,n,a,r,i,s,o){let c=le.getLanguageId(t),l=le.getTokenType(t),u=le.containsBalancedBrackets(t)?1:0,p=le.getFontStyle(t),d=le.getForeground(t),m=le.getBackground(t);return n!==0&&(c=n),a!==8&&(l=a),r!==null&&(u=r?1:0),i!==-1&&(p=i),s!==0&&(d=s),o!==0&&(m=o),(c{if(t.id=r,t.match)return new th(t.$vscodeTextmateLocation,t.id,t.name,t.match,J._compileCaptures(t.captures,n,a));if(typeof t.begin>"u"){t.repository&&(a=Ic({},a,t.repository));let i=t.patterns;return typeof i>"u"&&t.include&&(i=[{include:t.include}]),new _s(t.$vscodeTextmateLocation,t.id,t.name,t.contentName,J._compilePatterns(i,n,a))}return t.while?new ha(t.$vscodeTextmateLocation,t.id,t.name,t.contentName,t.begin,J._compileCaptures(t.beginCaptures||t.captures,n,a),t.while,J._compileCaptures(t.whileCaptures||t.captures,n,a),J._compilePatterns(t.patterns,n,a)):new Rr(t.$vscodeTextmateLocation,t.id,t.name,t.contentName,t.begin,J._compileCaptures(t.beginCaptures||t.captures,n,a),t.end,J._compileCaptures(t.endCaptures||t.captures,n,a),t.applyEndPatternLast,J._compilePatterns(t.patterns,n,a))}),t.id}static _compileCaptures(t,n,a){let r=[];if(t){let i=0;for(const s in t){if(s==="$vscodeTextmateLocation")continue;const o=parseInt(s,10);o>i&&(i=o)}for(let s=0;s",OElig:"Œ",oelig:"œ",Scaron:"Š",scaron:"š",Yuml:"Ÿ",circ:"ˆ",tilde:"˜",ensp:" ",emsp:" ",thinsp:" ",zwnj:"‌",zwj:"‍",lrm:"‎",rlm:"‏",ndash:"–",mdash:"—",lsquo:"‘",rsquo:"’",sbquo:"‚",ldquo:"“",rdquo:"”",bdquo:"„",dagger:"†",Dagger:"‡",permil:"‰",lsaquo:"‹",rsaquo:"›",euro:"€"},qh=["cent","copy","divide","gt","lt","not","para","times"],al={}.hasOwnProperty,Mr={};let Zn;for(Zn in Qa)al.call(Qa,Zn)&&(Mr[Qa[Zn]]=Zn);const zh=/[^\dA-Za-z]/;function Bh(e,t,n,a){const r=String.fromCharCode(e);if(al.call(Mr,r)){const i=Mr[r],s="&"+i;return n&&Mh.includes(i)&&!qh.includes(i)&&(!a||t&&t!==61&&zh.test(String.fromCharCode(t)))?s:s+";"}return""}function Uh(e,t,n){let a=Lh(e,t,n.omitOptionalSemicolons),r;if((n.useNamedReferences||n.useShortestReferences)&&(r=Bh(e,t,n.omitOptionalSemicolons,n.attribute)),(n.useShortestReferences||!r)&&n.useShortestReferences){const i=Dh(e,t,n.omitOptionalSemicolons);i.length||--!>|

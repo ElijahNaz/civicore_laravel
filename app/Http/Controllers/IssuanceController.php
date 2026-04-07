@@ -34,7 +34,9 @@ class IssuanceController extends Controller
                 $params[] = $searchTerm;
                 $params[] = $searchTerm;
             }
-            $whereClause = " WHERE " . implode(" AND ", $conditions);
+            $whereClause = " WHERE " . implode(" AND ", $conditions) . " AND deleted_at IS NULL";
+        } else {
+            $whereClause = " WHERE deleted_at IS NULL";
         }
         
         // Get total count
@@ -43,7 +45,7 @@ class IssuanceController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results
-        $query = "SELECT * FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
+        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
@@ -116,8 +118,15 @@ class IssuanceController extends Controller
     }
 
     /**
-     * Get next certificate number
+     * Undo soft delete for issuance
      */
+    public function undo($id)
+    {
+        DB::update("UPDATE issuances SET deleted_at = NULL WHERE id = ?", [$id]);
+        
+        return response()->json(['success' => true]);
+    }
+
     public function nextCertNumber($type)
     {
         // Determine prefix based on type
@@ -130,21 +139,64 @@ class IssuanceController extends Controller
         
         $year = date('Y');
         
-        // Get the last certificate number for this type and year
-        $results = DB::select("SELECT certNumber FROM issuances WHERE type = ? AND certNumber LIKE ? ORDER BY id DESC LIMIT 1", 
-            [$type, $prefix . '-' . $year . '%']);
+        // Tie tightly to primary key (id) across all issuances
+        $results = DB::select("SELECT MAX(id) as max_id FROM issuances");
         
         $nextNum = 1;
-        if (count($results) > 0) {
-            $lastCertNum = $results[0]->certNumber;
-            $parts = explode('-', $lastCertNum);
-            if (count($parts) === 3) {
-                $nextNum = intval($parts[2]) + 1;
-            }
+        if (count($results) > 0 && $results[0]->max_id !== null) {
+            $nextNum = intval($results[0]->max_id) + 1;
         }
         
         $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
         
         return response()->json(['certNumber' => $certNumber]);
+    }
+
+    /**
+     * Mark issuance as Issued and capture who issued it
+     */
+    public function markAsIssued(Request $request, $id)
+    {
+        $user = $request->session()->get('user_name', 'System');
+        
+        DB::update("UPDATE issuances SET status = 'Issued', encoded_by = ? WHERE id = ?", [$user, $id]);
+        
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Download issuance PDF
+     */
+    public function download($id)
+    {
+        $issuances = DB::select("SELECT file_data, certNumber FROM issuances WHERE id = ?", [$id]);
+        
+        if (count($issuances) === 0 || empty($issuances[0]->file_data)) {
+            return response()->json(['error' => 'Not found or no file data'], 404);
+        }
+
+        $filename = 'Certificate_' . $issuances[0]->certNumber . '.pdf';
+        
+        return response($issuances[0]->file_data)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    /**
+     * View issuance PDF
+     */
+    public function view($id)
+    {
+        $issuances = DB::select("SELECT file_data, certNumber FROM issuances WHERE id = ?", [$id]);
+        
+        if (count($issuances) === 0 || empty($issuances[0]->file_data)) {
+            return response()->json(['error' => 'Not found or no file data'], 404);
+        }
+
+        $filename = 'Certificate_' . $issuances[0]->certNumber . '.pdf';
+        
+        return response($issuances[0]->file_data)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="' . $filename . '"');
     }
 }

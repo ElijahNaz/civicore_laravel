@@ -51,9 +51,9 @@ export const ModalProvider = ({ children }) => {
             {children}
             <AlertModal 
                 isOpen={isOpen} 
+                {...config} 
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
-                {...config} 
             />
         </ModalContext.Provider>
     );

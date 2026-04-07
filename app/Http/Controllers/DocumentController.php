@@ -36,7 +36,9 @@ class DocumentController extends Controller
                 $params[] = $searchTerm;
                 $params[] = $searchTerm;
             }
-            $whereClause = " WHERE " . implode(" AND ", $conditions);
+            $whereClause = " WHERE " . implode(" AND ", $conditions) . " AND deleted_at IS NULL";
+        } else {
+            $whereClause = " WHERE deleted_at IS NULL";
         }
         
         // Get total count
@@ -45,7 +47,7 @@ class DocumentController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results (exclude file_data for performance)
-        $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, created_at, updated_at 
+        $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, extracted_fields, detected_type, created_at, updated_at, encoded_by 
                   FROM documents" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
@@ -136,7 +138,7 @@ class DocumentController extends Controller
 
         // Save to database with file content
         DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            [$originalName, $docType, date('m/d/Y'), $size, 'Uploaded', null, $personName, $barangay, $fileInfo, $fileContent]);
+            [$originalName, $docType, date('m/d/Y'), $size, 'Pending', null, $personName, $barangay, $fileInfo, $fileContent]);
 
         return response()->json([
             'success' => true,
@@ -148,12 +150,97 @@ class DocumentController extends Controller
     }
 
     /**
+     * Update document extracted fields (after OCR review)
+     * PUT /api/documents/{id}
+     */
+    public function update(Request $request, $id)
+    {
+        $extractedFields = $request->input('extracted_fields');
+        $personName      = $request->input('personName', '');
+        $barangay        = $request->input('barangay', '');
+        $status          = $request->input('status', 'Processed');
+        $parentalConsent = $request->input('parental_consent', false);
+
+        // Get current user encoded_by logic based on custom session setup
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $encodedBy = $user ? $user->name : 'System';
+
+        DB::update(
+            "UPDATE documents SET extracted_fields = ?, personName = ?, barangay = ?, status = ?, parental_consent = ?, encoded_by = ? WHERE id = ?",
+            [
+                json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                $personName,
+                $barangay,
+                $status,
+                $parentalConsent ? 1 : 0,
+                $encodedBy,
+                $id,
+            ]
+        );
+
+        // --- Automatically inject into Issuances if Processed ---
+        if ($status === 'Processed') {
+            $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
+            if (count($doc) > 0) {
+                // Determine prefix based on type
+                $docType = $doc[0]->detected_type ?: $doc[0]->type;
+                $prefix = 'BC'; // Birth Certificate default
+                if ($docType === 'death') {
+                    $prefix = 'DC'; // Death Certificate
+                } elseif ($docType === 'marriage' || $docType === 'marriage_license') {
+                    $prefix = 'ML'; // Marriage License
+                }
+                
+                $year = date('Y');
+                
+                // Get the last certificate number for this type and year
+                $results = DB::select("SELECT certNumber FROM issuances WHERE type = ? AND certNumber LIKE ? ORDER BY id DESC LIMIT 1", 
+                    [$docType, $prefix . '-' . $year . '%']);
+                
+                $nextNum = 1;
+                if (count($results) > 0) {
+                    $lastCertNum = $results[0]->certNumber;
+                    $parts = explode('-', $lastCertNum);
+                    if (count($parts) === 3) {
+                        $nextNum = intval($parts[2]) + 1;
+                    }
+                }
+                
+                $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+                $issuanceDate = date('m/d/Y');
+                
+                // Generate PDF using DOMPDF
+                $pdf = app('dompdf.wrapper');
+                $pdf->loadView('pdf.certificate', ['doc' => $doc[0], 'fields' => $extractedFields]);
+                $pdfData = $pdf->output();
+
+                // insert issuance with file_data
+                DB::insert("INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                    [$certNumber, $docType, $personName, $barangay, $issuanceDate, 'Active', $encodedBy, $id, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData]);
+            }
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Delete document
      */
     public function destroy($id)
     {
-        // Delete from database - file_data will be deleted automatically
-        DB::delete("DELETE FROM documents WHERE id = ?", [$id]);
+        // Soft delete from database
+        DB::update("UPDATE documents SET deleted_at = NOW() WHERE id = ?", [$id]);
+        
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Undo soft delete for document
+     */
+    public function undo($id)
+    {
+        DB::update("UPDATE documents SET deleted_at = NULL WHERE id = ?", [$id]);
         
         return response()->json(['success' => true]);
     }
@@ -171,6 +258,8 @@ class DocumentController extends Controller
 
         $doc = $documents[0];
         $metadata = json_decode($doc->metadata, true);
+        
+        $filename = $metadata['originalName'] ?? 'document.pdf';
         
         // Get file content from database
         $fileContent = $doc->file_data;

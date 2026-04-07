@@ -4,7 +4,7 @@ import {
     PrinterIcon, DocumentMinusIcon, 
     MagnifyingGlassIcon, PlusCircleIcon,
     AdjustmentsHorizontalIcon, EyeIcon,
-    TrashIcon, CheckCircleIcon, ClockIcon
+    TrashIcon, CheckCircleIcon, ClockIcon, ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -17,36 +17,62 @@ const Issuances = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectAll, setSelectAll] = useState(false);
     const [showNewModal, setShowNewModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('database');
     
     const [newCert, setNewCert] = useState({
         number: '',
         type: 'birth',
-        name: '',
         barangay: '',
         date: '',
-        status: 'Issued'
+        status: 'Pending'
     });
 
-    const fetchIssuances = async () => {
+    const fetchDatabaseData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch('/api/issuances', { credentials: 'include' });
-            const data = await res.json();
-            if (data.data) {
-                const results = data.data.map(i => ({
-                    id: i.id,
-                    number: i.certNumber,
-                    type: i.type,
-                    name: i.name,
-                    barangay: i.barangay,
-                    date: i.issuanceDate,
-                    status: i.status
-                }));
-                setCertificates(results);
-                sessionStorage.setItem('cache_issuances', JSON.stringify(results));
+            const [issRes, docRes] = await Promise.all([
+                fetch('/api/issuances', { credentials: 'include' }),
+                fetch('/api/documents', { credentials: 'include' })
+            ]);
+            let combined = [];
+            
+            if (issRes.ok) {
+                const issData = await issRes.json();
+                if (issData.data) {
+                    combined = [...combined, ...issData.data.map(i => ({
+                        id: `iss-${i.id}`,
+                        realId: i.id,
+                        number: i.certNumber,
+                        type: i.type,
+                        name: i.name,
+                        barangay: i.barangay,
+                        date: i.issuanceDate,
+                        status: i.status || 'Pending',
+                        encoded_by: i.encoded_by,
+                        source: 'issuance'
+                    }))];
+                }
             }
+            if (docRes.ok) {
+                const docData = await docRes.json();
+                if (docData.data) {
+                    combined = [...combined, ...docData.data.map(d => ({
+                        id: `doc-${d.id}`,
+                        realId: d.id,
+                        number: d.name, // filename
+                        type: d.type || 'Document',
+                        name: d.personName || 'Extracted via OCR',
+                        barangay: d.barangay || 'N/A',
+                        date: d.date || (d.created_at ? d.created_at.split('T')[0] : 'N/A'),
+                        status: d.status || 'Uploaded',
+                        encoded_by: d.encoded_by,
+                        source: 'document'
+                    }))];
+                }
+            }
+            setCertificates(combined);
         } catch (e) {
-            console.error("Error fetching issuances:", e);
+            console.error("Error fetching database records:", e);
         } finally {
             setIsLoading(false);
         }
@@ -54,7 +80,7 @@ const Issuances = () => {
 
     // Load from database initially
     useEffect(() => {
-        fetchIssuances();
+        fetchDatabaseData();
     }, []);
 
     // Generate real cert number from database when modal opens or type changes
@@ -109,9 +135,9 @@ const Issuances = () => {
             const data = await res.json();
             
             if (data.success) {
-                fetchIssuances();
+                fetchDatabaseData();
                 setShowNewModal(false);
-                setNewCert({ number: '', type: 'birth', name: '', barangay: '', date: '', status: 'Issued' });
+                setNewCert({ number: '', type: 'birth', name: '', barangay: '', date: '', status: 'Pending' });
                 showAlert({
                     title: 'Success',
                     message: 'New issuance has been saved successfully.',
@@ -134,37 +160,84 @@ const Issuances = () => {
         }
     };
 
-    const handleDelete = async (id) => {
+    const handleDelete = async (cert) => {
         showAlert({
-            title: 'Delete Issuance',
-            message: 'Are you sure you want to permanently delete this issuance record? This action cannot be undone.',
+            title: `Delete ${cert.source === 'issuance' ? 'Issuance' : 'Document'}`,
+            message: `Are you sure you want to delete this ${cert.source}?`,
             type: 'warning',
             showCancel: true,
             confirmText: 'Delete',
             onConfirm: async () => {
                 try {
-                    const res = await fetch(`/api/issuances/${id}`, {
+                    const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}` : `/api/documents/${cert.realId}`;
+                    const res = await fetch(endpoint, {
                         method: 'DELETE',
                         credentials: 'include'
                     });
                     const data = await res.json();
                     if (data.success) {
-                        // Update local state
-                        const updated = certificates.filter(c => c.id !== id);
+                        const updated = certificates.filter(c => c.id !== cert.id);
                         setCertificates(updated);
-                        sessionStorage.setItem('cache_issuances', JSON.stringify(updated));
                         
                         showAlert({
                             title: 'Deleted',
-                            message: 'The issuance has been successfully deleted.',
+                            message: `The ${cert.source} has been successfully deleted.`,
                             type: 'success'
                         });
                     }
                 } catch (error) {
-                    console.error("Error deleting issuance:", error);
+                    console.error("Error deleting record:", error);
                 }
             }
         });
+    };
+
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Delete ${selectedCerts.length} items?`)) return;
+        for (const cert of selectedCerts) {
+            const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}` : `/api/documents/${cert.realId}`;
+            await fetch(endpoint, { method: 'DELETE', credentials: 'include' });
+        }
+        setCertificates(prev => prev.filter(c => !c.selected));
+    };
+
+    const handleUndo = async (cert) => {
+        const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}/undo` : `/api/documents/${cert.realId}/undo`;
+        await fetch(endpoint, { method: 'POST', credentials: 'include' });
+        fetchDatabaseData();
+    };
+
+    const handleMarkAsIssued = async (cert) => {
+        if (cert.source !== 'issuance') {
+            showAlert({ title: "Note", message: "Only manually created issuance tracking records can be marked as Issued.", type: "warning" });
+            return;
+        }
+        try {
+            const res = await fetch(`/api/issuances/${cert.realId}/issue`, { method: 'POST', credentials: 'include' });
+            const data = await res.json();
+            if (data.success) {
+                showAlert({ title: "Finalized", message: "Certificate has been marked as Issued.", type: "success" });
+                fetchDatabaseData();
+            }
+        } catch (error) {
+            console.error("Error issuing:", error);
+        }
+    };
+
+    const handleView = (cert) => {
+        if (cert.source === 'issuance') {
+            window.open(`/api/issuances/view/${cert.realId}`, '_blank');
+        } else {
+            window.open(`/api/documents/download/${cert.realId}`, '_blank');
+        }
+    };
+
+    const handleDownload = (cert) => {
+        if (cert.source === 'issuance') {
+            window.open(`/api/issuances/download/${cert.realId}`, '_blank');
+        } else {
+            window.open(`/api/documents/download/${cert.realId}`, '_blank');
+        }
     };
 
     const containerVariants = {
@@ -195,7 +268,7 @@ const Issuances = () => {
                     <>
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Issuances</p>
+                                <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Database Records</p>
                                 <h3 className="text-3xl font-black text-slate-800">{certificates.length}</h3>
                             </div>
                             <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400">
@@ -205,8 +278,8 @@ const Issuances = () => {
                         
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-emerald-500 text-sm font-bold uppercase tracking-wider mb-1">Issued Status</p>
-                                <h3 className="text-3xl font-black text-slate-800">{certificates.filter(c => c.status === 'Issued').length}</h3>
+                                <p className="text-emerald-500 text-sm font-bold uppercase tracking-wider mb-1">Total Issuances</p>
+                                <h3 className="text-3xl font-black text-slate-800">{certificates.filter(c => c.source === 'issuance').length}</h3>
                             </div>
                             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500">
                                 <CheckCircleIcon className="w-6 h-6" />
@@ -215,16 +288,40 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-amber-500 text-sm font-bold uppercase tracking-wider mb-1">Pending Review</p>
-                                <h3 className="text-3xl font-black text-slate-800">{certificates.filter(c => c.status === 'Pending').length}</h3>
+                                <p className="text-indigo-500 text-sm font-bold uppercase tracking-wider mb-1">Uploaded Documents</p>
+                                <h3 className="text-3xl font-black text-slate-800">{certificates.filter(c => c.source === 'document').length}</h3>
                             </div>
-                            <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-500">
+                            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-500">
                                 <ClockIcon className="w-6 h-6" />
                             </div>
                         </motion.div>
                     </>
                 )}
             </div>
+
+            {/* View Tabs */}
+            <motion.div variants={itemVariants} className="flex space-x-1 bg-slate-100 p-1.5 rounded-xl w-fit">
+                <button
+                    onClick={() => setActiveTab('database')}
+                    className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all ${
+                        activeTab === 'database' 
+                            ? 'bg-white text-slate-800 shadow-sm' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    Master Database (Pending/Queue)
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all ${
+                        activeTab === 'history' 
+                            ? 'bg-white text-slate-800 shadow-sm' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    Issuance History
+                </button>
+            </motion.div>
 
             {/* Main Table Container */}
             <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col">
@@ -239,7 +336,7 @@ const Issuances = () => {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search by name or certificate number..."
+                                placeholder="Search by name, file name, or certificate number..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm"
@@ -287,7 +384,7 @@ const Issuances = () => {
                             <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">
                                 <PrinterIcon className="w-4 h-4" /> Print Selected
                             </button>
-                            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg hover:bg-rose-100 font-medium">
+                            <button onClick={handleBulkDelete} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg hover:bg-rose-100 font-medium">
                                 <TrashIcon className="w-4 h-4" /> Delete
                             </button>
                         </div>
@@ -312,6 +409,7 @@ const Issuances = () => {
                                 <th className="p-4">Recipient Name</th>
                                 <th className="p-4">Barangay</th>
                                 <th className="p-4">Date Added</th>
+                                <th className="p-4">Issued By / Encoded By</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4 pr-6 text-right">Actions</th>
                             </tr>
@@ -323,15 +421,22 @@ const Issuances = () => {
                                         <SkeletonLoader type="table" rows={8} />
                                     </td>
                                 </tr>
-                            ) : filteredCertificates.length === 0 ? (
+                            ) : filteredCertificates.filter(c => activeTab === 'database' ? c.status !== 'Issued' : c.status === 'Issued').length === 0 ? (
                                 <tr>
                                     <td colSpan="8" className="p-8 text-center text-slate-500">
-                                        No certificates found matching your criteria.
+                                        No certificates found in this view.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredCertificates.map((cert) => (
+                                filteredCertificates.filter(c => activeTab === 'database' ? c.status !== 'Issued' : c.status === 'Issued').map((cert) => (
                                     <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors group">
+                                        {cert.isDeleted ? (
+                                            <td colSpan="9" className="p-4 text-center">
+                                                <span className="text-sm text-slate-500 mr-3">Issuance temporarily deleted.</span>
+                                                <button onClick={() => handleUndo(cert)} className="text-xs font-bold text-[#d4a574] border border-[#d4a574]/30 bg-[#d4a574]/10 hover:bg-[#d4a574] hover:text-[#0f172a] px-3 py-1.5 rounded-lg transition-colors">Undo</button>
+                                            </td>
+                                        ) : (
+                                        <>
                                         <td className="p-4 pl-6">
                                             <input 
                                                 type="checkbox"
@@ -341,11 +446,11 @@ const Issuances = () => {
                                             />
                                         </td>
                                         <td className="p-4">
-                                            <span className="font-bold text-slate-800">{cert.number}</span>
+                                            <span className="font-bold text-slate-800 truncate block max-w-[200px]" title={cert.number}>{cert.number}</span>
                                         </td>
                                         <td className="p-4">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600">
-                                                {cert.type}
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${cert.source === 'document' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                {cert.source === 'document' ? 'Doc: ' + cert.type : cert.type}
                                             </span>
                                         </td>
                                         <td className="p-4">
@@ -357,10 +462,17 @@ const Issuances = () => {
                                         <td className="p-4 text-slate-500 text-sm">
                                             {cert.date}
                                         </td>
+                                        <td className="p-4 text-slate-500 text-sm">
+                                            {cert.encoded_by || 'System'}
+                                        </td>
                                         <td className="p-4">
                                             {cert.status === 'Issued' ? (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Issued
+                                                </span>
+                                            ) : cert.status === 'Uploaded' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Uploaded
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-100">
@@ -370,14 +482,22 @@ const Issuances = () => {
                                         </td>
                                         <td className="p-4 pr-6 text-right">
                                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View details">
+                                                {cert.status !== 'Issued' && cert.source === 'issuance' && (
+                                                    <button onClick={() => handleMarkAsIssued(cert)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Mark as Issued">
+                                                        <CheckCircleIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => handleView(cert)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View details">
                                                     <EyeIcon className="w-4 h-4" />
                                                 </button>
-                                                <button className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Print document">
+                                                <button onClick={() => handleView(cert)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Print document">
                                                     <PrinterIcon className="w-4 h-4" />
                                                 </button>
+                                                <button onClick={() => handleDownload(cert)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Download PDF">
+                                                    <ArrowDownTrayIcon className="w-4 h-4" />
+                                                </button>
                                                 <button 
-                                                    onClick={() => handleDelete(cert.id)}
+                                                    onClick={() => handleDelete(cert)}
                                                     className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" 
                                                     title="Delete record"
                                                 >
@@ -385,6 +505,8 @@ const Issuances = () => {
                                                 </button>
                                             </div>
                                         </td>
+                                        </>
+                                        )}
                                     </tr>
                                 ))
                             )}
@@ -423,7 +545,7 @@ const Issuances = () => {
                                 <div className="space-y-2">
                                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Certificate Number</label>
                                     <input 
-                                        value={generateCertNumber()} 
+                                        value={newCert.number} 
                                         readOnly 
                                         className="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 text-sm font-mono cursor-not-allowed" 
                                     />

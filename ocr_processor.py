@@ -1,228 +1,297 @@
 #!/usr/bin/env python3
 """
-EasyOCR Processor for CiviCORE
-This script processes images and PDFs using EasyOCR to extract text.
-Run: pip install -r requirements.txt before using this script.
+CiviCORE OCR Processor — EasyOCR powered
+Extracts structured fields from Birth, Death, and Marriage documents.
+Usage: python ocr_processor.py <file_path> [--lang en,tl] [--type image|pdf|auto] [--doc_type birth|death|marriage]
 """
 
 import sys
 import json
 import os
+import re
 import argparse
 from pathlib import Path
 
-# Try to import EasyOCR - show helpful error if not installed
+# ── Dependency checks ───────────────────────────────────────────────────────
 try:
     import easyocr
 except ImportError:
-    print(json.dumps({
-        "success": False,
-        "error": "EasyOCR not installed. Run: pip install -r requirements.txt"
-    }))
+    print(json.dumps({"success": False, "error": "EasyOCR not installed. Run: pip install easyocr"}))
     sys.exit(1)
 
 try:
     from PIL import Image
 except ImportError:
-    print(json.dumps({
-        "success": False,
-        "error": "Pillow not installed. Run: pip install pillow"
-    }))
-    sys.exit(1)
-
-try:
-    import cv2
-except ImportError:
-    print(json.dumps({
-        "success": False,
-        "error": "OpenCV not installed. Run: pip install opencv-python"
-    }))
+    print(json.dumps({"success": False, "error": "Pillow not installed. Run: pip install Pillow"}))
     sys.exit(1)
 
 
-def process_image_ocr(image_path, lang=['en', 'tl']):
-    """
-    Process an image file using EasyOCR and extract text.
-    
-    Args:
-        image_path: Path to the image file
-        lang: List of language codes (default: English and Tagalog)
-    
-    Returns:
-        Dictionary with success status and extracted text
-    """
-    try:
-        # Initialize EasyOCR reader (cache model in memory for faster processing)
-        if not hasattr(process_image_ocr, 'reader'):
-            print(f"Initializing EasyOCR with languages: {lang}", file=sys.stderr)
-            process_image_ocr.reader = easyocr.Reader(lang, gpu=False, verbose=False)
-        
-        print(f"Processing image: {image_path}", file=sys.stderr)
-        
-        # Read the image using EasyOCR
-        results = process_image_ocr.reader.readtext(image_path)
-        
-        # Extract text from results
-        extracted_text = []
-        confidence_scores = []
-        
-        for (bbox, text, prob) in results:
-            if text.strip():  # Only add non-empty text
-                extracted_text.append(text.strip())
-                confidence_scores.append(round(prob, 2))
-        
-        full_text = '\n'.join(extracted_text)
-        
-        # Calculate average confidence
-        avg_confidence = round(sum(confidence_scores) / len(confidence_scores), 2) if confidence_scores else 0
-        
-        return {
-            "success": True,
-            "text": full_text,
-            "extracted_lines": extracted_text,
-            "confidence": avg_confidence,
-            "words_found": len(extracted_text)
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+# ── Shared EasyOCR reader (lazy init) ───────────────────────────────────────
+_reader = None
+
+def get_reader(lang):
+    global _reader
+    if _reader is None:
+        print(f"Initializing EasyOCR ({lang})…", file=sys.stderr)
+        _reader = easyocr.Reader(lang, gpu=False, verbose=False)
+    return _reader
 
 
-def process_pdf_ocr(pdf_path, lang=['en', 'tl']):
-    """
-    Process a PDF file by converting pages to images and running OCR.
-    Note: For PDFs, we extract the first page as a simple text approach.
-    For full PDF OCR, consider using pdf2image + EasyOCR.
-    
-    Args:
-        pdf_path: Path to the PDF file
-        lang: List of language codes
-    
-    Returns:
-        Dictionary with success status and extracted text
-    """
+# ── Document-type detection ─────────────────────────────────────────────────
+BIRTH_KEYWORDS    = ['certificate of live birth', 'live birth', 'birth certificate', 'date of birth',
+                     'place of birth', 'sex', 'father', 'mother', 'philsys', 'republic form no. 102']
+DEATH_KEYWORDS    = ['certificate of death', 'death certificate', 'cause of death', 'date of death',
+                     'place of death', 'deceased', 'attendant', 'republic form no. 103']
+MARRIAGE_KEYWORDS = ['certificate of marriage', 'marriage license', 'marriage contract', 'husband',
+                     'wife', 'spouse', 'date of marriage', 'place of marriage', 'republic form no. 97']
+
+def detect_document_type(text: str) -> str:
+    """Return 'birth', 'death', 'marriage', or 'unknown'."""
+    lower = text.lower()
+    birth_hits    = sum(1 for kw in BIRTH_KEYWORDS    if kw in lower)
+    death_hits    = sum(1 for kw in DEATH_KEYWORDS    if kw in lower)
+    marriage_hits = sum(1 for kw in MARRIAGE_KEYWORDS if kw in lower)
+    scores = {'birth': birth_hits, 'death': death_hits, 'marriage': marriage_hits}
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else 'unknown'
+
+
+# ── Field extractors ────────────────────────────────────────────────────────
+def _first_match(patterns, text, flags=re.IGNORECASE):
+    for pat in patterns:
+        m = re.search(pat, text, flags)
+        if m:
+            return m.group(1).strip()
+    return None
+
+def extract_birth_fields(text: str, lines: list) -> dict:
+    fields = {}
+
+    # Full name — look for "Name:" label or first capitalised multi-word line
+    name = _first_match([
+        r'(?:name of child|name)[:\s]+([A-Z][A-Za-z\s,.\-]+)',
+        r'(?:last name|surname)[:\s]+([A-Za-z\s]+)',
+    ], text)
+    if not name:
+        for line in lines[:12]:
+            if re.match(r'^[A-Z][A-Z\s,.\-]{5,}$', line.strip()):
+                name = line.strip()
+                break
+    fields['full_name'] = name or ''
+
+    fields['date_of_birth'] = _first_match([
+        r'(?:date of birth|birth date|born)[:\s]+([A-Za-z0-9\s,/\-]+)',
+        r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})',
+    ], text) or ''
+
+    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
+
+    fields['place_of_birth'] = _first_match([
+        r'(?:place of birth|municipality|city)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text) or ''
+
+    fields['fathers_name'] = _first_match([
+        r"(?:father'?s?\s*name|father)[:\s]+([A-Za-z\s,.\-]+)",
+    ], text) or ''
+
+    fields['mothers_name'] = _first_match([
+        r"(?:mother'?s?\s*name|mother)[:\s]+([A-Za-z\s,.\-]+)",
+    ], text) or ''
+
+    fields['barangay'] = _first_match([
+        r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)',
+    ], text) or ''
+
+    return fields
+
+
+def extract_death_fields(text: str, lines: list) -> dict:
+    fields = {}
+
+    fields['full_name'] = _first_match([
+        r'(?:name of deceased|name)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text) or ''
+
+    fields['date_of_death'] = _first_match([
+        r'(?:date of death|died)[:\s]+([A-Za-z0-9\s,/\-]+)',
+        r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})',
+    ], text) or ''
+
+    fields['age'] = _first_match([
+        r'(?:age at death|age)[:\s]+(\d+)',
+        r'\b(\d{1,3})\s*(?:years?|yr)',
+    ], text) or ''
+
+    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
+
+    fields['place_of_death'] = _first_match([
+        r'(?:place of death|died at|hospital|municipality)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text) or ''
+
+    fields['cause_of_death'] = _first_match([
+        r'(?:cause of death|immediate cause)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text) or ''
+
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
+
+    return fields
+
+
+def extract_marriage_fields(text: str, lines: list) -> dict:
+    fields = {}
+
+    fields['husbands_name'] = _first_match([
+        r"(?:husband'?s?\s*name|groom|husband)[:\s]+([A-Za-z\s,.\-]+)",
+    ], text) or ''
+
+    fields['wifes_name'] = _first_match([
+        r"(?:wife'?s?\s*name|bride|wife)[:\s]+([A-Za-z\s,.\-]+)",
+    ], text) or ''
+
+    fields['date_of_marriage'] = _first_match([
+        r'(?:date of marriage|married on|wedding date)[:\s]+([A-Za-z0-9\s,/\-]+)',
+        r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})',
+    ], text) or ''
+
+    fields['place_of_marriage'] = _first_match([
+        r'(?:place of marriage|married at|municipality)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text) or ''
+
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
+
+    return fields
+
+
+def extract_fields(doc_type: str, text: str, lines: list) -> dict:
+    if doc_type == 'birth':
+        return extract_birth_fields(text, lines)
+    elif doc_type == 'death':
+        return extract_death_fields(text, lines)
+    elif doc_type == 'marriage':
+        return extract_marriage_fields(text, lines)
+    return {}
+
+
+# ── OCR runners ──────────────────────────────────────────────────────────────
+def run_ocr_on_image(image_path: str, lang: list) -> dict:
+    reader = get_reader(lang)
+    print(f"Running OCR on image: {image_path}", file=sys.stderr)
+    results = reader.readtext(image_path)
+    lines, scores = [], []
+    for (_bbox, text, prob) in results:
+        if text.strip():
+            lines.append(text.strip())
+            scores.append(round(prob, 3))
+    full_text = '\n'.join(lines)
+    avg_conf  = round(sum(scores) / len(scores), 3) if scores else 0
+    return {'success': True, 'text': full_text, 'lines': lines, 'confidence': avg_conf}
+
+
+def run_ocr_on_pdf(pdf_path: str, lang: list) -> dict:
     try:
-        # For PDF processing, we'll try to use pdf2image if available
+        from pdf2image import convert_from_path
+    except ImportError:
+        return {'success': False, 'error': 'pdf2image not installed. Run: pip install pdf2image'}
+
+    print(f"Converting PDF: {pdf_path}", file=sys.stderr)
+    images = convert_from_path(pdf_path, dpi=200)
+    if not images:
+        return {'success': False, 'error': 'Could not convert PDF to images'}
+
+    reader = get_reader(lang)
+    all_lines, all_scores = [], []
+    tmp_dir = os.path.join(os.path.dirname(pdf_path), '_ocr_tmp')
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    for i, img in enumerate(images):
+        tmp_path = os.path.join(tmp_dir, f'page_{i}.png')
+        img.save(tmp_path, 'PNG')
+        for (_bbox, text, prob) in reader.readtext(tmp_path):
+            if text.strip():
+                all_lines.append(text.strip())
+                all_scores.append(round(prob, 3))
         try:
-            from pdf2image import convert_from_path
-        except ImportError:
-            return {
-                "success": False,
-                "error": "PDF processing requires pdf2image. Run: pip install pdf2image"
-            }
-        
-        print(f"Processing PDF: {pdf_path}", file=sys.stderr)
-        
-        # Convert PDF to images
-        images = convert_from_path(pdf_path)
-        
-        if not images:
-            return {
-                "success": False,
-                "error": "Could not convert PDF to images"
-            }
-        
-        # Initialize reader
-        if not hasattr(process_pdf_ocr, 'reader'):
-            print(f"Initializing EasyOCR for PDF with languages: {lang}", file=sys.stderr)
-            process_pdf_ocr.reader = easyocr.Reader(lang, gpu=False, verbose=False)
-        
-        all_text = []
-        
-        # Process each page
-        for page_num, image in enumerate(images, 1):
-            # Save temporary image
-            temp_image_path = f"/tmp/pdf_page_{page_num}.png"
-            image.save(temp_image_path, "PNG")
-            
-            # OCR the page
-            results = process_pdf_ocr.reader.readtext(temp_image_path)
-            
-            # Extract text
-            for (bbox, text, prob) in results:
-                if text.strip():
-                    all_text.append(text.strip())
-            
-            # Clean up temp file
-            if os.path.exists(temp_image_path):
-                os.remove(temp_image_path)
-        
-        full_text = '\n'.join(all_text)
-        
-        return {
-            "success": True,
-            "text": full_text,
-            "extracted_lines": all_text,
-            "pages_processed": len(images),
-            "words_found": len(all_text)
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    try:
+        os.rmdir(tmp_dir)
+    except Exception:
+        pass
+
+    full_text = '\n'.join(all_lines)
+    avg_conf  = round(sum(all_scores) / len(all_scores), 3) if all_scores else 0
+    return {'success': True, 'text': full_text, 'lines': all_lines,
+            'confidence': avg_conf, 'pages_processed': len(images)}
 
 
+# ── Main ─────────────────────────────────────────────────────────────────────
 def main():
-    """Main entry point for the OCR processor."""
-    parser = argparse.ArgumentParser(description='EasyOCR Processor for CiviCORE')
-    parser.add_argument('input_file', help='Path to the image or PDF file to process')
-    parser.add_argument('--lang', default='en,tl', help='Comma-separated language codes (default: en,tl)')
-    parser.add_argument('--type', choices=['image', 'pdf', 'auto'], default='auto', 
-                        help='File type (auto-detect by default)')
-    parser.add_argument('--save-txt', action='store_true', default=True,
-                        help='Save extracted text to a .txt file (default: True)')
-    
+    parser = argparse.ArgumentParser(description='CiviCORE OCR Processor')
+    parser.add_argument('input_file',          help='Path to image or PDF')
+    parser.add_argument('--lang',              default='en,tl', help='Comma-separated language codes')
+    parser.add_argument('--type',              choices=['image', 'pdf', 'auto'], default='auto')
+    parser.add_argument('--doc_type',          default='',
+                        help='Expected document type: birth | death | marriage (optional)')
     args = parser.parse_args()
-    
-    # Parse languages
-    lang = args.lang.split(',')
-    
-    # Determine file type
+
+    lang      = [l.strip() for l in args.lang.split(',')]
     file_path = args.input_file
-    file_ext = Path(file_path).suffix.lower()
-    
-    if args.type == 'auto':
-        if file_ext in ['.pdf']:
-            file_type = 'pdf'
-        else:
-            file_type = 'image'
-    else:
-        file_type = args.type
-    
-    # Check if file exists
+    ext       = Path(file_path).suffix.lower()
+
     if not os.path.exists(file_path):
-        result = {
-            "success": False,
-            "error": f"File not found: {file_path}"
-        }
-        print(json.dumps(result))
+        print(json.dumps({'success': False, 'error': f'File not found: {file_path}'}))
         sys.exit(1)
-    
-    # Process based on file type
-    if file_type == 'pdf':
-        result = process_pdf_ocr(file_path, lang)
-    else:
-        result = process_image_ocr(file_path, lang)
-    
-    # Save extracted text to .txt file for verification
-    if args.save_txt and result.get('success') and result.get('text'):
-        try:
-            # Create .txt file in the same directory as the input file
-            txt_file_path = str(Path(file_path).with_suffix('.txt'))
-            with open(txt_file_path, 'w', encoding='utf-8') as f:
-                f.write(result['text'])
-            result['txt_file_saved'] = txt_file_path
-            print(f"Text file saved to: {txt_file_path}", file=sys.stderr)
-        except Exception as e:
-            print(f"Warning: Could not save text file: {str(e)}", file=sys.stderr)
-    
-    # Output result as JSON
-    print(json.dumps(result))
+
+    # ── Step 1: OCR ──────────────────────────────────────────────────────────
+    file_type = args.type
+    if file_type == 'auto':
+        file_type = 'pdf' if ext == '.pdf' else 'image'
+
+    ocr_result = run_ocr_on_pdf(file_path, lang) if file_type == 'pdf' \
+                 else run_ocr_on_image(file_path, lang)
+
+    if not ocr_result.get('success'):
+        print(json.dumps(ocr_result))
+        sys.exit(1)
+
+    raw_text = ocr_result['text']
+    lines    = ocr_result.get('lines', [])
+
+    # ── Step 2: Detect document type ─────────────────────────────────────────
+    detected_type  = detect_document_type(raw_text)
+    expected_type  = args.doc_type.lower().strip() if args.doc_type else ''
+
+    # Validation: does detected type match what the user selected?
+    type_mismatch  = False
+    mismatch_msg   = ''
+    if expected_type and expected_type not in ('unknown', '') and detected_type != 'unknown':
+        if detected_type != expected_type:
+            type_mismatch = True
+            mismatch_msg  = (
+                f"Document type mismatch: you selected '{expected_type}' "
+                f"but the document appears to be a '{detected_type}' certificate."
+            )
+
+    # ── Step 3: Extract structured fields ───────────────────────────────────
+    # Use detected type for extraction; fall back to expected if detection failed
+    extraction_type = detected_type if detected_type != 'unknown' else expected_type
+    extracted_fields = extract_fields(extraction_type, raw_text, lines)
+
+    # ── Step 4: Output ───────────────────────────────────────────────────────
+    output = {
+        'success':          True,
+        'text':             raw_text,
+        'confidence':       ocr_result.get('confidence', 0),
+        'pages_processed':  ocr_result.get('pages_processed', 1),
+        'detected_type':    detected_type,
+        'expected_type':    expected_type,
+        'type_mismatch':    type_mismatch,
+        'mismatch_message': mismatch_msg,
+        'extracted_fields': extracted_fields,
+    }
+    print(json.dumps(output, ensure_ascii=False))
 
 
 if __name__ == '__main__':

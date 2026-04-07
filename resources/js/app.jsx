@@ -4,78 +4,112 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import './bootstrap';
 import '../css/app.css';
 
-// Make sure you delete the line that says import '../css/styles.css'
-
-// Import React components with explicit paths
-import Landing from './components/Landing.jsx';
-import Login from './components/Login.jsx';
-import Dashboard from './components/Dashboard.jsx';
-import Documents from './components/Documents.jsx';
-import Issuances from './components/Issuances.jsx';
-import Mapping from './components/Mapping.jsx';
-import Accounts from './components/Accounts.jsx';
-import Layout from './components/Layout.jsx';
-import PublicLayout from './components/PublicLayout.jsx';
-
-// Import new public pages
-import AboutPortal from './components/AboutPortal.jsx';
-import DigitalServices from './components/DigitalServices.jsx';
+// Components
+import Landing          from './components/Landing.jsx';
+import Login            from './components/Login.jsx';
+import Dashboard        from './components/Dashboard.jsx';
+import Documents        from './components/Documents.jsx';
+import Issuances        from './components/Issuances.jsx';
+import Mapping          from './components/Mapping.jsx';
+import Accounts         from './components/Accounts.jsx';
+import Layout           from './components/Layout.jsx';
+import PublicLayout     from './components/PublicLayout.jsx';
+import AboutPortal      from './components/AboutPortal.jsx';
+import DigitalServices  from './components/DigitalServices.jsx';
 import ContactDirectory from './components/ContactDirectory.jsx';
+import { ModalProvider } from './components/ModalContext.jsx';
 
-// Simple auth check
-const isAuthenticated = () => {
-    return document.cookie.includes('laravel_session') || sessionStorage.getItem('user');
+// ─── Auth helpers ────────────────────────────────────────────────────────────
+
+const getUser = () => {
+    try {
+        return JSON.parse(sessionStorage.getItem('user') || 'null');
+    } catch {
+        return null;
+    }
 };
 
-// Protected Route wrapper
+const isAuthenticated = () => !!getUser();
+
+// ─── Protected Route ─────────────────────────────────────────────────────────
+//
+// allowedRoles: if empty → any authenticated user may access
+//               if set   → user.role must be in the list
+//
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     if (!isAuthenticated()) {
         return <Navigate to="/login" replace />;
     }
-    
+
     if (allowedRoles.length > 0) {
-        const user = JSON.parse(sessionStorage.getItem('user') || '{}');
-        if (!allowedRoles.includes(user.role)) {
-            // If they can't access this, send them to the most basic allowed page
+        const user = getUser();
+        if (!allowedRoles.includes(user?.role)) {
+            // Redirect to the highest page they ARE allowed to access
             return <Navigate to="/documents" replace />;
         }
     }
-    
+
     return children;
 };
 
-// Scroll to top on route change
+// ─── Scroll to top on route change ───────────────────────────────────────────
 const ScrollToTop = () => {
     const { pathname } = useLocation();
-    React.useEffect(() => {
-        window.scrollTo(0, 0);
-    }, [pathname]);
+    React.useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
     return null;
 };
 
-import { ModalProvider } from './components/ModalContext.jsx';
-
+// ─── App ─────────────────────────────────────────────────────────────────────
 function App() {
     return (
         <ModalProvider>
             <BrowserRouter>
                 <ScrollToTop />
                 <Routes>
-                    {/* Public Routes */}
-                    <Route path="/" element={<PublicLayout><Landing /></PublicLayout>} />
-                    <Route path="/about" element={<PublicLayout><AboutPortal /></PublicLayout>} />
+                    {/* ── Public ─────────────────────────────────────────── */}
+                    <Route path="/"         element={<PublicLayout><Landing /></PublicLayout>} />
+                    <Route path="/about"    element={<PublicLayout><AboutPortal /></PublicLayout>} />
                     <Route path="/services" element={<PublicLayout><DigitalServices /></PublicLayout>} />
-                    <Route path="/contact" element={<PublicLayout><ContactDirectory /></PublicLayout>} />
-                    <Route path="/login" element={<Login />} />
-                    
-                    {/* Protected Routes */}
-                    <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['Superadmin', 'Admin']}><Layout><Dashboard /></Layout></ProtectedRoute>} />
-                    <Route path="/documents" element={<ProtectedRoute><Layout><Documents /></Layout></ProtectedRoute>} />
-                    <Route path="/issuances" element={<ProtectedRoute allowedRoles={['Superadmin', 'Admin']}><Layout><Issuances /></Layout></ProtectedRoute>} />
-                    <Route path="/mapping" element={<ProtectedRoute allowedRoles={['Superadmin', 'Admin']}><Layout><Mapping /></Layout></ProtectedRoute>} />
-                    <Route path="/accounts" element={<ProtectedRoute><Layout><Accounts /></Layout></ProtectedRoute>} />
-                    
-                    {/* Redirect root to landing */}
+                    <Route path="/contact"  element={<PublicLayout><ContactDirectory /></PublicLayout>} />
+                    <Route path="/login"    element={<Login />} />
+
+                    {/* ── Protected ──────────────────────────────────────── */}
+                    {/* Dashboard — Admin + Staff */}
+                    <Route path="/dashboard" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                            <Layout><Dashboard /></Layout>
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Documents — all authenticated */}
+                    <Route path="/documents" element={
+                        <ProtectedRoute>
+                            <Layout><Documents /></Layout>
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Issuances — Admin + Staff */}
+                    <Route path="/issuances" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                            <Layout><Issuances /></Layout>
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Mapping — Admin only */}
+                    <Route path="/mapping" element={
+                        <ProtectedRoute allowedRoles={['Admin']}>
+                            <Layout><Mapping /></Layout>
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Accounts — all authenticated (filtered inside component by role) */}
+                    <Route path="/accounts" element={
+                        <ProtectedRoute>
+                            <Layout><Accounts /></Layout>
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>
@@ -83,8 +117,6 @@ function App() {
     );
 }
 
-// Mount the React app
+// Mount
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-    <App /> 
-);
+root.render(<App />);

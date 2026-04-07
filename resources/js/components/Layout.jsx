@@ -14,14 +14,21 @@ const Layout = ({ children }) => {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
 
-    const menuItems = [
-        { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard' },
-        { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document' },
-        { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance' },
-        { path: '/mapping', icon: MapPinIcon, label: 'Mapping' },
-        { path: '/accounts', icon: UsersIcon, label: 'Account Management' },
+    // Role-based menu items
+    // Admin   → all items
+    // Staff   → Dashboard, Documents, Issuances, Accounts
+    // User    → Dashboard, Documents, Accounts
+    const allMenuItems = [
+        { path: '/dashboard', icon: ChartBarIcon,              label: 'Dashboard',          roles: ['Admin', 'Staff', 'User'] },
+        { path: '/documents', icon: ArrowUpTrayIcon,           label: 'Upload Document',    roles: ['Admin', 'Staff', 'User'] },
+        { path: '/issuances', icon: ClipboardDocumentCheckIcon,label: 'Issuance',           roles: ['Admin', 'Staff'] },
+        { path: '/mapping',   icon: MapPinIcon,                label: 'Mapping',            roles: ['Admin'] },
+        { path: '/accounts',  icon: UsersIcon,                 label: 'Account Management', roles: ['Admin', 'Staff', 'User'] },
     ];
+
+    const menuItems = allMenuItems.filter(item => item.roles.includes(user.role));
 
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
     const closeSidebar = () => setSidebarOpen(false);
@@ -39,7 +46,7 @@ const Layout = ({ children }) => {
         navigate('/');
     };
 
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+
 
     return (
         <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
@@ -94,14 +101,7 @@ const Layout = ({ children }) => {
 
                 {/* Menu */}
                 <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto w-full custom-scrollbar">
-                    {menuItems.filter(item => {
-                        // Regular User: Only Upload Document & Accounts
-                        if (user.role === 'User') {
-                            return ['/documents', '/accounts'].includes(item.path);
-                        }
-                        // Admin: Everything except managing other users is handled inside Accounts.jsx
-                        return true; 
-                    }).map((item) => {
+                    {menuItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = location.pathname === item.path;
                         return (

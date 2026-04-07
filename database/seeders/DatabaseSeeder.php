@@ -3,44 +3,38 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
     public function run(): void
     {
-        // Create specific users for different roles
-        // Superadmin account
-        User::factory()->create([
-            'name' => 'Super Admin',
-            'email' => 'superadmin@civicore.com',
-            'role' => 'Superadmin',
-            'password' => 'password',
+        // Admin — full system access
+        User::create([
+            'name'     => 'Admin Officer',
+            'email'    => 'admin@civicore.gov.ph',
+            'password' => Hash::make('admin2024'),
+            'role'     => 'Admin',
         ]);
 
-        // Admin account
-        User::factory()->create([
-            'name' => 'Admin Officer',
-            'email' => 'admin@civicore.com',
-            'role' => 'Admin',
-            'password' => 'password',
+        // Staff — internal employee, restricted to own account
+        User::create([
+            'name'     => 'Staff Member',
+            'email'    => 'staff@civicore.gov.ph',
+            'password' => Hash::make('staff2024'),
+            'role'     => 'Staff',
         ]);
 
-        // Regular User account
-        User::factory()->create([
-            'name' => 'Civilian User',
-            'email' => 'user@civicore.com',
-            'role' => 'User',
-            'password' => 'password',
+        // User — external/civilian, restricted to own account
+        User::create([
+            'name'     => 'Civilian User',
+            'email'    => 'user@civicore.gov.ph',
+            'password' => Hash::make('user2024'),
+            'role'     => 'User',
         ]);
-
-        // Optional more test users
-        // User::factory(5)->create();
     }
 }

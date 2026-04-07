@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ExclamationTriangleIcon, 
@@ -42,7 +43,8 @@ export default function AlertModal({
 }) {
     const handleConfirm = onConfirm || onClose;
     const handleCancel = onCancel || onClose;
-    return (
+
+    const modal = (
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -122,4 +124,6 @@ export default function AlertModal({
             )}
         </AnimatePresence>
     );
+
+    return createPortal(modal, document.body);
 }

@@ -15,66 +15,59 @@ use App\Http\Controllers\DashboardController;
 | API Routes
 |--------------------------------------------------------------------------
 |
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
+| All routes use the 'web' middleware group so that Laravel session cookies
+| (laravel_session) are available — required for session-based auth.
 |
 */
 
 Route::middleware('web')->group(function () {
-    Route::get('/debug-auth', function (Request $request) {
-        return [
-            'user' => $request->user(),
-            'session_exists' => $request->session()->has('user'),
-            'role_in_session' => $request->session()->get('user.role'),
-            'total_users' => \App\Models\User::count(),
-            'roles_available' => \App\Models\User::pluck('role', 'email')
-        ];
-    });
 
-// Auth Routes - need session middleware for cookie handling
-Route::post('/login', [AuthController::class, 'login']);
-Route::get('/session', [AuthController::class, 'session']);
+    // ── Auth ───────────────────────────────────────────────────────────────
+    Route::post('/login',           [AuthController::class, 'login']);
+    Route::get('/session',          [AuthController::class, 'session']);
+    Route::post('/logout',          [AuthController::class, 'logout']);
+    Route::post('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/verify-password', [AuthController::class, 'verifyPassword']);
 
-// Auth Routes that need session
-Route::post('/logout', [AuthController::class, 'logout']);
-Route::post('/change-password', [AuthController::class, 'changePassword']);
-Route::post('/verify-password', [AuthController::class, 'verifyPassword']);
+    // ── Users ──────────────────────────────────────────────────────────────
+    Route::get('/users',                [UserController::class, 'index']);
+    Route::get('/users/{id}',           [UserController::class, 'show']);
+    Route::post('/users',               [UserController::class, 'store']);
+    Route::post('/create-account',      [UserController::class, 'createAccount']);
+    Route::put('/users/{id}',           [UserController::class, 'update']);
+    Route::put('/users/{id}/profile',   [UserController::class, 'updateProfile']);
+    Route::delete('/users/{id}',        [UserController::class, 'destroy']);
 
-// User Routes
-Route::get('/users', [UserController::class, 'index']);
-Route::get('/users/{id}', [UserController::class, 'show']);
-Route::post('/users', [UserController::class, 'store']);
-Route::post('/create-account', [UserController::class, 'createAccount']);
-Route::put('/users/{id}', [UserController::class, 'update']);
-Route::put('/users/{id}/profile', [UserController::class, 'updateProfile']);
-Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    // ── Dashboard ──────────────────────────────────────────────────────────
+    Route::get('/dashboard/stats',      [DashboardController::class, 'stats']);
 
-// Dashboard Routes
-Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+    // ── Documents ──────────────────────────────────────────────────────────
+    Route::get('/documents',                    [DocumentController::class, 'index']);
+    Route::post('/documents',                   [DocumentController::class, 'store']);
+    Route::put('/documents/{id}',               [DocumentController::class, 'update']);
+    Route::delete('/documents/{id}',            [DocumentController::class, 'destroy']);
+    Route::post('/documents/{id}/undo',         [DocumentController::class, 'undo']);
+    Route::post('/documents/upload',            [DocumentController::class, 'upload']);
+    Route::get('/documents/download/{id}',      [DocumentController::class, 'download']);
 
-// Document Routes
-Route::get('/documents', [DocumentController::class, 'index']);
-Route::post('/documents', [DocumentController::class, 'store']);
-Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
-Route::post('/documents/upload', [DocumentController::class, 'upload']);
-Route::get('/documents/download/{id}', [DocumentController::class, 'download']);
+    // ── OCR ────────────────────────────────────────────────────────────────
+    Route::post('/ocr/process', [OcrController::class, 'process']);
 
-// OCR Routes
-Route::post('/ocr/process', [OcrController::class, 'process']);
+    // ── Issuances ──────────────────────────────────────────────────────────
+    Route::get('/issuances',                          [IssuanceController::class, 'index']);
+    Route::get('/issuances/{id}',                     [IssuanceController::class, 'show']);
+    Route::get('/issuances/download/{id}',            [IssuanceController::class, 'download']);
+    Route::get('/issuances/view/{id}',                [IssuanceController::class, 'view']);
+    Route::post('/issuances',                         [IssuanceController::class, 'store']);
+    Route::delete('/issuances/{id}',                  [IssuanceController::class, 'destroy']);
+    Route::post('/issuances/{id}/undo',               [IssuanceController::class, 'undo']);
+    Route::post('/issuances/{id}/issue',              [IssuanceController::class, 'markAsIssued']);
+    Route::get('/issuances/next-cert-number/{type}',  [IssuanceController::class, 'nextCertNumber']);
 
-// Issuance Routes
-Route::get('/issuances', [IssuanceController::class, 'index']);
-Route::get('/issuances/{id}', [IssuanceController::class, 'show']);
-Route::post('/issuances', [IssuanceController::class, 'store']);
-Route::delete('/issuances/{id}', [IssuanceController::class, 'destroy']);
-Route::get('/issuances/next-cert-number/{type}', [IssuanceController::class, 'nextCertNumber']);
+    // ── Barangays ──────────────────────────────────────────────────────────
+    Route::get('/barangays', [BarangayController::class, 'index']);
 
-// Barangay Routes
-Route::get('/barangays', [BarangayController::class, 'index']);
-
-// Template Routes
-Route::get('/templates', [TemplateController::class, 'index']);
-Route::put('/templates/{type}', [TemplateController::class, 'update']);
-
+    // ── Templates ──────────────────────────────────────────────────────────
+    Route::get('/templates',         [TemplateController::class, 'index']);
+    Route::put('/templates/{type}',  [TemplateController::class, 'update']);
 });

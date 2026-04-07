@@ -11,19 +11,30 @@ const Mapping = () => {
     const canvasRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [apiData, setApiData] = useState([]);
+    const [docsData, setDocsData] = useState([]);
     const [activeFilter, setActiveFilter] = useState('all');
 
     // Fetch API Data
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch('/api/issuances?per_page=1000', { credentials: 'include' });
-            if (res.ok) {
-                const responseJson = await res.json();
+            const [issuancesRes, docsRes] = await Promise.all([
+                fetch('/api/issuances?per_page=1000', { credentials: 'include' }),
+                fetch('/api/documents?per_page=1000', { credentials: 'include' })
+            ]);
+            
+            if (issuancesRes.ok) {
+                const responseJson = await issuancesRes.json();
                 const data = responseJson.data || responseJson;
                 const result = Array.isArray(data) ? data : [];
                 setApiData(result);
                 sessionStorage.setItem('cache_map_data', JSON.stringify(result));
+            }
+            if (docsRes.ok) {
+                const responseJson = await docsRes.json();
+                const data = responseJson.data || responseJson;
+                const result = Array.isArray(data) ? data : [];
+                setDocsData(result);
             }
         } catch (err) {
             console.error("Failed to load map data from API", err);
@@ -160,6 +171,8 @@ const Mapping = () => {
                     }
                 }
             });
+            
+            let totalDocs = docsData.length;
 
             const barangaysForMap = staticBarangays.map(b => ({
                 ...b,
@@ -214,7 +227,7 @@ const Mapping = () => {
 
             // Update Global Stats in UI (using state)
             const totalRecords = birthCount + deathCount + marriageCount;
-            setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords });
+            setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords, totalDocs });
 
             mapRef.current = map;
 
@@ -236,9 +249,9 @@ const Mapping = () => {
                 });
             }
         }
-    }, [isLoading, apiData]);
+    }, [isLoading, apiData, docsData]);
 
-    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0 });
+    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
 
     const filteredPrints = apiData.filter(print => 
         activeFilter === 'all' || (print.type || '').toLowerCase().includes(activeFilter)
@@ -279,7 +292,7 @@ const Mapping = () => {
             </motion.div>
 
             {/* Top Stat Cards Grid */}
-            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {isLoading ? (
                     <div className="col-span-4">
                         <SkeletonLoader type="cards" rows={1} />
@@ -287,20 +300,24 @@ const Mapping = () => {
                 ) : (
                     <>
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Birth Registrations</p>
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Uploaded Docs</p>
+                            <h3 className="text-3xl font-black text-emerald-500">{stats.totalDocs}</h3>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Birth Certs</p>
                             <h3 className="text-3xl font-black text-[#d4a574]">{stats.birthCount}</h3>
                         </div>
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Death Registrations</p>
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Death Certs</p>
                             <h3 className="text-3xl font-black text-rose-500">{stats.deathCount}</h3>
                         </div>
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Marriage Licenses</p>
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Marriage Certs</p>
                             <h3 className="text-3xl font-black text-indigo-500">{stats.marriageCount}</h3>
                         </div>
                         <div className="bg-gradient-to-br from-[#0f172a] to-slate-800 p-5 rounded-2xl shadow-lg shadow-slate-800/20 flex flex-col justify-center relative overflow-hidden">
                             <div className="absolute right-[-10%] top-[-10%] w-24 h-24 bg-[#d4a574]/10 rounded-full blur-xl"></div>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Most Active Area</p>
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Most Active</p>
                             <h3 className="text-xl font-black text-white truncate">{stats.mostActiveBrgy}</h3>
                         </div>
                     </>

@@ -3,248 +3,261 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Models\User;
 
 class UserController extends Controller
 {
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
     /**
-     * Get all users with pagination
+     * Get the authenticated user from session, or abort with 401.
+     */
+    private function sessionUser(Request $request): ?User
+    {
+        $userId = $request->session()->get('user_id');
+        return $userId ? User::find($userId) : null;
+    }
+
+    // ─── List users ───────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/users
+     * Admin  → all users (with optional search + pagination)
+     * Others → only their own record
      */
     public function index(Request $request)
     {
-        $currentUser = $request->user();
-        if (!$currentUser) {
-            return response()->json(['error' => 'Unauthenticated'], 401);
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        $page = (int) $request->query('page', 1);
+        if ($actor->role !== 'Admin') {
+            // Non-admins only see themselves
+            return response()->json([
+                'data' => [$this->formatUser($actor)],
+                'meta' => ['current_page' => 1, 'per_page' => 1, 'total' => 1, 'last_page' => 1],
+            ]);
+        }
+
+        // Admin: paginated + searchable list
+        $page    = max(1, (int) $request->query('page', 1));
         $perPage = min((int) $request->query('per_page', 20), 100);
-        $search = $request->query('search', '');
-        
-        // Build query
-        $query = "SELECT * FROM users";
-        $countQuery = "SELECT COUNT(*) as total FROM users";
-        $params = [];
-        
-        // RBAC filtering: Only Superadmin can see everyone
-        if (strtolower($currentUser->role ?? '') !== 'superadmin') {
-            $whereClause = " WHERE id = ?";
-            $query .= $whereClause;
-            $countQuery .= $whereClause;
-            $params = [$currentUser->id];
-        } elseif (!empty($search)) {
-            $whereClause = " WHERE name LIKE ? OR email LIKE ? OR role LIKE ?";
-            $query .= $whereClause;
-            $countQuery .= $whereClause;
-            $searchTerm = "%{$search}%";
-            $params = [$searchTerm, $searchTerm, $searchTerm];
+        $search  = $request->query('search', '');
+
+        $query = User::query()->orderByDesc('id');
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('role', 'like', "%{$search}%");
+            });
         }
-        
-        $totalResult = DB::select($countQuery, $params);
-        $total = $totalResult[0]->total;
-        
-        $query .= " ORDER BY id DESC LIMIT ? OFFSET ?";
-        $params[] = $perPage;
-        $params[] = ($page - 1) * $perPage;
-        
-        $users = DB::select($query, $params);
-        
-        foreach ($users as $user) {
-            $user->permissions = $this->parsePermissions($user->permissions ?? null);
-            unset($user->password); // Security
-        }
-        
+
+        $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+
         return response()->json([
-            'data' => $users,
+            'data' => $paginated->map(fn($u) => $this->formatUser($u)),
             'meta' => [
-                'current_page' => $page,
-                'per_page' => $perPage,
-                'total' => $total,
-                'last_page' => ceil($total / $perPage),
-            ]
+                'current_page' => $paginated->currentPage(),
+                'per_page'     => $paginated->perPage(),
+                'total'        => $paginated->total(),
+                'last_page'    => $paginated->lastPage(),
+            ],
         ]);
     }
 
-    /**
-     * Get single user
-     */
-    public function show($id)
-    {
-        $users = DB::select("SELECT * FROM users WHERE id = ?", [$id]);
-        
-        if (count($users) === 0) {
-            return response()->json(['error' => 'Not found'], 404);
-        }
-        
-        $user = $users[0];
-        $user->permissions = $this->parsePermissions($user->permissions ?? null);
-        
-        return response()->json($user);
-    }
+    // ─── Single user ──────────────────────────────────────────────────────────
 
     /**
-     * Create new user
+     * GET /api/users/{id}
+     * Admin → any user | Staff/User → only self
+     */
+    public function show(Request $request, $id)
+    {
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        if ($actor->role !== 'Admin' && $actor->id != $id) {
+            return response()->json(['error' => 'Forbidden.'], 403);
+        }
+
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
+
+        return response()->json($this->formatUser($user));
+    }
+
+    // ─── Create ───────────────────────────────────────────────────────────────
+
+    /**
+     * POST /api/users  |  POST /api/create-account
+     * Admin only
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string',
-            'role' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()->first()], 400);
-        }
-
-        $name = $request->input('name');
-        $email = $request->input('email');
-        $password = $request->input('password');
-        $role = $request->input('role');
-
-        // Assign permissions based on role
-        $permissions = $this->getPermissionsByRole($role);
-
-        \App\Models\User::create([
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-            'role' => $role,
-            'permissions' => $permissions
-        ]);
-
-        return response()->json(['success' => true, 'message' => 'User created successfully!']);
+        return $this->createUser($request);
     }
 
-    /**
-     * Create account (Super Admin only)
-     */
     public function createAccount(Request $request)
     {
+        return $this->createUser($request);
+    }
+
+    private function createUser(Request $request)
+    {
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        if ($actor->role !== 'Admin') {
+            return response()->json(['error' => 'Only Admins can create accounts.'], 403);
+        }
+
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email',
-            'password' => 'required|string',
-            'role' => 'required|string',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6',
+            'role'     => 'required|in:Admin,Staff,User',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
-        $name = $request->input('name');
-        $email = $request->input('email');
-        $password = $request->input('password');
-        $role = $request->input('role');
-
-        // Assign permissions based on role
-        $permissions = $this->getPermissionsByRole($role);
-
-        \App\Models\User::create([
-            'name' => $name,
-            'email' => $email,
-            'password' => $password,
-            'role' => $role,
-            'permissions' => $permissions
+        $user = User::create([
+            'name'     => $request->input('name'),
+            'email'    => $request->input('email'),
+            'password' => Hash::make($request->input('password')),
+            'role'     => $request->input('role'),
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Account created successfully!']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Account created successfully.',
+            'user'    => $this->formatUser($user),
+        ], 201);
     }
 
+    // ─── Update ───────────────────────────────────────────────────────────────
+
     /**
-     * Update user
+     * PUT /api/users/{id}
+     * Admin → can update role + full profile of anyone
+     * Staff/User → cannot use this endpoint (use updateProfile for own data)
      */
     public function update(Request $request, $id)
     {
-        $role = $request->input('role');
-        $permissions = $request->input('permissions');
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
 
-        // Automatically assign correct permissions based on role
-        $updatedPermissions = $this->getPermissionsByRole($role, $permissions);
+        if ($actor->role !== 'Admin') {
+            return response()->json(['error' => 'Only Admins can change roles.'], 403);
+        }
 
-        DB::update("UPDATE users SET role = ?, permissions = ? WHERE id = ?", 
-            [$role, json_encode($updatedPermissions), $id]);
-
-        return response()->json(['success' => true]);
-    }
-
-    /**
-     * Update user profile
-     */
-    public function updateProfile(Request $request, $id)
-    {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email',
+            'role' => 'required|in:Admin,Staff,User',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
-        $name = $request->input('name');
-        $email = $request->input('email');
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
 
-        DB::update("UPDATE users SET name = ?, email = ? WHERE id = ?", [$name, $email, $id]);
+        $user->role = $request->input('role');
+        $user->save();
 
-        return response()->json(['success' => true, 'message' => 'Profile updated successfully!']);
+        return response()->json(['success' => true, 'user' => $this->formatUser($user)]);
     }
 
     /**
-     * Delete user
+     * PUT /api/users/{id}/profile
+     * Admin → any user | Staff/User → only self
      */
-    public function destroy($id)
+    public function updateProfile(Request $request, $id)
     {
-        DB::delete("DELETE FROM users WHERE id = ?", [$id]);
-        
-        return response()->json(['success' => true]);
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        if ($actor->role !== 'Admin' && $actor->id != $id) {
+            return response()->json(['error' => 'Forbidden.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $id,
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 400);
+        }
+
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
+
+        $user->name  = $request->input('name');
+        $user->email = $request->input('email');
+        $user->save();
+
+        return response()->json(['success' => true, 'message' => 'Profile updated.', 'user' => $this->formatUser($user)]);
     }
 
+    // ─── Delete ───────────────────────────────────────────────────────────────
+
     /**
-     * Get permissions by role
+     * DELETE /api/users/{id}
+     * Admin → any user | Staff/User → only self
      */
-    private function getPermissionsByRole($role, $customPermissions = null)
+    public function destroy(Request $request, $id)
     {
-        if ($customPermissions !== null && !empty($customPermissions)) {
-            return $customPermissions;
+        $actor = $this->sessionUser($request);
+        if (!$actor) {
+            return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        switch ($role) {
-            case 'Superadmin':
-                return ["View Dashboard", "Upload Documents", "Manage Users", "Edit Permissions", "Mapping Analytics"];
-            case 'Admin':
-                return ["View Dashboard", "Upload Documents", "Mapping Analytics", "View Reports"];
-            case 'User':
-                return ["Upload Documents", "View Account"];
-            default:
-                return ["View Account"];
+        if ($actor->role !== 'Admin' && $actor->id != $id) {
+            return response()->json(['error' => 'Forbidden.'], 403);
         }
+
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
+
+        $user->delete();
+
+        return response()->json(['success' => true, 'message' => 'Account deleted.']);
     }
 
-    /**
-     * Parse permissions from JSON string
-     */
-    private function parsePermissions($permissions)
+    // ─── Format ───────────────────────────────────────────────────────────────
+
+    private function formatUser(User $user): array
     {
-        if (empty($permissions)) {
-            return [];
-        }
-
-        if (is_array($permissions)) {
-            return $permissions;
-        }
-
-        if (is_object($permissions)) {
-            return json_decode(json_encode($permissions), true);
-        }
-
-        try {
-            return json_decode($permissions, true);
-        } catch (\Exception $e) {
-            return [];
-        }
+        return [
+            'id'          => $user->id,
+            'name'        => $user->name,
+            'email'       => $user->email,
+            'role'        => $user->role,
+            'permissions' => $user->permissions ?? [],
+            'created_at'  => $user->created_at,
+        ];
     }
 }

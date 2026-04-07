@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -24,9 +25,10 @@ return new class extends Migration
                 $table->string('barangay')->nullable();
                 $table->json('metadata')->nullable();
                 $table->longText('ocr_text')->nullable();
-                $table->binary('file_data')->nullable(); // Using binary for longblob storage
                 $table->timestamps();
             });
+            // Add LONGBLOB column separately — Laravel's binary() maps to TINYBLOB in MySQL
+            DB::statement('ALTER TABLE documents ADD COLUMN file_data LONGBLOB NULL');
         }
     }
 

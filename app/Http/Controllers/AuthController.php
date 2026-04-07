@@ -3,110 +3,81 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Models\User;
 
 class AuthController extends Controller
 {
     /**
-     * Login user
+     * Login
      */
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 400);
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+            ], 400);
         }
 
-        $email = $request->input('email');
-        $password = $request->input('password');
+        $user = User::where('email', $request->input('email'))->first();
 
-        // Find user by email
-        $users = DB::select("SELECT * FROM users WHERE email = ?", [$email]);
-
-        if (count($users) === 0) {
-            // Early return for invalid email - no need to wait for bcrypt
-            return response()->json(['success' => false, 'message' => 'Invalid email or password'], 401);
+        if (!$user || !Hash::check($request->input('password'), $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid email or password.',
+            ], 401);
         }
 
-        $user = $users[0];
-
-        // Verify password - improved logic
-        $passwordValid = false;
-        
-        // Try Hash::check first (safe fallback for non-bcrypt)
-        if (Hash::check($password, $user->password)) {
-            $passwordValid = true;
-        } elseif ($user->password === $password) {
-            // Plain text fallback
-            $passwordValid = true;
-        }
-        
-        if ($passwordValid) {
-            // Always upgrade to bcrypt
-            $hashedPassword = Hash::make($password);
-            DB::update("UPDATE users SET password = ? WHERE id = ?", [$hashedPassword, $user->id]);
-        }
-
-        if (!$passwordValid) {
-            return response()->json(['success' => false, 'message' => 'Invalid email or password'], 401);
-        }
-        
-        // Parse permissions from JSON string to array
-        $user->permissions = $this->parsePermissions($user->permissions ?? null);
-        
         // Store user in session
-        $request->session()->put('user', $user);
-        
-        return response()->json(['success' => true, 'user' => $user]);
+        $request->session()->put('user_id', $user->id);
+
+        return response()->json([
+            'success' => true,
+            'user'    => $this->formatUser($user),
+        ]);
     }
 
     /**
-     * Check session
+     * Return current session user
      */
     public function session(Request $request)
     {
-        if ($request->session()->has('user')) {
-            $userId = $request->session()->get('user')->id;
-            
-            // Always fetch fresh user data from database
-            $users = DB::select("SELECT * FROM users WHERE id = ?", [$userId]);
-            
-            if (count($users) === 0) {
-                $request->session()->forget('user');
-                return response()->json(['success' => false, 'message' => 'User not found'], 401);
-            }
-            
-            $freshUser = $users[0];
-            $freshUser->permissions = $this->parsePermissions($freshUser->permissions ?? null);
-            
-            // Update session with fresh data
-            $request->session()->put('user', $freshUser);
-            
-            return response()->json([
-                'success' => true,
-                'user' => $freshUser,
-                'sessionId' => $request->session()->getId()
-            ]);
+        $userId = $request->session()->get('user_id');
+
+        if (!$userId) {
+            return response()->json(['success' => false, 'message' => 'No active session.'], 401);
         }
-        
-        return response()->json(['success' => false, 'message' => 'No active session'], 401);
+
+        $user = User::find($userId);
+
+        if (!$user) {
+            $request->session()->forget('user_id');
+            return response()->json(['success' => false, 'message' => 'User not found.'], 401);
+        }
+
+        return response()->json([
+            'success' => true,
+            'user'    => $this->formatUser($user),
+        ]);
     }
 
     /**
-     * Logout user
+     * Logout
      */
     public function logout(Request $request)
     {
-        $request->session()->forget('user');
+        $request->session()->forget('user_id');
         $request->session()->invalidate();
-        
-        return response()->json(['success' => true, 'message' => 'Logged out successfully']);
+        $request->session()->regenerateToken();
+
+        return response()->json(['success' => true, 'message' => 'Logged out successfully.']);
     }
 
     /**
@@ -115,38 +86,37 @@ class AuthController extends Controller
     public function changePassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'userId' => 'required|integer',
+            'userId'          => 'required|integer',
             'currentPassword' => 'required|string',
-            'newPassword' => 'required|string|min:1',
+            'newPassword'     => 'required|string|min:6',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()->first()], 400);
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 400);
         }
 
-        $userId = $request->input('userId');
-        $currentPassword = $request->input('currentPassword');
-        $newPassword = $request->input('newPassword');
+        $sessionUserId = $request->session()->get('user_id');
+        $targetId      = (int) $request->input('userId');
+        $sessionUser   = User::find($sessionUserId);
 
-        // Get user from database
-        $users = DB::select("SELECT * FROM users WHERE id = ?", [$userId]);
-
-        if (count($users) === 0) {
-            return response()->json(['success' => false, 'message' => 'User not found'], 404);
+        // Only Admin can change another user's password
+        if ($sessionUser?->role !== 'Admin' && $sessionUserId !== $targetId) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
-        $user = $users[0];
-
-        // Verify current password (handles both hashed and plain)
-        if (!Hash::check($currentPassword, $user->password) && $user->password !== $currentPassword) {
-            return response()->json(['success' => false, 'message' => 'Current password is incorrect'], 401);
+        $user = User::find($targetId);
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'User not found.'], 404);
         }
 
-        // Hash the new password and update
-        $hashedPassword = Hash::make($newPassword);
-        DB::update("UPDATE users SET password = ? WHERE id = ?", [$hashedPassword, $userId]);
+        if (!Hash::check($request->input('currentPassword'), $user->password)) {
+            return response()->json(['success' => false, 'message' => 'Current password is incorrect.'], 401);
+        }
 
-        return response()->json(['success' => true, 'message' => 'Password changed successfully!']);
+        $user->password = Hash::make($request->input('newPassword'));
+        $user->save();
+
+        return response()->json(['success' => true, 'message' => 'Password changed successfully.']);
     }
 
     /**
@@ -155,55 +125,38 @@ class AuthController extends Controller
     public function verifyPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'userId' => 'required|integer',
+            'userId'   => 'required|integer',
             'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()->first()], 400);
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 400);
         }
 
-        $userId = $request->input('userId');
-        $password = $request->input('password');
-
-        // Get user from database
-        $users = DB::select("SELECT * FROM users WHERE id = ?", [$userId]);
-
-        if (count($users) === 0) {
-            return response()->json(['success' => false, 'message' => 'User not found'], 404);
+        $user = User::find($request->input('userId'));
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'User not found.'], 404);
         }
 
-        $user = $users[0];
-
-        // Verify password (handles both hashed and plain)
-        if (!Hash::check($password, $user->password) && $user->password !== $password) {
-            return response()->json(['success' => false, 'message' => 'Invalid password'], 401);
+        if (!Hash::check($request->input('password'), $user->password)) {
+            return response()->json(['success' => false, 'message' => 'Invalid password.'], 401);
         }
 
-        return response()->json(['success' => true, 'message' => 'Password verified']);
+        return response()->json(['success' => true, 'message' => 'Password verified.']);
     }
 
     /**
-     * Parse permissions from JSON string
+     * Format user for JSON response (exclude sensitive fields)
      */
-    private function parsePermissions($permissions)
+    private function formatUser(User $user): array
     {
-        if (empty($permissions)) {
-            return [];
-        }
-
-        if (is_array($permissions)) {
-            return $permissions;
-        }
-
-        if (is_object($permissions)) {
-            return json_decode(json_encode($permissions), true);
-        }
-
-        try {
-            return json_decode($permissions, true);
-        } catch (\Exception $e) {
-            return [];
-        }
+        return [
+            'id'          => $user->id,
+            'name'        => $user->name,
+            'email'       => $user->email,
+            'role'        => $user->role,
+            'permissions' => $user->permissions ?? [],
+            'created_at'  => $user->created_at,
+        ];
     }
 }
