@@ -48,7 +48,9 @@ Route::middleware('web')->group(function () {
     Route::delete('/documents/{id}',            [DocumentController::class, 'destroy']);
     Route::post('/documents/{id}/undo',         [DocumentController::class, 'undo']);
     Route::post('/documents/upload',            [DocumentController::class, 'upload']);
+    Route::post('/documents/{id}/quick-approve', [DocumentController::class, 'quickApprove']);
     Route::get('/documents/download/{id}',      [DocumentController::class, 'download']);
+    Route::get('/documents/download-txt/{id}',  [DocumentController::class, 'downloadTxt']);
 
     // ── OCR ────────────────────────────────────────────────────────────────
     Route::post('/ocr/process', [OcrController::class, 'process']);

@@ -18,6 +18,7 @@ import AboutPortal      from './components/AboutPortal.jsx';
 import DigitalServices  from './components/DigitalServices.jsx';
 import ContactDirectory from './components/ContactDirectory.jsx';
 import { ModalProvider } from './components/ModalContext.jsx';
+import { DataProvider } from './components/DataContext.jsx';
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 
@@ -62,58 +63,60 @@ const ScrollToTop = () => {
 // ─── App ─────────────────────────────────────────────────────────────────────
 function App() {
     return (
-        <ModalProvider>
-            <BrowserRouter>
-                <ScrollToTop />
-                <Routes>
-                    {/* ── Public ─────────────────────────────────────────── */}
-                    <Route path="/"         element={<PublicLayout><Landing /></PublicLayout>} />
-                    <Route path="/about"    element={<PublicLayout><AboutPortal /></PublicLayout>} />
-                    <Route path="/services" element={<PublicLayout><DigitalServices /></PublicLayout>} />
-                    <Route path="/contact"  element={<PublicLayout><ContactDirectory /></PublicLayout>} />
-                    <Route path="/login"    element={<Login />} />
+        <DataProvider>
+            <ModalProvider>
+                <BrowserRouter>
+                    <ScrollToTop />
+                    <Routes>
+                        {/* ── Public ─────────────────────────────────────────── */}
+                        <Route path="/"         element={<PublicLayout><Landing /></PublicLayout>} />
+                        <Route path="/about"    element={<PublicLayout><AboutPortal /></PublicLayout>} />
+                        <Route path="/services" element={<PublicLayout><DigitalServices /></PublicLayout>} />
+                        <Route path="/contact"  element={<PublicLayout><ContactDirectory /></PublicLayout>} />
+                        <Route path="/login"    element={<Login />} />
 
-                    {/* ── Protected ──────────────────────────────────────── */}
-                    {/* Dashboard — Admin + Staff */}
-                    <Route path="/dashboard" element={
-                        <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
-                            <Layout><Dashboard /></Layout>
-                        </ProtectedRoute>
-                    } />
+                        {/* ── Protected ──────────────────────────────────────── */}
+                        {/* Dashboard — Admin + Staff */}
+                        <Route path="/dashboard" element={
+                            <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                                <Layout><Dashboard /></Layout>
+                            </ProtectedRoute>
+                        } />
 
-                    {/* Documents — all authenticated */}
-                    <Route path="/documents" element={
-                        <ProtectedRoute>
-                            <Layout><Documents /></Layout>
-                        </ProtectedRoute>
-                    } />
+                        {/* Documents — all authenticated */}
+                        <Route path="/documents" element={
+                            <ProtectedRoute>
+                                <Layout><Documents /></Layout>
+                            </ProtectedRoute>
+                        } />
 
-                    {/* Issuances — Admin + Staff */}
-                    <Route path="/issuances" element={
-                        <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
-                            <Layout><Issuances /></Layout>
-                        </ProtectedRoute>
-                    } />
+                        {/* Issuances — Admin + Staff */}
+                        <Route path="/issuances" element={
+                            <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                                <Layout><Issuances /></Layout>
+                            </ProtectedRoute>
+                        } />
 
-                    {/* Mapping — Admin only */}
-                    <Route path="/mapping" element={
-                        <ProtectedRoute allowedRoles={['Admin']}>
-                            <Layout><Mapping /></Layout>
-                        </ProtectedRoute>
-                    } />
+                        {/* Mapping — Admin only */}
+                        <Route path="/mapping" element={
+                            <ProtectedRoute allowedRoles={['Admin']}>
+                                <Layout><Mapping /></Layout>
+                            </ProtectedRoute>
+                        } />
 
-                    {/* Accounts — all authenticated (filtered inside component by role) */}
-                    <Route path="/accounts" element={
-                        <ProtectedRoute>
-                            <Layout><Accounts /></Layout>
-                        </ProtectedRoute>
-                    } />
+                        {/* Accounts — all authenticated (filtered inside component by role) */}
+                        <Route path="/accounts" element={
+                            <ProtectedRoute>
+                                <Layout><Accounts /></Layout>
+                            </ProtectedRoute>
+                        } />
 
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </BrowserRouter>
-        </ModalProvider>
+                        {/* Fallback */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </BrowserRouter>
+            </ModalProvider>
+        </DataProvider>
     );
 }
 

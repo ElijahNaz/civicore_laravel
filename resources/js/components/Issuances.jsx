@@ -9,15 +9,58 @@ import {
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
 
+import { useData } from './DataContext.jsx';
+
 const Issuances = () => {
     const { showAlert } = useModal();
-    const [isLoading, setIsLoading] = useState(true);
-    const [certificates, setCertificates] = useState([]);
+    const { 
+        issuances: rawIssuances, 
+        documents: rawDocuments, 
+        loading: dataLoading,
+        refreshIssuances,
+        refreshDocuments,
+        refreshStats
+    } = useData();
+    
+    const isLoading = dataLoading.issuances || dataLoading.documents;
     const [selectedType, setSelectedType] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectAll, setSelectAll] = useState(false);
     const [showNewModal, setShowNewModal] = useState(false);
     const [activeTab, setActiveTab] = useState('database');
+    
+    // Compute combined certificates from global state
+    const [certificates, setCertificates] = useState([]);
+
+    useEffect(() => {
+        const combined = [
+            ...rawIssuances.map(i => ({
+                id: `iss-${i.id}`,
+                realId: i.id,
+                number: i.number,
+                type: i.type,
+                name: i.name,
+                barangay: i.barangay,
+                date: i.date,
+                status: i.status || 'Pending',
+                encoded_by: i.encoded_by,
+                source: 'issuance'
+            })),
+            ...rawDocuments.map(d => ({
+                id: `doc-${d.id}`,
+                realId: d.id,
+                number: d.name, // filename
+                type: d.type || 'Document',
+                name: d.extracted_fields?.full_name || 'Extracted via OCR',
+                barangay: d.extracted_fields?.barangay || 'N/A',
+                date: d.date || (d.created_at ? d.created_at.split('T')[0] : 'N/A'),
+                status: d.status || 'Uploaded',
+                encoded_by: d.encoded_by,
+                source: 'document'
+            }))
+        ];
+        setCertificates(combined);
+    }, [rawIssuances, rawDocuments]);
     
     const [newCert, setNewCert] = useState({
         number: '',
@@ -27,61 +70,12 @@ const Issuances = () => {
         status: 'Pending'
     });
 
-    const fetchDatabaseData = async () => {
-        setIsLoading(true);
-        try {
-            const [issRes, docRes] = await Promise.all([
-                fetch('/api/issuances', { credentials: 'include' }),
-                fetch('/api/documents', { credentials: 'include' })
-            ]);
-            let combined = [];
-            
-            if (issRes.ok) {
-                const issData = await issRes.json();
-                if (issData.data) {
-                    combined = [...combined, ...issData.data.map(i => ({
-                        id: `iss-${i.id}`,
-                        realId: i.id,
-                        number: i.certNumber,
-                        type: i.type,
-                        name: i.name,
-                        barangay: i.barangay,
-                        date: i.issuanceDate,
-                        status: i.status || 'Pending',
-                        encoded_by: i.encoded_by,
-                        source: 'issuance'
-                    }))];
-                }
-            }
-            if (docRes.ok) {
-                const docData = await docRes.json();
-                if (docData.data) {
-                    combined = [...combined, ...docData.data.map(d => ({
-                        id: `doc-${d.id}`,
-                        realId: d.id,
-                        number: d.name, // filename
-                        type: d.type || 'Document',
-                        name: d.personName || 'Extracted via OCR',
-                        barangay: d.barangay || 'N/A',
-                        date: d.date || (d.created_at ? d.created_at.split('T')[0] : 'N/A'),
-                        status: d.status || 'Uploaded',
-                        encoded_by: d.encoded_by,
-                        source: 'document'
-                    }))];
-                }
-            }
-            setCertificates(combined);
-        } catch (e) {
-            console.error("Error fetching database records:", e);
-        } finally {
-            setIsLoading(false);
-        }
+    // Helper to refresh everything
+    const refreshAll = () => {
+        refreshIssuances(true);
+        refreshDocuments(true);
+        refreshStats(true);
     };
-
-    // Load from database initially
-    useEffect(() => {
-        fetchDatabaseData();
-    }, []);
 
     // Generate real cert number from database when modal opens or type changes
     useEffect(() => {
@@ -135,7 +129,7 @@ const Issuances = () => {
             const data = await res.json();
             
             if (data.success) {
-                fetchDatabaseData();
+                refreshAll();
                 setShowNewModal(false);
                 setNewCert({ number: '', type: 'birth', name: '', barangay: '', date: '', status: 'Pending' });
                 showAlert({
@@ -176,8 +170,7 @@ const Issuances = () => {
                     });
                     const data = await res.json();
                     if (data.success) {
-                        const updated = certificates.filter(c => c.id !== cert.id);
-                        setCertificates(updated);
+                        refreshAll();
                         
                         showAlert({
                             title: 'Deleted',
@@ -204,7 +197,7 @@ const Issuances = () => {
     const handleUndo = async (cert) => {
         const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}/undo` : `/api/documents/${cert.realId}/undo`;
         await fetch(endpoint, { method: 'POST', credentials: 'include' });
-        fetchDatabaseData();
+        refreshAll();
     };
 
     const handleMarkAsIssued = async (cert) => {
@@ -217,7 +210,7 @@ const Issuances = () => {
             const data = await res.json();
             if (data.success) {
                 showAlert({ title: "Finalized", message: "Certificate has been marked as Issued.", type: "success" });
-                fetchDatabaseData();
+                refreshAll();
             }
         } catch (error) {
             console.error("Error issuing:", error);
@@ -481,26 +474,32 @@ const Issuances = () => {
                                             )}
                                         </td>
                                         <td className="p-4 pr-6 text-right">
-                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex items-center justify-end gap-1.5">
                                                 {cert.status !== 'Issued' && cert.source === 'issuance' && (
-                                                    <button onClick={() => handleMarkAsIssued(cert)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Mark as Issued">
+                                                    <button onClick={() => handleMarkAsIssued(cert)}
+                                                        title="Mark as Issued"
+                                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm">
                                                         <CheckCircleIcon className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                <button onClick={() => handleView(cert)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View details">
+                                                <button onClick={() => handleView(cert)}
+                                                    title="View Document"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-colors shadow-sm">
                                                     <EyeIcon className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleView(cert)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Print document">
+                                                <button onClick={() => handleView(cert)}
+                                                    title="Print Document"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-600 text-white hover:bg-slate-700 transition-colors shadow-sm">
                                                     <PrinterIcon className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDownload(cert)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Download PDF">
+                                                <button onClick={() => handleDownload(cert)}
+                                                    title="Download PDF"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors shadow-sm">
                                                     <ArrowDownTrayIcon className="w-4 h-4" />
                                                 </button>
-                                                <button 
-                                                    onClick={() => handleDelete(cert)}
-                                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" 
-                                                    title="Delete record"
-                                                >
+                                                <button onClick={() => handleDelete(cert)}
+                                                    title="Delete Record"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-colors shadow-sm">
                                                     <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </div>

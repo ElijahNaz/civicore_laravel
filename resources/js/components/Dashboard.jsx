@@ -11,39 +11,20 @@ import {
     UsersIcon, 
     ArrowUpTrayIcon 
 } from '@heroicons/react/24/outline';
-
-const API_BASE = '/api';  // Laravel API
+import { useData } from './DataContext';
 
 function Dashboard() {
-    const [stats, setStats] = useState({
-        totalDocs: 0,
-        processedDocs: 0,
-        pendingDocs: 0,
-        totalUsers: 0,
-        totalIssuances: 0,
-        pendingIssuances: 0
-    });
+    const { stats, loading: dataLoading } = useData();
     const [chartData, setChartData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const loading = dataLoading.stats;
     const chartRefs = useRef({});
 
     useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const response = await fetch(`${API_BASE}/dashboard/stats`, { credentials: 'include' });
-                const data = await response.json();
-                
-                if (data.stats) setStats(data.stats);
-                if (data.chartData) setChartData(data.chartData);
-            } catch (err) {
-                console.error('Error fetching stats:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        
-        fetchStats();
-    }, []);
+        const cachedChartData = sessionStorage.getItem('civicore_chart_data');
+        if (cachedChartData) {
+            setChartData(JSON.parse(cachedChartData));
+        }
+    }, [stats]);
 
     // Initialize Charts
     useEffect(() => {

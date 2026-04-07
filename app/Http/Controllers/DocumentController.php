@@ -116,6 +116,11 @@ class DocumentController extends Controller
         $personName = $request->input('personName', '');
         $barangay = $request->input('barangay', '');
 
+        // Resolve uploader name from session
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $encodedBy = $user ? $user->name : 'System';
+
         // Generate unique filename
         $originalName = $file->getClientOriginalName();
         $extension = $file->getClientOriginalExtension();
@@ -136,16 +141,17 @@ class DocumentController extends Controller
             'storedIn' => 'database'
         ]);
 
-        // Save to database with file content
-        DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            [$originalName, $docType, date('m/d/Y'), $size, 'Pending', null, $personName, $barangay, $fileInfo, $fileContent]);
+        // Save to database with file content and encoded_by
+        DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata, file_data, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+            [$originalName, $docType, date('m/d/Y'), $size, 'Pending', null, $personName, $barangay, $fileInfo, $fileContent, $encodedBy]);
 
         return response()->json([
             'success' => true,
             'id' => DB::getPdo()->lastInsertId(),
             'filename' => $filename,
             'originalName' => $originalName,
-            'size' => $size
+            'size' => $size,
+            'encoded_by' => $encodedBy,
         ]);
     }
 
@@ -156,20 +162,46 @@ class DocumentController extends Controller
     public function update(Request $request, $id)
     {
         $extractedFields = $request->input('extracted_fields');
+        $ocrText         = $request->input('ocr_text', '');
         $personName      = $request->input('personName', '');
         $barangay        = $request->input('barangay', '');
         $status          = $request->input('status', 'Processed');
         $parentalConsent = $request->input('parental_consent', false);
 
+        return $this->performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent);
+    }
+
+    /**
+     * Fast-track approval of extracted data without the full modal
+     */
+    public function quickApprove(Request $request, $id)
+    {
+        $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
+        if (count($doc) === 0) return response()->json(['error' => 'Document not found'], 404);
+        
+        $document = $doc[0];
+        $fields = json_decode($document->extracted_fields, true) ?? [];
+        $personName = $fields['full_name'] ?? $fields['husbands_name'] ?? $document->name;
+        $barangay = $fields['barangay'] ?? '';
+        
+        return $this->performSave($request, $id, $fields, $document->ocr_text, $personName, $barangay, 'Processed', false);
+    }
+
+    /**
+     * Shared logic for saving/approving a document
+     */
+    private function performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent)
+    {
         // Get current user encoded_by logic based on custom session setup
         $userId = $request->session()->get('user_id');
         $user = $userId ? \App\Models\User::find($userId) : null;
         $encodedBy = $user ? $user->name : 'System';
 
         DB::update(
-            "UPDATE documents SET extracted_fields = ?, personName = ?, barangay = ?, status = ?, parental_consent = ?, encoded_by = ? WHERE id = ?",
+            "UPDATE documents SET extracted_fields = ?, ocr_text = ?, personName = ?, barangay = ?, status = ?, parental_consent = ?, encoded_by = ? WHERE id = ?",
             [
                 json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                $ocrText,
                 $personName,
                 $barangay,
                 $status,
@@ -210,9 +242,14 @@ class DocumentController extends Controller
                 $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
                 $issuanceDate = date('m/d/Y');
                 
-                // Generate PDF using DOMPDF
+                // Generate PDF (using full OCR text as primary output as requested)
                 $pdf = app('dompdf.wrapper');
-                $pdf->loadView('pdf.certificate', ['doc' => $doc[0], 'fields' => $extractedFields]);
+                $pdf->setPaper('a4', 'portrait');
+                $pdf->loadView('pdf.ocr_report', [
+                    'doc' => $doc[0], 
+                    'fields' => $extractedFields,
+                    'ocr_text' => $ocrText ?: $doc[0]->ocr_text
+                ]);
                 $pdfData = $pdf->output();
 
                 // insert issuance with file_data
@@ -258,21 +295,56 @@ class DocumentController extends Controller
 
         $doc = $documents[0];
         $metadata = json_decode($doc->metadata, true);
+        $status = strtolower($doc->status ?? 'pending');
         
+        // --- NEW: If extracted or processed, generate a PDF preview with the text ---
+        if ($status === 'extracted' || $status === 'processed' || $status === 'active') {
+            $fields = json_decode($doc->extracted_fields, true) ?? [];
+            
+            // Build a quick PDF view
+            $pdf = app('dompdf.wrapper');
+            $pdf->loadView('pdf.ocr_report', [
+                'doc' => $doc, 
+                'fields' => $fields,
+                'ocr_text' => $doc->ocr_text,
+                'is_preview' => true 
+            ]);
+            
+            return response($pdf->output())
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'inline; filename="preview-' . $id . '.pdf"');
+        }
+
+        // Otherwise return the raw upload
         $filename = $metadata['originalName'] ?? 'document.pdf';
-        
-        // Get file content from database
         $fileContent = $doc->file_data;
         
         if (empty($fileContent)) {
             return response()->json(['error' => 'File content not found in database'], 404);
         }
 
-        $filename = $metadata['originalName'] ?? 'document.pdf';
         $mimetype = $metadata['mimetype'] ?? 'application/pdf';
 
         return response($fileContent)
             ->header('Content-Type', $mimetype)
             ->header('Content-Disposition', 'inline; filename="' . $filename . '"');
+    }
+
+    /**
+     * Download the extracted OCR text as a .txt file
+     */
+    public function downloadTxt($id)
+    {
+        $doc = DB::selectOne("SELECT name, ocr_text FROM documents WHERE id = ?", [$id]);
+
+        if (!$doc || !$doc->ocr_text) {
+            return response()->json(['error' => 'No text content available.'], 404);
+        }
+
+        $filename = pathinfo($doc->name, PATHINFO_FILENAME) . '.txt';
+
+        return response($doc->ocr_text)
+            ->header('Content-Type', 'text/plain')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }
 }

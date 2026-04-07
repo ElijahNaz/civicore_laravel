@@ -5,49 +5,28 @@ import { motion } from 'framer-motion';
 import { MapPinIcon, DocumentChartBarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import SkeletonLoader from './SkeletonLoader.jsx';
 
+import { useData } from './DataContext.jsx';
+
 const Mapping = () => {
     const mapRef = useRef(null);
     const chartRef = useRef(null);
     const canvasRef = useRef(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [apiData, setApiData] = useState([]);
-    const [docsData, setDocsData] = useState([]);
+    const { 
+        issuances: apiData, 
+        documents: docsData, 
+        loading: dataLoading,
+        refreshAll
+    } = useData();
+    
+    const isLoading = dataLoading.issuances || dataLoading.documents;
     const [activeFilter, setActiveFilter] = useState('all');
 
     // Fetch API Data
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const [issuancesRes, docsRes] = await Promise.all([
-                fetch('/api/issuances?per_page=1000', { credentials: 'include' }),
-                fetch('/api/documents?per_page=1000', { credentials: 'include' })
-            ]);
-            
-            if (issuancesRes.ok) {
-                const responseJson = await issuancesRes.json();
-                const data = responseJson.data || responseJson;
-                const result = Array.isArray(data) ? data : [];
-                setApiData(result);
-                sessionStorage.setItem('cache_map_data', JSON.stringify(result));
-            }
-            if (docsRes.ok) {
-                const responseJson = await docsRes.json();
-                const data = responseJson.data || responseJson;
-                const result = Array.isArray(data) ? data : [];
-                setDocsData(result);
-            }
-        } catch (err) {
-            console.error("Failed to load map data from API", err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // Global fetch is handled by DataProvider
+    const fetchData = () => refreshAll();
 
     useEffect(() => {
-        fetchData();
-        
-        // --- CHART.JS ---
-        // Cleanup existing chart on unmount or re-render
+        // cleanup on unmount
         return () => {
             if (chartRef.current) {
                 chartRef.current.destroy();
@@ -286,7 +265,7 @@ const Mapping = () => {
                     </h2>
                     <p className="text-slate-500 font-medium text-sm mt-1">Live distribution of civil documents across Naic barangays.</p>
                 </div>
-                <button onClick={() => fetchData(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors cursor-pointer active:scale-95">
+                <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors cursor-pointer active:scale-95">
                     <ArrowPathIcon className="w-4 h-4" /> Refresh Data
                 </button>
             </motion.div>
