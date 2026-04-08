@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class ProcessDocumentOcr implements ShouldQueue
 {
@@ -19,7 +20,7 @@ class ProcessDocumentOcr implements ShouldQueue
      *
      * @var int
      */
-    public $timeout = 300; // 5 minutes max
+    public $timeout = 600; // 10 minutes max (extra safe for large files)
 
     protected $documentId;
     protected $docType;
@@ -40,20 +41,17 @@ class ProcessDocumentOcr implements ShouldQueue
      */
     public function handle(): void
     {
-        Log::info("Starting OCR Job for Document ID: " . $this->documentId);
+        Log::info("Starting OCR Job (v2 - Server Mode) for Document ID: " . $this->documentId);
 
-        // Fetch document from DB
-        $documents = DB::select("SELECT * FROM documents WHERE id = ?", [$this->documentId]);
-        if (count($documents) === 0) {
-            Log::error("Document not found for OCR Job: " . $this->documentId);
+        // Fetch document
+        $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$this->documentId]);
+        if (!$doc) {
+            Log::error("Document not found: " . $this->documentId);
             return;
         }
 
-        $doc = $documents[0];
-        $fileContent = $doc->file_data;
-
-        if (empty($fileContent)) {
-            Log::error("File content not found in database for Document ID: " . $this->documentId);
+        if (empty($doc->file_data)) {
+            Log::error("No file data for document: " . $this->documentId);
             DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
             return;
         }
@@ -61,147 +59,48 @@ class ProcessDocumentOcr implements ShouldQueue
         // Determine extension
         $metadata = json_decode($doc->metadata, true);
         $mimetype = $metadata['mimetype'] ?? 'image/jpeg';
+        $extension = str_contains($mimetype, 'pdf') ? 'pdf' : 'jpg';
 
-        $extension = 'jpg';
-        if (str_contains($mimetype, 'pdf'))  $extension = 'pdf';
-        elseif (str_contains($mimetype, 'png'))  $extension = 'png';
-        elseif (str_contains($mimetype, 'tiff')) $extension = 'tiff';
-        elseif (str_contains($mimetype, 'bmp'))  $extension = 'bmp';
-
-        // Write to temp file
-        $tempDir = sys_get_temp_dir();
-        $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'ocr_' . $this->documentId . '_' . time() . '.' . $extension;
-
-        if (file_put_contents($tempFile, $fileContent) === false) {
-            Log::error("Could not write temp file for Document ID: " . $this->documentId);
-            DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-            return;
-        }
+        // Write to temp file for the Python server to read
+        // (In a distributed system we'd send binary, but since it's local, path is faster)
+        $tempFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ocr_v2_' . $this->documentId . '.' . $extension;
+        file_put_contents($tempFile, $doc->file_data);
 
         try {
-            // Build command
-            $ocrScript = base_path('ocr_processor.py');
-            $pythonBin = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+            Log::info("Calling OCR Server for ID: " . $this->documentId);
+            
+            $response = Http::timeout(300)->post('http://127.0.0.1:5000/ocr', [
+                'file_path' => $tempFile,
+                'doc_type' => $this->docType ?: 'birth',
+                'languages' => $this->languages ?: 'en,tl'
+            ]);
 
-            // Build setup
-            $cmd = $pythonBin
-                . ' "' . addslashes($ocrScript) . '"'
-                . ' "' . addslashes($tempFile)  . '"'
-                . ' --lang '     . escapeshellarg($this->languages)
-                . ' --type auto'
-                . ' --doc_type ' . escapeshellarg($this->docType ?: 'birth');
-
-            Log::info("Job running shell command: " . $cmd);
-
-            $descriptors = [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ];
-
-            $process = proc_open($cmd, $descriptors, $pipes);
-
-            if (!is_resource($process)) {
-                Log::error("Failed to start Python process in OCR Job for Document ID: " . $this->documentId);
-                DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-                return;
+            if ($response->failed()) {
+                throw new \Exception("OCR Server returned error: " . $response->body());
             }
 
-            fclose($pipes[0]);
-
-            $stdout = '';
-            $stderr = '';
-            $start = time();
-            $timeout = 240; // 4 minutes
-
-            stream_set_blocking($pipes[1], false);
-            stream_set_blocking($pipes[2], false);
-
-            while (true) {
-                $chunk = fread($pipes[1], 8192);
-                if ($chunk !== false) $stdout .= $chunk;
-
-                $errChunk = fread($pipes[2], 8192);
-                if ($errChunk !== false) $stderr .= $errChunk;
-
-                $status = proc_get_status($process);
-                if (!$status['running']) break;
-
-                if ((time() - $start) >= $timeout) {
-                    proc_terminate($process);
-                    Log::error("OCR processing timed out for Document ID: " . $this->documentId);
-                    DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-                    return;
-                }
-
-                usleep(200000); // 200ms
+            $result = $response->json();
+            
+            if (!($result['success'] ?? false)) {
+                throw new \Exception("OCR Result indicates failure: " . ($result['error'] ?? 'Unknown error'));
             }
 
-            $stdout .= stream_get_contents($pipes[1]);
-            $stderr .= stream_get_contents($pipes[2]);
+            // Standardize status: 'extracted' is our "Done" state
+            DB::update(
+                "UPDATE documents SET ocr_text = ?, extracted_fields = ?, detected_type = ?, status = 'extracted' WHERE id = ?",
+                [
+                    $result['text'] ?? '',
+                    json_encode($result['extracted_fields'] ?? [], JSON_UNESCAPED_UNICODE),
+                    $result['detected_type'] ?? '',
+                    $this->documentId,
+                ]
+            );
 
-            fclose($pipes[1]);
-            fclose($pipes[2]);
+            Log::info("OCR Job (v2) completed successfully for ID: " . $this->documentId);
 
-            $exitCode = proc_close($process);
-
-            Log::info("Job OCR exit code: " . $exitCode);
-
-            $stdout = trim($stdout);
-
-            if ($exitCode !== 0 || empty($stdout)) {
-                Log::error("OCR processing failed for Document ID: " . $this->documentId . " with exit code: " . $exitCode);
-                Log::error("Stderr: " . $stderr);
-                DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-                return;
-            }
-
-            // Parse valid JSON
-            $jsonLine = null;
-            foreach (array_reverse(explode("\n", $stdout)) as $line) {
-                $line = trim($line);
-                if (str_starts_with($line, '{')) {
-                    $jsonLine = $line;
-                    break;
-                }
-            }
-
-            if (!$jsonLine) {
-                Log::error("OCR did not return valid JSON for Document ID: " . $this->documentId);
-                DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-                return;
-            }
-
-            $result = json_decode($jsonLine, true);
-
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::error("Failed to parse OCR JSON for Document ID: " . $this->documentId);
-                DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-                return;
-            }
-
-            // Persist valid results exactly as before!
-            if ($result['success'] ?? false) {
-                $ocrText         = $result['text']             ?? '';
-                $extractedFields = $result['extracted_fields'] ?? [];
-                $detectedType    = $result['detected_type']    ?? '';
-
-                DB::update(
-                    "UPDATE documents SET ocr_text = ?, extracted_fields = ?, detected_type = ?, status = 'extracted' WHERE id = ?",
-                    [
-                        $ocrText,
-                        json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
-                        $detectedType,
-                        $this->documentId,
-                    ]
-                );
-                
-                Log::info("OCR Job completed successfully for Document ID: " . $this->documentId);
-            } else {
-                Log::error("OCR Job failed according to JSON response for Document ID: " . $this->documentId);
-                DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-            }
-
+        } catch (\Exception $e) {
+            Log::error("OCR Job (v2) failed: " . $e->getMessage());
+            DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
         } finally {
             if (file_exists($tempFile)) {
                 @unlink($tempFile);

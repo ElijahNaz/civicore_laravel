@@ -165,10 +165,11 @@ class DocumentController extends Controller
         $ocrText         = $request->input('ocr_text', '');
         $personName      = $request->input('personName', '');
         $barangay        = $request->input('barangay', '');
-        $status          = $request->input('status', 'Processed');
+        $status          = $request->input('status', 'Extracted');
         $parentalConsent = $request->input('parental_consent', false);
+        $detectedType    = $request->input('detectedType');
 
-        return $this->performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent);
+        return $this->performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType);
     }
 
     /**
@@ -183,82 +184,99 @@ class DocumentController extends Controller
         $fields = json_decode($document->extracted_fields, true) ?? [];
         $personName = $fields['full_name'] ?? $fields['husbands_name'] ?? $document->name;
         $barangay = $fields['barangay'] ?? '';
+        $detectedType = $document->detected_type ?: $document->type;
         
-        return $this->performSave($request, $id, $fields, $document->ocr_text, $personName, $barangay, 'Processed', false);
+        return $this->performSave($request, $id, $fields, $document->ocr_text, $personName, $barangay, 'Processed', false, $detectedType);
     }
 
     /**
      * Shared logic for saving/approving a document
      */
-    private function performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent)
+    private function performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType = null)
     {
-        // Get current user encoded_by logic based on custom session setup
-        $userId = $request->session()->get('user_id');
-        $user = $userId ? \App\Models\User::find($userId) : null;
-        $encodedBy = $user ? $user->name : 'System';
+        try {
+            // Get current user encoded_by logic based on custom session setup
+            $userId = $request->session()->get('user_id');
+            $user = $userId ? \App\Models\User::find($userId) : null;
+            $encodedBy = $user ? $user->name : 'System';
 
-        DB::update(
-            "UPDATE documents SET extracted_fields = ?, ocr_text = ?, personName = ?, barangay = ?, status = ?, parental_consent = ?, encoded_by = ? WHERE id = ?",
-            [
-                json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
-                $ocrText,
-                $personName,
-                $barangay,
-                $status,
-                $parentalConsent ? 1 : 0,
-                $encodedBy,
-                $id,
-            ]
-        );
+            DB::update(
+                "UPDATE documents SET extracted_fields = ?, ocr_text = ?, personName = ?, barangay = ?, status = ?, parental_consent = ?, encoded_by = ?, detected_type = ? WHERE id = ?",
+                [
+                    json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                    $ocrText,
+                    $personName,
+                    $barangay,
+                    $status,
+                    $parentalConsent ? 1 : 0,
+                    $encodedBy,
+                    $detectedType,
+                    $id,
+                ]
+            );
 
-        // --- Automatically inject into Issuances if Processed ---
-        if ($status === 'Processed') {
-            $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
-            if (count($doc) > 0) {
-                // Determine prefix based on type
-                $docType = $doc[0]->detected_type ?: $doc[0]->type;
-                $prefix = 'BC'; // Birth Certificate default
-                if ($docType === 'death') {
-                    $prefix = 'DC'; // Death Certificate
-                } elseif ($docType === 'marriage' || $docType === 'marriage_license') {
-                    $prefix = 'ML'; // Marriage License
-                }
+            // --- Automatically inject or UPDATE in Issuances (Master Registry) if Processed ---
+            if ($status === 'Processed') {
+                // 1. Check if a Master Record already exists for this document
+                $existing = DB::select("SELECT id, certNumber FROM issuances WHERE document_id = ?", [$id]);
                 
-                $year = date('Y');
-                
-                // Get the last certificate number for this type and year
-                $results = DB::select("SELECT certNumber FROM issuances WHERE type = ? AND certNumber LIKE ? ORDER BY id DESC LIMIT 1", 
-                    [$docType, $prefix . '-' . $year . '%']);
-                
-                $nextNum = 1;
-                if (count($results) > 0) {
-                    $lastCertNum = $results[0]->certNumber;
-                    $parts = explode('-', $lastCertNum);
-                    if (count($parts) === 3) {
-                        $nextNum = intval($parts[2]) + 1;
+                $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
+                if (count($doc) > 0) {
+                    $docType = $doc[0]->detected_type ?: $doc[0]->type;
+                    
+                    // Generate PDF (using full OCR text as primary output)
+                    $pdf = app('dompdf.wrapper');
+                    $pdf->setPaper('a4', 'portrait');
+                    $pdf->loadView('pdf.ocr_report', [
+                        'doc' => $doc[0], 
+                        'fields' => $extractedFields,
+                        'ocr_text' => $ocrText ?: $doc[0]->ocr_text
+                    ]);
+                    $pdfData = $pdf->output();
+
+                    if (count($existing) > 0) {
+                        // 2. UPDATE existing Master Record (Keep certNumber)
+                        DB::update(
+                            "UPDATE issuances SET type = ?, name = ?, barangay = ?, status = ?, encoded_by = ?, extracted_data = ?, file_data = ? WHERE document_id = ?",
+                            [$docType, $personName, $barangay, 'Active', $encodedBy, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData, $id]
+                        );
+                    } else {
+                        // 3. INSERT new Master Record (Generate NEW certNumber)
+                        $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
+                        $year = date('Y');
+                        
+                        $results = DB::select("SELECT certNumber FROM issuances WHERE type = ? AND certNumber LIKE ? ORDER BY id DESC LIMIT 1", 
+                            [$docType, $prefix . '-' . $year . '%']);
+                        
+                        $nextNum = 1;
+                        if (count($results) > 0) {
+                            $lastCertNum = $results[0]->certNumber;
+                            $parts = explode('-', $lastCertNum);
+                            if (count($parts) === 3) {
+                                $nextNum = intval($parts[2]) + 1;
+                            }
+                        }
+                        
+                        $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+                        $issuanceDate = date('m/d/Y');
+
+                        DB::insert("INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                            [$certNumber, $docType, $personName, $barangay, $issuanceDate, 'Active', $encodedBy, $id, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData]);
                     }
                 }
-                
-                $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
-                $issuanceDate = date('m/d/Y');
-                
-                // Generate PDF (using full OCR text as primary output as requested)
-                $pdf = app('dompdf.wrapper');
-                $pdf->setPaper('a4', 'portrait');
-                $pdf->loadView('pdf.ocr_report', [
-                    'doc' => $doc[0], 
-                    'fields' => $extractedFields,
-                    'ocr_text' => $ocrText ?: $doc[0]->ocr_text
-                ]);
-                $pdfData = $pdf->output();
-
-                // insert issuance with file_data
-                DB::insert("INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                    [$certNumber, $docType, $personName, $barangay, $issuanceDate, 'Active', $encodedBy, $id, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData]);
             }
-        }
 
-        return response()->json(['success' => true]);
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            \Log::error("Document Save/Approve Error: " . $e->getMessage(), [
+                'id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false, 
+                'error' => 'System sync failure: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -285,10 +303,30 @@ class DocumentController extends Controller
     /**
      * Download/view file from database
      */
+    /**
+     * Download the document (as attachment)
+     */
     public function download($id)
     {
+        return $this->serveDocument($id, 'attachment');
+    }
+
+    /**
+     * View the document (inline)
+     */
+    public function view($id)
+    {
+        return $this->serveDocument($id, 'inline');
+    }
+
+    /**
+     * Shared logic for serving document content
+     */
+    private function serveDocument($id, $disposition = 'inline')
+    {
+        $request = request();
         $documents = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
-        
+
         if (count($documents) === 0) {
             return response()->json(['error' => 'Document not found'], 404);
         }
@@ -297,8 +335,9 @@ class DocumentController extends Controller
         $metadata = json_decode($doc->metadata, true);
         $status = strtolower($doc->status ?? 'pending');
         
-        // --- NEW: If extracted or processed, generate a PDF preview with the text ---
-        if ($status === 'extracted' || $status === 'processed' || $status === 'active') {
+        // --- If extracted or processed, generate a PDF preview with the text ---
+        // UNLESS we explicitly ask for the 'raw' original file
+        if (!$request->has('raw') && ($status === 'extracted' || $status === 'processed' || $status === 'active')) {
             $fields = json_decode($doc->extracted_fields, true) ?? [];
             
             // Build a quick PDF view
@@ -312,22 +351,32 @@ class DocumentController extends Controller
             
             return response($pdf->output())
                 ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'inline; filename="preview-' . $id . '.pdf"');
+                ->header('Content-Disposition', $disposition . '; filename="preview-' . $id . '.pdf"');
         }
 
-        // Otherwise return the raw upload
-        $filename = $metadata['originalName'] ?? 'document.pdf';
+        // Return the raw upload with binary safety
         $fileContent = $doc->file_data;
-        
         if (empty($fileContent)) {
-            return response()->json(['error' => 'File content not found in database'], 404);
+            \Log::error("File data missing for document ID: " . $id);
+            return response()->json(['error' => 'File content not found'], 404);
         }
 
-        $mimetype = $metadata['mimetype'] ?? 'application/pdf';
+        // Clean output buffers to ensure binary safety
+        if (ob_get_length()) ob_end_clean();
 
+        $mimetype = $metadata['mimetype'] ?? null;
+        if (!$mimetype) {
+            $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);
+            $mimetype = match(strtolower($ext)) {
+                'png' => 'image/png', 'jpg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp',
+                'gif' => 'image/gif', 'pdf' => 'application/pdf', default => 'application/octet-stream'
+            };
+        }
+
+        // Use a binary response with correct length
         return response($fileContent)
             ->header('Content-Type', $mimetype)
-            ->header('Content-Disposition', 'inline; filename="' . $filename . '"');
+            ->header('Content-Disposition', $disposition . '; filename="' . ($metadata['originalName'] ?? 'document') . '"');
     }
 
     /**

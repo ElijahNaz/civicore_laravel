@@ -305,7 +305,7 @@ function Dashboard() {
                         
                         <motion.div variants={itemVariants} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-slate-800 text-lg">OCR Accuracy Rate</h3>
+                                <h3 className="font-bold text-slate-800 text-lg">Geographic Distribution</h3>
                             </div>
                             <div className="relative h-[300px] w-full flex items-center justify-center">
                                 <canvas id="accuracyChart"></canvas>

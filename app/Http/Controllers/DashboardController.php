@@ -12,28 +12,28 @@ class DashboardController extends Controller
      */
     public function stats()
     {
-        // 1. Basic Stats
-        $documentsCountResult = DB::select("SELECT COUNT(*) as count FROM documents");
+        // 1. Basic Stats - Count finalized documents only for the main total
+        $documentsCountResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE (status = 'processed' OR status = 'Processed') AND deleted_at IS NULL");
         $documentsCount = $documentsCountResult[0]->count ?? 0;
 
-        $processedDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE status = 'processed' OR status = 'Processed'");
+        $processedDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE (status = 'processed' OR status = 'Processed') AND deleted_at IS NULL");
         $processedDocs = $processedDocsResult[0]->count ?? 0;
 
         // Pending OCR or just uploaded docs
-        $pendingDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE status = 'pending' OR status = 'Uploaded'");
+        $pendingDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE (status = 'pending' OR status = 'Uploaded') AND deleted_at IS NULL");
         $pendingDocs = $pendingDocsResult[0]->count ?? 0;
 
         $usersCountResult = DB::select("SELECT COUNT(*) as count FROM users");
         $usersCount = $usersCountResult[0]->count ?? 0;
 
-        $issuancesCountResult = DB::select("SELECT COUNT(*) as count FROM issuances");
+        $issuancesCountResult = DB::select("SELECT COUNT(*) as count FROM issuances WHERE deleted_at IS NULL");
         $totalIssuances = $issuancesCountResult[0]->count ?? 0;
 
-        $pendingIssuancesResult = DB::select("SELECT COUNT(*) as count FROM issuances WHERE status = 'Pending' OR status = 'pending'");
+        $pendingIssuancesResult = DB::select("SELECT COUNT(*) as count FROM issuances WHERE (status = 'Pending' OR status = 'pending') AND deleted_at IS NULL");
         $pendingIssuances = $pendingIssuancesResult[0]->count ?? 0;
 
-        // 2. Document Types Distribution (Group by type from documents)
-        $docTypes = DB::select("SELECT type, COUNT(*) as count FROM documents GROUP BY type");
+        // 2. Document Types Distribution (Only Processed docs)
+        $docTypes = DB::select("SELECT type, COUNT(*) as count FROM documents WHERE (status = 'processed' OR status = 'Processed') AND deleted_at IS NULL GROUP BY type");
         $chartData = [
             'labels' => [],
             'data' => []
@@ -46,13 +46,13 @@ class DashboardController extends Controller
 
         if (empty($chartData['labels'])) {
             $chartData = [
-                'labels' => ['Live Birth', 'Death', 'Marriage'],
+                'labels' => ['Birth', 'Death', 'Marriage'],
                 'data' => [0, 0, 0]
             ];
         }
 
-        // 3. Process Status (Processed vs Pending for Document Tracking)
-        $failedDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE status = 'failed' OR status = 'Failed'");
+        // 3. Process Status (Pipeline overview)
+        $failedDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE (status = 'failed' OR status = 'Failed') AND deleted_at IS NULL");
         $failedDocs = $failedDocsResult[0]->count ?? 0;
 
         $processStatus = [
@@ -64,7 +64,7 @@ class DashboardController extends Controller
             ]
         ];
 
-        // 4. Monthly Upload Trend (Last 6 Months)
+        // 4. Monthly Processing Trend (Last 6 Months - Approved Only)
         $monthlyUploads = [];
         $months = [];
         for ($i = 5; $i >= 0; $i--) {
@@ -76,6 +76,8 @@ class DashboardController extends Controller
             $end = $month->copy()->endOfMonth();
             
             $count = DB::table('documents')
+                ->where('status', 'Processed')
+                ->whereNull('deleted_at')
                 ->whereBetween('created_at', [$start, $end])
                 ->count();
             
@@ -87,11 +89,12 @@ class DashboardController extends Controller
             'data' => $monthlyUploads
         ];
 
-        // 5. OCR Accuracy Rate (Simulated based on processed vs failed, or representative data)
-        // In a real system, this would come from an ocr_logs table
+        // 5. Geographic Distribution (Replacing simulated Accuracy with real Barangay data)
+        $brgyData = DB::select("SELECT barangay, COUNT(*) as count FROM issuances WHERE deleted_at IS NULL GROUP BY barangay ORDER BY count DESC LIMIT 5");
+        
         $ocrAccuracy = [
-            'labels' => ['Text', 'Names', 'Dates', 'Signatures', 'Stamps'],
-            'data' => [98, 95, 99, 85, 90] // Realistic simulated data
+            'labels' => !empty($brgyData) ? array_column($brgyData, 'barangay') : ['Poblacion', 'Sabang', 'Halang', 'Muzon', 'Labac'],
+            'data' => !empty($brgyData) ? array_map('intval', array_column($brgyData, 'count')) : [0, 0, 0, 0, 0]
         ];
 
         return response()->json([

@@ -21,11 +21,11 @@ const Layout = ({ children }) => {
     // Staff   → Dashboard, Documents, Issuances, Accounts
     // User    → Dashboard, Documents, Accounts
     const allMenuItems = [
-        { path: '/dashboard', icon: ChartBarIcon,              label: 'Dashboard',          roles: ['Admin', 'Staff', 'User'] },
-        { path: '/documents', icon: ArrowUpTrayIcon,           label: 'Upload Document',    roles: ['Admin', 'Staff', 'User'] },
-        { path: '/issuances', icon: ClipboardDocumentCheckIcon,label: 'Issuance',           roles: ['Admin', 'Staff'] },
-        { path: '/mapping',   icon: MapPinIcon,                label: 'Mapping',            roles: ['Admin'] },
-        { path: '/accounts',  icon: UsersIcon,                 label: 'Account Management', roles: ['Admin', 'Staff', 'User'] },
+        { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard', roles: ['Admin', 'Staff', 'User'] },
+        { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document', roles: ['Admin', 'Staff', 'User'] },
+        { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance', roles: ['Admin', 'Staff'] },
+        { path: '/mapping', icon: MapPinIcon, label: 'Mapping', roles: ['Admin'] },
+        { path: '/accounts', icon: UsersIcon, label: 'Account Management', roles: ['Admin', 'Staff', 'User'] },
     ];
 
     const menuItems = allMenuItems.filter(item => item.roles.includes(user.role));
@@ -110,8 +110,8 @@ const Layout = ({ children }) => {
                                 to={item.path}
                                 onClick={closeSidebar}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
-                                        ? 'bg-[#d4a574]/10 text-[#d4a574] font-medium shadow-sm ring-1 ring-[#d4a574]/30'
-                                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                                    ? 'bg-[#d4a574]/10 text-[#d4a574] font-medium shadow-sm ring-1 ring-[#d4a574]/30'
+                                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
                                     }`}
                             >
                                 <Icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-[#d4a574]' : 'text-slate-500 group-hover:text-slate-300'}`} />

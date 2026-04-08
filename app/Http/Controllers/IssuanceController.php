@@ -45,7 +45,7 @@ class IssuanceController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results
-        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
+        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
@@ -114,6 +114,43 @@ class IssuanceController extends Controller
     {
         DB::delete("DELETE FROM issuances WHERE id = ?", [$id]);
         
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Update issuance record
+     */
+    public function update(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'certNumber' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
+            'name' => 'nullable|string|max:255',
+            'barangay' => 'nullable|string|max:255',
+            'issuanceDate' => 'nullable|string',
+            'status' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 400);
+        }
+
+        $fields = [];
+        $params = [];
+
+        foreach ($request->only(['certNumber', 'type', 'name', 'barangay', 'issuanceDate', 'status', 'encoded_by']) as $key => $value) {
+            $fields[] = "$key = ?";
+            $params[] = $value;
+        }
+
+        if (empty($fields)) {
+            return response()->json(['error' => 'No fields to update'], 400);
+        }
+
+        $params[] = $id;
+        $sql = "UPDATE issuances SET " . implode(', ', $fields) . " WHERE id = ?";
+        DB::update($sql, $params);
+
         return response()->json(['success' => true]);
     }
 

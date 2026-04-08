@@ -11,9 +11,20 @@ export const useData = () => {
 };
 
 export const DataProvider = ({ children }) => {
+    const DATA_VERSION = '1.0.3';
+    
     // ── State for Stats ──────────────────────────────────────────────────────
     const [stats, setStats] = useState(() => {
         const cached = sessionStorage.getItem('civicore_stats');
+        const version = sessionStorage.getItem('civicore_version');
+        
+        // Force clear if version mismatch or first time
+        if (version !== DATA_VERSION) {
+            sessionStorage.clear();
+            sessionStorage.setItem('civicore_version', DATA_VERSION);
+            return { totalDocs: 0, processedDocs: 0, pendingDocs: 0, totalUsers: 0, totalIssuances: 0, pendingIssuances: 0 };
+        }
+        
         return cached ? JSON.parse(cached) : {
             totalDocs: 0,
             processedDocs: 0,
@@ -93,6 +104,7 @@ export const DataProvider = ({ children }) => {
                     date:            doc.date || '',
                     detected_type:   doc.detected_type || '',
                     extracted_fields: doc.extracted_fields ? JSON.parse(doc.extracted_fields) : null,
+                    ocr_text:        doc.ocr_text,
                     encoded_by:      doc.encoded_by,
                     created_at:      doc.created_at
                 }));

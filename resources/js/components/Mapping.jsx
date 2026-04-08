@@ -151,7 +151,8 @@ const Mapping = () => {
                 }
             });
             
-            let totalDocs = docsData.length;
+            // Match TOTAL UPLOADED to the sum of all categorized Master Registry records
+            const totalDocs = apiData.length;
 
             const barangaysForMap = staticBarangays.map(b => ({
                 ...b,

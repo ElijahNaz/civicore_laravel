@@ -9,6 +9,7 @@ use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\OcrController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ActivityLogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,10 +51,15 @@ Route::middleware('web')->group(function () {
     Route::post('/documents/upload',            [DocumentController::class, 'upload']);
     Route::post('/documents/{id}/quick-approve', [DocumentController::class, 'quickApprove']);
     Route::get('/documents/download/{id}',      [DocumentController::class, 'download']);
+    Route::get('/documents/view/{id}',          [DocumentController::class, 'view']);
     Route::get('/documents/download-txt/{id}',  [DocumentController::class, 'downloadTxt']);
 
     // ── OCR ────────────────────────────────────────────────────────────────
     Route::post('/ocr/process', [OcrController::class, 'process']);
+    Route::get('/documents/{id}/status', function ($id) {
+        $doc = DB::selectOne("SELECT status FROM documents WHERE id = ?", [$id]);
+        return response()->json(['status' => $doc ? $doc->status : 'not_found']);
+    });
 
     // ── Issuances ──────────────────────────────────────────────────────────
     Route::get('/issuances',                          [IssuanceController::class, 'index']);
@@ -72,4 +78,8 @@ Route::middleware('web')->group(function () {
     // ── Templates ──────────────────────────────────────────────────────────
     Route::get('/templates',         [TemplateController::class, 'index']);
     Route::put('/templates/{type}',  [TemplateController::class, 'update']);
+
+    // ── Activity Logs ──────────────────────────────────────────────────────
+    Route::get('/activity-logs',     [ActivityLogController::class, 'index']);
+    Route::post('/activity-logs',    [ActivityLogController::class, 'store']);
 });
