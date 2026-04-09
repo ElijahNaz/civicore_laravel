@@ -44,6 +44,7 @@ Route::middleware('web')->group(function () {
 
     // ── Documents ──────────────────────────────────────────────────────────
     Route::get('/documents',                    [DocumentController::class, 'index']);
+    Route::get('/documents/history',            [DocumentController::class, 'history']);
     Route::post('/documents',                   [DocumentController::class, 'store']);
     Route::put('/documents/{id}',               [DocumentController::class, 'update']);
     Route::delete('/documents/{id}',            [DocumentController::class, 'destroy']);

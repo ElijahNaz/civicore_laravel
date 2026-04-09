@@ -54,4 +54,19 @@
         @apply absolute inset-0 opacity-20 pointer-events-none;
         background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%23d4a574' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
     }
+
+    /* Modern Edge Lighting Animations */
+    @keyframes border-beam {
+        0%, 100% { offset-distance: 0%; }
+        50% { offset-distance: 100%; }
+    }
+
+    @keyframes edge-glow {
+        0%, 100% { border-color: #e2e8f0; box-shadow: 0 0 0 rgba(79, 70, 229, 0); }
+        25%, 75% { border-color: #4f46e5; box-shadow: 0 0 20px rgba(79, 70, 229, 0.2); }
+    }
+
+    .neon-pulse {
+        animation: edge-glow 4s infinite ease-in-out;
+    }
 }

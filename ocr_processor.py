@@ -64,20 +64,59 @@ def _first_match(patterns, text, flags=re.IGNORECASE):
             return m.group(1).strip()
     return None
 
+def smart_split_name(full_name: str) -> dict:
+    """Break a full name string into structured components."""
+    if not full_name:
+        return {'last_name': '', 'first_name': '', 'middle_name': '', 'suffix': ''}
+    
+    name = full_name.strip()
+    suffix = ''
+    suffixes = r'\b(Jr|Sr|II|III|IV|V|VI|VII|M\.D\.|Esq|Ph\.D)\b\.?'
+    
+    # Extract suffix
+    m_suffix = re.search(suffixes, name, re.IGNORECASE)
+    if m_suffix:
+        suffix = m_suffix.group(0).strip('.')
+        name = re.sub(suffixes, '', name, flags=re.IGNORECASE).strip()
+
+    # Handle "LAST, FIRST MIDDLE" format
+    if ',' in name:
+        parts = name.split(',', 1)
+        last_name = parts[0].strip()
+        remaining = parts[1].strip().split()
+        first_name = remaining[0] if remaining else ''
+        middle_name = ' '.join(remaining[1:]) if len(remaining) > 1 else ''
+        return {'last_name': last_name, 'first_name': first_name, 'middle_name': middle_name, 'suffix': suffix}
+
+    # Handle "FIRST MIDDLE LAST"
+    parts = name.split()
+    if len(parts) == 1:
+        return {'last_name': parts[0], 'first_name': '', 'middle_name': '', 'suffix': suffix}
+    elif len(parts) == 2:
+        return {'last_name': parts[1], 'first_name': parts[0], 'middle_name': '', 'suffix': suffix}
+    else:
+        # Assume last word is last name, first is first, middle is everything else
+        return {
+            'last_name': parts[-1],
+            'first_name': parts[0],
+            'middle_name': ' '.join(parts[1:-1]),
+            'suffix': suffix
+        }
+
 def extract_birth_fields(text: str, lines: list) -> dict:
     fields = {}
 
-    # Full name — look for "Name:" label or first capitalised multi-word line
-    name = _first_match([
-        r'(?:name of child|name)[:\s]+([A-Z][A-Za-z\s,.\-]+)',
-        r'(?:last name|surname)[:\s]+([A-Za-z\s]+)',
+    # Name of child
+    name_str = _first_match([
+        r'(?:name of child|child\'s name|name)[:\s]+([A-Z][A-Za-z\s,.\-]+)',
     ], text)
-    if not name:
-        for line in lines[:12]:
-            if re.match(r'^[A-Z][A-Z\s,.\-]{5,}$', line.strip()):
-                name = line.strip()
+    if not name_str:
+        for line in lines[:15]:
+            if re.match(r'^[A-Z][A-Z\s,.\-]{5,}$', line.strip()) and 'BIRTH' not in line:
+                name_str = line.strip()
                 break
-    fields['full_name'] = name or ''
+    
+    fields.update(smart_split_name(name_str))
 
     fields['date_of_birth'] = _first_match([
         r'(?:date of birth|birth date|born)[:\s]+([A-Za-z0-9\s,/\-]+)',
@@ -85,22 +124,21 @@ def extract_birth_fields(text: str, lines: list) -> dict:
     ], text) or ''
 
     fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
+    fields['place_of_birth'] = _first_match([r'(?:place of birth|municipality|city)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
 
-    fields['place_of_birth'] = _first_match([
-        r'(?:place of birth|municipality|city)[:\s]+([A-Za-z\s,.\-]+)',
-    ], text) or ''
+    # Father
+    f_name = _first_match([r"(?:father'?s?\s*name|father)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    f_parts = smart_split_name(f_name)
+    for k, v in f_parts.items():
+        fields[f'father_{k}'] = v
 
-    fields['fathers_name'] = _first_match([
-        r"(?:father'?s?\s*name|father)[:\s]+([A-Za-z\s,.\-]+)",
-    ], text) or ''
+    # Mother
+    m_name = _first_match([r"(?:mother'?s?\s*name|mother)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    m_parts = smart_split_name(m_name)
+    for k, v in m_parts.items():
+        fields[f'mother_{k}'] = v
 
-    fields['mothers_name'] = _first_match([
-        r"(?:mother'?s?\s*name|mother)[:\s]+([A-Za-z\s,.\-]+)",
-    ], text) or ''
-
-    fields['barangay'] = _first_match([
-        r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)',
-    ], text) or ''
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
 
     return fields
 
@@ -108,9 +146,10 @@ def extract_birth_fields(text: str, lines: list) -> dict:
 def extract_death_fields(text: str, lines: list) -> dict:
     fields = {}
 
-    fields['full_name'] = _first_match([
-        r'(?:name of deceased|name)[:\s]+([A-Za-z\s,.\-]+)',
-    ], text) or ''
+    name_str = _first_match([
+        r'(?:name of deceased|deceased name|name)[:\s]+([A-Za-z\s,.\-]+)',
+    ], text)
+    fields.update(smart_split_name(name_str))
 
     fields['date_of_death'] = _first_match([
         r'(?:date of death|died)[:\s]+([A-Za-z0-9\s,/\-]+)',
@@ -123,15 +162,8 @@ def extract_death_fields(text: str, lines: list) -> dict:
     ], text) or ''
 
     fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
-
-    fields['place_of_death'] = _first_match([
-        r'(?:place of death|died at|hospital|municipality)[:\s]+([A-Za-z\s,.\-]+)',
-    ], text) or ''
-
-    fields['cause_of_death'] = _first_match([
-        r'(?:cause of death|immediate cause)[:\s]+([A-Za-z\s,.\-]+)',
-    ], text) or ''
-
+    fields['place_of_death'] = _first_match([r'(?:place of death|died at|hospital|municipality)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
+    fields['cause_of_death'] = _first_match([r'(?:cause of death|immediate cause)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
     fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
 
     return fields
@@ -140,23 +172,24 @@ def extract_death_fields(text: str, lines: list) -> dict:
 def extract_marriage_fields(text: str, lines: list) -> dict:
     fields = {}
 
-    fields['husbands_name'] = _first_match([
-        r"(?:husband'?s?\s*name|groom|husband)[:\s]+([A-Za-z\s,.\-]+)",
-    ], text) or ''
+    # Husband
+    h_name = _first_match([r"(?:husband'?s?\s*name|groom|husband)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    h_parts = smart_split_name(h_name)
+    for k, v in h_parts.items():
+        fields[f'husband_{k}'] = v
 
-    fields['wifes_name'] = _first_match([
-        r"(?:wife'?s?\s*name|bride|wife)[:\s]+([A-Za-z\s,.\-]+)",
-    ], text) or ''
+    # Wife
+    w_name = _first_match([r"(?:wife'?s?\s*name|bride|wife)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    w_parts = smart_split_name(w_name)
+    for k, v in w_parts.items():
+        fields[f'wife_{k}'] = v
 
     fields['date_of_marriage'] = _first_match([
         r'(?:date of marriage|married on|wedding date)[:\s]+([A-Za-z0-9\s,/\-]+)',
         r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})',
     ], text) or ''
 
-    fields['place_of_marriage'] = _first_match([
-        r'(?:place of marriage|married at|municipality)[:\s]+([A-Za-z\s,.\-]+)',
-    ], text) or ''
-
+    fields['place_of_marriage'] = _first_match([r'(?:place of marriage|married at|municipality)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
     fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
 
     return fields

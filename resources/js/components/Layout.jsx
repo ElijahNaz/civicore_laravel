@@ -8,10 +8,15 @@ import {
     UsersIcon,
     MapPinIcon
 } from '@heroicons/react/24/outline';
+import { useData } from './DataContext.jsx';
+import SaveToasts from './SaveToasts.jsx';
+import ActionCenter from './ActionCenter.jsx';
+import Avatar from './Avatar.jsx';
 
 const Layout = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const { backgroundTasks } = useData();
     const location = useLocation();
     const navigate = useNavigate();
     const user = JSON.parse(sessionStorage.getItem('user') || '{}');
@@ -151,9 +156,7 @@ const Layout = ({ children }) => {
                                 <span className="text-sm font-semibold text-slate-700 leading-none group-hover:text-slate-900 transition-colors">{user.name || 'User'}</span>
                                 <span className="text-xs text-slate-500 mt-1 font-medium">{user.role || 'Admin'}</span>
                             </div>
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0f172a] to-slate-700 text-white flex items-center justify-center font-bold shadow-md ring-2 ring-white group-hover:ring-[#d4a574] transition-all">
-                                {(user.name || 'U').charAt(0).toUpperCase()}
-                            </div>
+                            <Avatar name={user.name} src={user.avatar} size={10} className="shadow-md ring-2 ring-white group-hover:ring-[#d4a574] transition-all" />
                         </button>
 
                         {/* Dropdown Menu */}
@@ -195,6 +198,10 @@ const Layout = ({ children }) => {
                     </AnimatePresence>
                 </div>
             </main>
+
+            {/* Global Overlays */}
+            <SaveToasts tasks={backgroundTasks} />
+            <ActionCenter />
         </div>
     );
 };

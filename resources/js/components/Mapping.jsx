@@ -1,9 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { motion } from 'framer-motion';
-import { MapPinIcon, DocumentChartBarIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    MapPinIcon, 
+    DocumentChartBarIcon, 
+    ArrowPathIcon,
+    ArrowDownTrayIcon,
+    TableCellsIcon,
+    EyeIcon,
+    MagnifyingGlassIcon,
+    ArrowsPointingOutIcon,
+    FireIcon
+} from '@heroicons/react/24/outline';
 import SkeletonLoader from './SkeletonLoader.jsx';
+import Avatar from 'boring-avatars';
 
 import { useData } from './DataContext.jsx';
 
@@ -18,8 +29,15 @@ const Mapping = () => {
         refreshAll
     } = useData();
     
+
     const isLoading = dataLoading.issuances || dataLoading.documents;
     const [activeFilter, setActiveFilter] = useState('all');
+    const [hoveredBrgy, setHoveredBrgy] = useState(null);
+    const [showHeatmap, setShowHeatmap] = useState(false);
+    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
+    
+    // Maintain references to markers for interactivity
+    const markersRef = useRef({});
 
     // Fetch API Data
     // Global fetch is handled by DataProvider
@@ -161,48 +179,74 @@ const Mapping = () => {
                 marriages: brgyCounts[b.name]?.marriages || 0
             }));
 
+            // Store markers in ref for interactivity
+            markersRef.current = {};
+
             barangaysForMap.forEach(barangay => {
                 const total = barangay.births + barangay.deaths + barangay.marriages;
                 
-                // Determine pin color based on majority type
-                let pinColor = '#0f172a'; // Default dark
-                if (total > 0) {
-                    if (barangay.births >= barangay.deaths && barangay.births >= barangay.marriages) pinColor = '#d4a574'; // Birth = Gold/Orange
-                    else if (barangay.deaths >= barangay.births && barangay.deaths >= barangay.marriages) pinColor = '#f43f5e'; // Death = Rose
-                    else pinColor = '#6366f1'; // Marriage = Indigo
-                }
+                if (showHeatmap) {
+                    // Heatmap mode: Large soft circles
+                    if (total > 0) {
+                        const intensity = Math.min(total / 10, 1); // Scale intensity
+                        const circle = L.circle(barangay.coords, {
+                            color: '#f43f5e',
+                            fillColor: '#f43f5e',
+                            fillOpacity: 0.1 + (intensity * 0.4),
+                            radius: 300 + (intensity * 500),
+                            stroke: false,
+                            interactive: false
+                        }).addTo(map);
+                        markersRef.current[barangay.name] = circle;
+                    }
+                } else {
+                    // Pin mode
+                    let pinColor = '#0f172a'; // Default dark
+                    if (total > 0) {
+                        if (barangay.births >= barangay.deaths && barangay.births >= barangay.marriages) pinColor = '#d4a574';
+                        else if (barangay.deaths >= barangay.births && barangay.deaths >= barangay.marriages) pinColor = '#f43f5e';
+                        else pinColor = '#6366f1';
+                    }
 
-                const pinIcon = L.divIcon({
-                    className: 'bg-transparent border-none',
-                    html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${pinColor}" stroke="${total > 0 ? '#ffffff' : '#d4a574'}" stroke-width="1.5" class="w-8 h-8 drop-shadow-md hover:scale-110 transition-transform origin-bottom cursor-pointer opacity-${total > 0 ? '100' : '40'}">
-                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                           </svg>`,
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 32],
-                    popupAnchor: [0, -32]
-                });
+                    const isHovered = hoveredBrgy === barangay.name;
+                    
+                    const pinIcon = L.divIcon({
+                        className: 'bg-transparent border-none',
+                        html: `<div class="relative ${isHovered ? 'scale-125 z-[1000]' : ''} transition-all duration-300">
+                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${pinColor}" stroke="${total > 0 ? '#ffffff' : '#d4a574'}" stroke-width="1.5" class="w-8 h-8 drop-shadow-md hover:scale-110 transition-transform origin-bottom cursor-pointer opacity-${total > 0 ? '100' : '40'}">
+                                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                   <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                 </svg>
+                                 ${isHovered ? '<div class="absolute inset-0 bg-white/40 rounded-full animate-ping pointer-events-none"></div>' : ''}
+                               </div>`,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    });
 
-                const marker = L.marker(barangay.coords, { icon: pinIcon }).addTo(map);
-                marker.bindTooltip(`
-                    <div style="text-align: center; line-height: 1.2;">
-                        <span class="font-bold text-slate-800 text-xs block">${barangay.name}</span>
-                        <span class="text-[10px] text-slate-500 font-medium">Total Issued: ${total}</span>
-                    </div>
-                `, { direction: 'top', offset: [0, -32], opacity: 0.95 });
-
-                marker.bindPopup(`
-                    <div class="p-3 min-w-[160px]">
-                        <h4 class="font-bold text-[#0f172a] text-sm mb-2 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                            ${barangay.name}
-                        </h4>
-                        <div class="space-y-1.5 text-xs mt-3">
-                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Births:</span> <span class="font-bold text-[#d4a574] bg-[#d4a574]/10 px-1.5 rounded">${barangay.births}</span></div>
-                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Deaths:</span> <span class="font-bold text-rose-500 bg-rose-50 px-1.5 rounded">${barangay.deaths}</span></div>
-                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Marriages:</span> <span class="font-bold text-indigo-500 bg-indigo-50 px-1.5 rounded">${barangay.marriages}</span></div>
+                    const marker = L.marker(barangay.coords, { icon: pinIcon }).addTo(map);
+                    marker.bindTooltip(`
+                        <div style="text-align: center; line-height: 1.2;">
+                            <span class="font-bold text-slate-800 text-xs block">${barangay.name}</span>
+                            <span class="text-[10px] text-slate-500 font-medium">Total Issued: ${total}</span>
                         </div>
-                    </div>
-                `, { closeButton: false });
+                    `, { direction: 'top', offset: [0, -32], opacity: 0.95 });
+
+                    marker.bindPopup(`
+                        <div class="p-3 min-w-[160px]">
+                            <h4 class="font-bold text-[#0f172a] text-sm mb-2 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                                ${barangay.name}
+                            </h4>
+                            <div class="space-y-1.5 text-xs mt-3">
+                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Births:</span> <span class="font-bold text-[#d4a574] bg-[#d4a574]/10 px-1.5 rounded">${barangay.births}</span></div>
+                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Deaths:</span> <span class="font-bold text-rose-500 bg-rose-50 px-1.5 rounded">${barangay.deaths}</span></div>
+                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Marriages:</span> <span class="font-bold text-indigo-500 bg-indigo-50 px-1.5 rounded">${barangay.marriages}</span></div>
+                            </div>
+                        </div>
+                    `, { closeButton: false });
+                    
+                    markersRef.current[barangay.name] = marker;
+                }
             });
 
             // Update Global Stats in UI (using state)
@@ -229,9 +273,51 @@ const Mapping = () => {
                 });
             }
         }
-    }, [isLoading, apiData, docsData]);
+    }, [isLoading, apiData, docsData, showHeatmap, hoveredBrgy]);
 
-    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
+    const exportToCSV = () => {
+        const headers = ["Certificate No.", "Type", "Subject Name", "Barangay", "Print Date", "Status", "Encoded By"];
+        const rows = filteredPrints.map(p => [
+            p.number,
+            p.type,
+            p.name,
+            p.barangay,
+            p.date,
+            p.status,
+            p.encoded_by || 'System'
+        ]);
+        
+        let csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
+            
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `civicore_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const locateBarangay = (brgyName) => {
+        const marker = markersRef.current[brgyName];
+        if (marker && mapRef.current) {
+            mapRef.current.setView(marker.getLatLng(), 15, { animate: true });
+            marker.openPopup();
+            
+            // Temporary pulse effect class could be added here if CSS is defined
+            setHoveredBrgy(brgyName);
+            setTimeout(() => setHoveredBrgy(null), 3000);
+        }
+    };
+
+    const resetMapView = () => {
+        if (mapRef.current) {
+            mapRef.current.setView([14.3150, 120.7700], 13, { animate: true });
+        }
+    };
+
 
     const filteredPrints = apiData.filter(print => 
         activeFilter === 'all' || (print.type || '').toLowerCase().includes(activeFilter)
@@ -266,9 +352,23 @@ const Mapping = () => {
                     </h2>
                     <p className="text-slate-500 font-medium text-sm mt-1">Live distribution of civil documents across Naic barangays.</p>
                 </div>
-                <button onClick={() => fetchData()} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors cursor-pointer active:scale-95">
-                    <ArrowPathIcon className="w-4 h-4" /> Refresh Data
-                </button>
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={exportToCSV}
+                        disabled={isLoading || filteredPrints.length === 0}
+                        className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all cursor-pointer active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ArrowDownTrayIcon className="w-4 h-4 text-emerald-500" />
+                        Export CSV
+                    </button>
+                    <button 
+                        onClick={() => fetchData()} 
+                        className="flex items-center gap-2 bg-[#0f172a] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all cursor-pointer active:scale-95 group"
+                    >
+                        <ArrowPathIcon className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${isLoading ? 'animate-spin' : ''}`} /> 
+                        Refresh
+                    </button>
+                </div>
             </motion.div>
 
             {/* Top Stat Cards Grid */}
@@ -308,7 +408,44 @@ const Mapping = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Map Section - 2 columns */}
-                <motion.div variants={itemVariants} className="lg:col-span-2 bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 p-1 flex flex-col overflow-hidden h-[450px]">
+                <motion.div variants={itemVariants} className="lg:col-span-2 relative bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 p-1 flex flex-col overflow-hidden h-[450px]">
+                    {/* Floating Map Controls */}
+                    <div className="absolute top-4 right-4 z-[1001] flex flex-col gap-2">
+                        <button 
+                            onClick={() => setShowHeatmap(!showHeatmap)}
+                            className={`p-2.5 rounded-xl shadow-lg border transition-all cursor-pointer ${showHeatmap ? 'bg-rose-500 text-white border-rose-400' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            title={showHeatmap ? "Switch to Pin View" : "Switch to Heatmap View"}
+                        >
+                            <FireIcon className="w-5 h-5" />
+                        </button>
+                        <button 
+                            onClick={resetMapView}
+                            className="bg-white p-2.5 rounded-xl text-slate-600 shadow-lg border border-slate-200 hover:bg-slate-50 transition-all cursor-pointer"
+                            title="Reset Map View"
+                        >
+                            <ArrowsPointingOutIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Legend Overlay */}
+                    <div className="absolute bottom-4 left-4 z-[1001] bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/60 min-w-[120px]">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Legend</p>
+                        <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#d4a574]"></span>
+                                <span className="text-[10px] font-bold text-slate-700">Births</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                <span className="text-[10px] font-bold text-slate-700">Deaths</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                <span className="text-[10px] font-bold text-slate-700">Marriages</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="mapContainer" className="w-full h-full rounded-xl bg-slate-100 z-0"></div>
                 </motion.div>
 
@@ -367,45 +504,90 @@ const Mapping = () => {
                                 <th className="p-4">Type</th>
                                 <th className="p-4">Subject Name</th>
                                 <th className="p-4">Barangay</th>
-                                <th className="p-4">Print Date</th>
                                 <th className="p-4">Status</th>
+                                <th className="p-4">Encoded By</th>
+                                <th className="p-4 text-right pr-6">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="6" className="p-0">
+                                    <td colSpan="7" className="p-0">
                                         <SkeletonLoader type="table" rows={4} />
                                     </td>
                                 </tr>
                             ) : filteredPrints.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" className="p-8 text-center text-slate-500">
+                                    <td colSpan="7" className="p-8 text-center text-slate-500">
                                         No tracking logs found.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredPrints.map((print, index) => (
-                                    <tr key={index} className="hover:bg-slate-50/50 transition-colors text-xs">
-                                        <td className="p-4 pl-6 font-bold text-slate-800">{print.certNumber}</td>
+                                    <tr 
+                                        key={index} 
+                                        onMouseEnter={() => setHoveredBrgy(print.barangay)}
+                                        onMouseLeave={() => setHoveredBrgy(null)}
+                                        className={`hover:bg-slate-50 transition-colors text-xs group/row ${hoveredBrgy === print.barangay ? 'bg-slate-50' : ''}`}
+                                    >
+                                        <td className="p-4 pl-6">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-slate-800">{print.number}</span>
+                                                <span className="text-[10px] text-slate-400 font-medium">{print.date}</span>
+                                            </div>
+                                        </td>
                                         <td className="p-4">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                                                print.type?.toLowerCase().includes('birth') ? 'bg-[#d4a574]/10 text-[#d4a574] border-[#d4a574]/20' :
+                                                print.type?.toLowerCase().includes('death') ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                            }`}>
                                                 {print.type}
                                             </span>
                                         </td>
                                         <td className="p-4 font-semibold text-slate-700">{print.name}</td>
                                         <td className="p-4 text-slate-600 font-medium">{print.barangay}</td>
-                                        <td className="p-4 text-slate-500">{print.issuanceDate}</td>
                                         <td className="p-4">
-                                            {print.status === 'Printed' ? (
+                                            {print.status === 'Printed' || print.status === 'Active' ? (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Printed
+                                                    <span className="w-1.2 h-1.2 rounded-full bg-emerald-500"></span> Issued
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600 border border-amber-100">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Queue
+                                                    <span className="w-1.2 h-1.2 rounded-full bg-amber-500 animate-pulse"></span> Processing
                                                 </span>
                                             )}
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                <Avatar
+                                                    size={20}
+                                                    name={print.encoded_by || 'System'}
+                                                    variant="beam"
+                                                    colors={['#0f172a', '#d4a574', '#6366f1', '#f43f5e', '#10b981']}
+                                                />
+                                                <span className="font-medium text-slate-500">{print.encoded_by || 'System'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-right pr-6">
+                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                                <button 
+                                                    onClick={() => locateBarangay(print.barangay)}
+                                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#d4a574] transition-all cursor-pointer"
+                                                    title="Locate on Map"
+                                                >
+                                                    <MagnifyingGlassIcon className="w-4 h-4" />
+                                                </button>
+                                                <a 
+                                                    href={`/api/documents/view/${print.document_id || print.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-indigo-500 transition-all cursor-pointer"
+                                                    title="View Full Document"
+                                                >
+                                                    <EyeIcon className="w-4 h-4" />
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

@@ -1,36 +1,50 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    XMarkIcon, CameraIcon, ArrowsRightLeftIcon, 
+import {
+    XMarkIcon, CameraIcon, ArrowsRightLeftIcon,
     SparklesIcon, ViewfinderCircleIcon, CheckIcon,
-    ArrowPathIcon, CpuChipIcon
+    ArrowPathIcon, CpuChipIcon, SwatchIcon,
+    AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
 
 const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
-    const scanCanvasRef = useRef(null);
+    const overlayCanvasRef = useRef(null);
+    const activeStreamRef = useRef(null);
+    const modalOpenRef = useRef(isOpen);
+    
+    // Dragging state
+    const draggingCorner = useRef(null);
+
     const [stream, setStream] = useState(null);
-    const [facingMode, setFacingMode] = useState('envirionment'); 
+    const [facingMode, setFacingMode] = useState('environment');
     const [hasPermission, setHasPermission] = useState(null);
     const [isCapturing, setIsCapturing] = useState(false);
-    
+
     // OpenCV states
     const [cvLoaded, setCvLoaded] = useState(false);
     const [isInitializing, setIsInitializing] = useState(false);
-    
+
     // Preview states
     const [previewImage, setPreviewImage] = useState(null);
     const [capturedFile, setCapturedFile] = useState(null);
+    const [rotation, setRotation] = useState(0);
+    const [isGrayscale, setIsGrayscale] = useState(false);
 
-    // Dynamic Corner Guides & Polyline Path
+    // Interactive Corner Guides (in % of container)
     const [corners, setCorners] = useState({
-        tl: { x: 5, y: 5 },
-        tr: { x: 95, y: 5 },
-        bl: { x: 5, y: 95 },
-        br: { x: 95, y: 95 }
+        tl: { x: 15, y: 15 },
+        tr: { x: 85, y: 15 },
+        bl: { x: 15, y: 85 },
+        br: { x: 85, y: 85 }
     });
+
+    // Auto-detected corners for Live Tracing
+    const [autoCorners, setAutoCorners] = useState(null);
+    const autoCornersRef = useRef(null); 
+    const lastDetectedRef = useRef(null);
 
     // OpenCV.js Loader
     useEffect(() => {
@@ -56,9 +70,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     }, [isOpen]);
 
     useEffect(() => {
+        modalOpenRef.current = isOpen;
         if (isOpen) {
             setPreviewImage(null);
             setCapturedFile(null);
+            setRotation(0);
+            setIsGrayscale(false);
             startCamera();
         } else {
             stopCamera();
@@ -66,111 +83,250 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         return () => stopCamera();
     }, [isOpen, facingMode]);
 
-    // Real-time Edge Tracing Loop (OpenCV Power)
-    useEffect(() => {
-        if (!isOpen || !stream || previewImage) return;
+    // Helper to sort points in TL, TR, BR, BL order
+    const sortPoints = (pts) => {
+        // pts is array of {x, y}
+        const sorted = [...pts].sort((a, b) => a.y - b.y);
+        const top = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
+        const bottom = sorted.slice(2, 4).sort((a, b) => a.x - b.x);
+        return { tl: top[0], tr: top[1], br: bottom[1], bl: bottom[0] };
+    };
 
-        const scanInterval = setInterval(() => {
-            if (!videoRef.current || !scanCanvasRef.current) return;
-            
+    // Live Tracing & Rendering Logic
+    useEffect(() => {
+        if (!isOpen) return;
+
+        let lastProcessTime = 0;
+        const processFreq = 60; // Slightly faster processing (~15fps)
+        let animationHandle;
+
+        const render = (time) => {
+            const canvas = overlayCanvasRef.current;
             const video = videoRef.current;
-            const canvas = scanCanvasRef.current;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!canvas) {
+                animationHandle = requestAnimationFrame(render);
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            const { width, height } = canvas.getBoundingClientRect();
             
-            // Sample at 320x240 for accuracy
-            canvas.width = 320;
-            canvas.height = 240;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            if (cvLoaded && window.cv) {
-                try {
-                    const cv = window.cv;
-                    let src = cv.imread(canvas);
-                    let dst = new cv.Mat();
-                    
-                    // 1. Grayscale & Blur
-                    cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-                    cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0);
-                    
-                    // 2. Canny Edge Detection
-                    cv.Canny(dst, dst, 50, 150);
-                    
-                    // 3. Find Contours
-                    let contours = new cv.MatVector();
-                    let hierarchy = new cv.Mat();
-                    cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-                    
-                    // 4. Find the largest 4-point contour
-                    let maxArea = 0;
-                    let bestContour = null;
-                    
-                    for (let i = 0; i < contours.size(); ++i) {
-                        let cnt = contours.get(i);
-                        let area = cv.contourArea(cnt);
-                        if (area > maxArea && area > 5000) {
-                            let approx = new cv.Mat();
-                            let peri = cv.arcLength(cnt, true);
-                            cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-                            
-                            if (approx.rows === 4) {
-                                maxArea = area;
-                                bestContour = approx;
-                            } else {
-                                approx.delete();
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            ctx.clearRect(0, 0, width, height);
+
+            // PHASE 1: LIVE (Auto Tracing)
+            if (!previewImage && video && video.readyState >= 2) {
+                if (window.cv && time - lastProcessTime > processFreq) {
+                    try {
+                        const cv = window.cv;
+                        const src = cv.imread(video);
+                        const dst = new cv.Mat();
+                        
+                        // Downscale for performance
+                        const dsize = new cv.Size(400, (400 / video.videoWidth) * video.videoHeight);
+                        cv.resize(src, dst, dsize, 0, 0, cv.INTER_AREA);
+                        
+                        const gray = new cv.Mat();
+                        cv.cvtColor(dst, gray, cv.COLOR_RGBA2GRAY);
+                        const blurred = new cv.Mat();
+                        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+                        const edged = new cv.Mat();
+                        cv.Canny(blurred, edged, 50, 150); // More sensitive thresholds
+
+                        const contours = new cv.MatVector();
+                        const hierarchy = new cv.Mat();
+                        cv.findContours(edged, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                        let maxArea = 0;
+                        let bestQuad = null;
+
+                        for (let i = 0; i < contours.size(); ++i) {
+                            const cnt = contours.get(i);
+                            const area = cv.contourArea(cnt);
+                            if (area > 1000) { // Lower area threshold for sensitivity
+                                const peri = cv.arcLength(cnt, true);
+                                const approx = new cv.Mat();
+                                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+                                
+                                // Favor quads, but also find "quad-like" shapes
+                                if (approx.rows === 4 && area > maxArea) {
+                                    maxArea = area;
+                                    if (bestQuad) bestQuad.delete();
+                                    bestQuad = approx;
+                                } else {
+                                    approx.delete();
+                                }
                             }
                         }
-                    }
-                    
-                    if (bestContour) {
-                        // Extract points and normalize to %
-                        const pts = [];
-                        for (let i = 0; i < 4; i++) {
-                            pts.push({
-                                x: (bestContour.data32S[i * 2] / canvas.width) * 100,
-                                y: (bestContour.data32S[i * 2 + 1] / canvas.height) * 100
-                            });
+
+                        if (bestQuad) {
+                            const pts = [];
+                            for (let i = 0; i < 4; i++) {
+                                pts.push({
+                                    x: (bestQuad.data32S[i * 2] / dsize.width) * 100,
+                                    y: (bestQuad.data32S[i * 2 + 1] / dsize.height) * 100
+                                });
+                            }
+                            const sorted = sortPoints(pts);
+                            autoCornersRef.current = sorted;
+                            lastDetectedRef.current = sorted;
+                            setAutoCorners(sorted); // Still update state for UI reactivity elsewhere if needed
+                            bestQuad.delete();
+                        } else {
+                            autoCornersRef.current = null;
+                            setAutoCorners(null);
                         }
-                        
-                        // Sort points: TL, TR, BR, BL
-                        pts.sort((a, b) => a.y - b.y);
-                        const top = pts.slice(0, 2).sort((a, b) => a.x - b.x);
-                        const bottom = pts.slice(2, 4).sort((a, b) => b.x - a.x);
-                        
-                        setCorners({
-                            tl: top[0], tr: top[1], 
-                            br: bottom[0], bl: bottom[1]
-                        });
-                        
-                        bestContour.delete();
+
+                        // Cleanup mats
+                        src.delete(); dst.delete(); gray.delete(); blurred.delete(); edged.delete(); 
+                        contours.delete(); hierarchy.delete();
+                        lastProcessTime = time;
+                    } catch (e) {
+                        // Silent fail for rendering loop stability
                     }
-
-                    // Memory Cleanup
-                    src.delete();
-                    dst.delete();
-                    contours.delete();
-                    hierarchy.delete();
-                    
-                } catch (err) {
-                    console.warn("OpenCV Processing Error:", err);
                 }
-            } else {
-                // FALLBACK: Fast Surgical Perimeter Scan (Native JS)
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                const sobelData = new Float32Array(canvas.width * canvas.height);
-                // ... (existing surgical scan logic omitted for brevity in walkthrough, but maintained in actual file)
-            }
-        }, 150);
 
-        return () => clearInterval(scanInterval);
-    }, [isOpen, stream, previewImage, cvLoaded]);
+                // Draw Live Trace using Ref (for smoothness)
+                const currentTrace = autoCornersRef.current;
+                if (currentTrace) {
+                    ctx.beginPath();
+                    ctx.moveTo((currentTrace.tl.x / 100) * width, (currentTrace.tl.y / 100) * height);
+                    ctx.lineTo((currentTrace.tr.x / 100) * width, (currentTrace.tr.y / 100) * height);
+                    ctx.lineTo((currentTrace.br.x / 100) * width, (currentTrace.br.y / 100) * height);
+                    ctx.lineTo((currentTrace.bl.x / 100) * width, (currentTrace.bl.y / 100) * height);
+                    ctx.closePath();
+                    
+                    ctx.strokeStyle = '#818cf8';
+                    ctx.lineWidth = 4;
+                    ctx.lineJoin = 'round';
+                    
+                    // Outer glow
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = 'rgba(129, 140, 248, 0.8)';
+                    ctx.stroke();
+                    
+                    // Inner sharp line
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+
+                    // Neon Pulse effect
+                    const pulse = (Math.sin(time / 200) + 1) / 2;
+                    ctx.strokeStyle = `rgba(129, 140, 248, ${0.2 + pulse * 0.3})`;
+                    ctx.lineWidth = 15;
+                    ctx.stroke();
+                }
+            }
+
+            // PHASE 2: PREVIEW (Manual Handles)
+            if (previewImage) {
+                // ... same drawing logic, but let's ensure it's stable ...
+                const m = corners; // Use current state for handles
+                ctx.beginPath();
+                ctx.moveTo((m.tl.x / 100) * width, (m.tl.y / 100) * height);
+                ctx.lineTo((m.tr.x / 100) * width, (m.tr.y / 100) * height);
+                ctx.lineTo((m.br.x / 100) * width, (m.br.y / 100) * height);
+                ctx.lineTo((m.bl.x / 100) * width, (m.bl.y / 100) * height);
+                ctx.closePath();
+                
+                ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+                ctx.fill();
+                ctx.strokeStyle = '#818cf8';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                Object.values(m).forEach(c => {
+                    ctx.beginPath();
+                    ctx.arc((c.x / 100) * width, (c.y / 100) * height, 12, 0, Math.PI * 2);
+                    ctx.fillStyle = 'white';
+                    ctx.shadowBlur = 10; ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                    ctx.fill();
+                    ctx.strokeStyle = '#4f46e5'; ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                });
+            }
+
+            animationHandle = requestAnimationFrame(render);
+        };
+
+        animationHandle = requestAnimationFrame(render);
+        return () => cancelAnimationFrame(animationHandle);
+    }, [isOpen, previewImage]); // Reduced dependencies! corners removed to stop constant loop restarts
+
+    // Dragging Handlers (ONLY IN PREVIEW/ADJUST MODE)
+    const handleDragStart = (e) => {
+        if (!previewImage) return; // Disable dragging during live trace
+        const canvas = overlayCanvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = ((clientX - rect.left) / rect.width) * 100;
+        const y = ((clientY - rect.top) / rect.height) * 100;
+
+        // Find nearest corner within threshold (e.g., 5%)
+        let minDist = 10;
+        let nearestKey = null;
+
+        Object.entries(corners).forEach(([key, c]) => {
+            const dist = Math.hypot(c.x - x, c.y - y);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestKey = key;
+            }
+        });
+
+        if (nearestKey) draggingCorner.current = nearestKey;
+    };
+
+    const handleDragging = (e) => {
+        if (!draggingCorner.current) return;
+        const canvas = overlayCanvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+        const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+
+        setCorners(prev => ({
+            ...prev,
+            [draggingCorner.current]: { x, y }
+        }));
+    };
+
+    const handleDragEnd = () => {
+        draggingCorner.current = null;
+    };
 
     const startCamera = async () => {
         stopCamera();
         try {
             const constraints = {
-                video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                video: { 
+                    facingMode, 
+                    width: { ideal: 1080 }, 
+                    height: { ideal: 1920 },
+                    aspectRatio: { ideal: 9/16 }
+                }
             };
             const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Critical Race Condition Check: 
+            // If the modal was closed while we were waiting for the camera, stop it immediately.
+            if (!modalOpenRef.current) {
+                newStream.getTracks().forEach(track => track.stop());
+                return;
+            }
+
+            activeStreamRef.current = newStream;
             setStream(newStream);
             if (videoRef.current) videoRef.current.srcObject = newStream;
             setHasPermission(true);
@@ -180,220 +336,279 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     };
 
     const stopCamera = () => {
+        if (activeStreamRef.current) {
+            activeStreamRef.current.getTracks().forEach(track => {
+                track.stop();
+                activeStreamRef.current.removeTrack(track);
+            });
+            activeStreamRef.current = null;
+        }
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
             setStream(null);
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
         }
     };
 
     const toggleCamera = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
     const capturePhoto = () => {
-        if (!videoRef.current || !canvasRef.current) return;
-        
+        if (!videoRef.current) return;
+
         setIsCapturing(true);
         const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+
+        // 1. Capture the current frame as a static image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
         
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
         setPreviewImage(dataUrl);
-        
-        canvas.toBlob((blob) => {
+
+        // 2. Snap manual handles to the last auto-detected position (or default)
+        if (lastDetectedRef.current) {
+            setCorners(lastDetectedRef.current);
+        }
+
+        tempCanvas.toBlob((blob) => {
             const file = new File([blob], `captured-${Date.now()}.jpg`, { type: 'image/jpeg' });
             setCapturedFile(file);
             setIsCapturing(false);
-        }, 'image/jpeg', 0.95);
+            stopCamera(); // Stop camera once captured for adjustment
+        }, 'image/jpeg', 0.9);
+    };
+
+    const processFinalWarp = () => {
+        if (!capturedFile || !window.cv) return;
+        
+        setIsCapturing(true);
+        const cv = window.cv;
+        
+        const img = new Image();
+        img.src = URL.createObjectURL(capturedFile);
+        img.onload = () => {
+            const src = cv.imread(img);
+            
+            // Source points from manual adjustment
+            const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                (corners.tl.x / 100) * src.cols, (corners.tl.y / 100) * src.rows,
+                (corners.tr.x / 100) * src.cols, (corners.tr.y / 100) * src.rows,
+                (corners.br.x / 100) * src.cols, (corners.br.y / 100) * src.rows,
+                (corners.bl.x / 100) * src.cols, (corners.bl.y / 100) * src.rows
+            ]);
+
+            const dstWidth = 900;
+            const dstHeight = 1200;
+            const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, dstWidth, 0, dstWidth, dstHeight, 0, dstHeight]);
+
+            const M = cv.getPerspectiveTransform(srcPts, dstPts);
+            const dst = new cv.Mat();
+            cv.warpPerspective(src, dst, M, new cv.Size(dstWidth, dstHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            const outputCanvas = document.createElement('canvas');
+            cv.imshow(outputCanvas, dst);
+            const finalDataUrl = outputCanvas.toDataURL('image/jpeg', 0.9);
+            
+            outputCanvas.toBlob((blob) => {
+                const file = new File([blob], capturedFile.name, { type: 'image/jpeg' });
+                onCapture(file);
+                onClose();
+                setIsCapturing(false);
+            }, 'image/jpeg', 0.9);
+
+            src.delete(); srcPts.delete(); dstPts.delete(); M.delete(); dst.delete();
+        };
     };
 
     const handleConfirm = () => {
-        if (capturedFile) {
-            onCapture(capturedFile);
-            onClose();
-        }
+        if (!capturedFile || !previewImage) return;
+        processFinalWarp();
     };
 
     const handleRetake = () => {
         setPreviewImage(null);
         setCapturedFile(null);
+        setRotation(0);
+        setIsGrayscale(false);
+        startCamera(); // Restart camera on retake
     };
+
+    const handleRotate = () => setRotation(prev => (prev + 90) % 360);
+    const toggleGrayscale = () => setIsGrayscale(prev => !prev);
 
     if (!isOpen) return null;
 
     return createPortal(
         <AnimatePresence>
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[10000] flex items-center justify-center bg-black transition-colors duration-500 touch-none overflow-hidden"
-                style={{ backgroundColor: previewImage ? 'rgba(15, 23, 42, 0.98)' : 'black' }}
+                className="fixed inset-0 z-[10000] flex flex-row bg-slate-950 transition-colors duration-500 touch-none overflow-hidden"
             >
-                {/* Header Actions */}
-                <AnimatePresence>
-                    {!previewImage && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-                            className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between z-10"
+                {/* Left Side: Viewfinder Area */}
+                <div className="flex-1 flex flex-col min-w-0">
+                    {/* Floating Header Actions (over viewer) */}
+                    <div className="absolute top-0 left-0 right-48 p-6 flex items-center justify-between z-20 pointer-events-none">
+                        <motion.button
+                            onClick={onClose}
+                            whileHover={{ rotate: 90 }}
+                            whileTap={{ scale: 0.9 }}
+                            className="p-3 text-white/50 hover:text-white bg-white/10 backdrop-blur-md rounded-2xl transition-all pointer-events-auto"
                         >
-                            <button onClick={onClose} className="p-3 text-white/50 hover:text-white bg-white/10 rounded-2xl transition-all active:scale-95">
-                                <XMarkIcon className="w-6 h-6" />
-                            </button>
-                            
-                            <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
-                                    <SparklesIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
-                                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                                        {cvLoaded ? 'OpenCV Precision Active' : 'Initializing Precision Engine...'}
-                                    </span>
-                                </div>
-                                {!cvLoaded && (
-                                    <div className="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
-                                        <motion.div 
-                                            initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ duration: 10 }}
-                                            className="h-full bg-indigo-500/50"
-                                        />
-                                    </div>
-                                )}
-                            </div>
+                            <XMarkIcon className="w-6 h-6" />
+                        </motion.button>
 
-                            <button onClick={toggleCamera} className="p-3 text-white/50 hover:text-white bg-white/10 rounded-2xl transition-all active:scale-95">
-                                <ArrowsRightLeftIcon className="w-6 h-6" />
-                            </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Viewfinder / Preview Container */}
-                <div className="relative w-full h-full max-w-lg mx-auto flex items-center justify-center overflow-hidden shadow-2xl">
-                    <AnimatePresence mode="wait">
-                        {previewImage ? (
-                            <motion.div 
-                                key="preview" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                                className="w-full h-full flex items-center justify-center p-4"
-                            >
-                                <img src={previewImage} className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl border-4 border-white/10" alt="Preview" />
-                            </motion.div>
-                        ) : (
-                            <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full">
-                                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                                
-                                {/* Pro Neon Tracing Overlay */}
-                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                                    <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                        {/* Neon Indigo Polyline Path - Defensive Render */}
-                                        {corners.tl && corners.tl.x !== undefined && (
-                                            <motion.path 
-                                                animate={{ 
-                                                    d: `M ${corners.tl.x} ${corners.tl.y} L ${corners.tr.x} ${corners.tr.y} L ${corners.br.x} ${corners.br.y} L ${corners.bl.x} ${corners.bl.y} Z` 
-                                                }}
-                                                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-                                                fill="rgba(99, 102, 241, 0.1)"
-                                                stroke="#818cf8"
-                                                strokeWidth="0.5"
-                                                strokeLinejoin="round"
-                                                className="drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]"
-                                            />
-                                        )}
-                                        
-                                        {/* Corners snapping hubs - Defensive Render */}
-                                        {[corners.tl, corners.tr, corners.br, corners.bl].map((c, idx) => (
-                                            c && c.x !== undefined && (
-                                                <motion.circle 
-                                                    key={idx}
-                                                    animate={{ cx: c.x, cy: c.y }}
-                                                    transition={{ type: 'spring', stiffness: 150, damping: 25 }}
-                                                    r="1.2"
-                                                    fill="white"
-                                                    className="drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]"
-                                                />
-                                            )
-                                        ))}
-                                    </svg>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Camera Access/Error State */}
-                    {hasPermission === false && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center bg-black/90">
-                            <CameraIcon className="w-16 h-16 text-rose-500 mb-4 opacity-50" />
-                            <h3 className="text-xl font-bold text-white mb-2">Camera Access Denied</h3>
-                            <p className="text-sm text-slate-400">Please enable camera access in your browser settings to capture documents.</p>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full backdrop-blur-md">
+                            <SparklesIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
+                            <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                                Interactive Precision Engine
+                            </span>
                         </div>
-                    )}
+
+                        <button onClick={toggleCamera} className="p-3 text-white/50 hover:text-white bg-white/10 backdrop-blur-md rounded-2xl transition-all active:scale-95 pointer-events-auto">
+                            <ArrowsRightLeftIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    {/* Main Viewfinder */}
+                    <div className="flex-1 w-full flex items-center justify-center p-8 overflow-hidden relative">
+                        <div className="relative w-full max-w-md aspect-[9/16] max-h-full rounded-3xl overflow-hidden bg-black shadow-2xl ring-1 ring-white/10">
+                            <AnimatePresence mode="wait">
+                                {previewImage ? (
+                                    <motion.div
+                                        key="preview" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                                        className="w-full h-full flex items-center justify-center relative p-4"
+                                    >
+                                        <motion.div
+                                            className="relative flex items-center justify-center w-full h-full"
+                                            animate={{ rotate: rotation }}
+                                            transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+                                        >
+                                            <img
+                                                src={previewImage}
+                                                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10"
+                                                style={{ filter: isGrayscale ? 'grayscale(100%)' : 'none' }}
+                                                alt="Preview"
+                                            />
+                                        </motion.div>
+                                        {/* Interactive Draggable Overlay (ONLY IN PREVIEW) */}
+                                        <canvas 
+                                            ref={overlayCanvasRef}
+                                            onMouseDown={handleDragStart}
+                                            onMouseMove={handleDragging}
+                                            onMouseUp={handleDragEnd}
+                                            onMouseLeave={handleDragEnd}
+                                            onTouchStart={handleDragStart}
+                                            onTouchMove={handleDragging}
+                                            onTouchEnd={handleDragEnd}
+                                            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                                        />
+                                    </motion.div>
+                                ) : (
+                                    <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full relative">
+                                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                                        
+                                        {/* Live Tracing Overlay */}
+                                        <canvas 
+                                            ref={overlayCanvasRef}
+                                            className="absolute inset-0 w-full h-full pointer-events-none"
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Shutter / Approval Actions */}
-                <div className="absolute bottom-0 left-0 right-0 p-12 flex items-center justify-center z-10">
+                {/* Right Side: Control Panel Area */}
+                <div className="w-48 flex flex-col items-center justify-center bg-white/[0.02] border-l border-white/5 backdrop-blur-sm z-30 p-8 shrink-0">
                     <AnimatePresence mode="wait">
                         {previewImage ? (
-                            <motion.div 
-                                key="confirm-actions" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
-                                className="flex gap-10 items-center bg-white/10 backdrop-blur-xl px-10 py-6 rounded-[2.5rem] border border-white/10"
+                            <motion.div
+                                key="confirm-actions" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }}
+                                className="flex flex-col gap-10 items-center"
                             >
-                                <button onClick={handleRetake} className="flex flex-col items-center gap-2 group">
-                                    <div className="w-16 h-16 bg-white/5 hover:bg-rose-500/20 rounded-full flex items-center justify-center text-white/50 group-hover:text-rose-400 transition-all active:scale-95">
-                                        <ArrowPathIcon className="w-8 h-8" />
+                                <button onClick={handleConfirm} className="flex flex-col items-center gap-2 group">
+                                    <div className="w-20 h-20 bg-white hover:scale-105 active:scale-95 rounded-full flex items-center justify-center text-slate-900 shadow-[0_0_40px_rgba(255,255,255,0.2)] transition-all">
+                                        <CheckIcon className="w-10 h-10" />
                                     </div>
-                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] group-hover:text-rose-400 transition-colors">Retake</span>
+                                    <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Confirm</span>
                                 </button>
 
-                                <button onClick={handleConfirm} className="flex flex-col items-center gap-2 group">
-                                    <div className="w-24 h-24 bg-white hover:scale-105 active:scale-95 rounded-full flex items-center justify-center text-slate-900 shadow-[0_0_50px_rgba(255,255,255,0.3)] transition-all">
-                                        <CheckIcon className="w-12 h-12" />
-                                    </div>
-                                    <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Confirm & Upload</span>
-                                </button>
+                                <div className="w-12 h-[1px] bg-white/10" />
+
+                                <div className="flex flex-col gap-8">
+                                    <button onClick={handleRotate} className="flex flex-col items-center gap-2 group">
+                                        <div className="w-14 h-14 bg-white/5 hover:bg-indigo-500/20 rounded-full flex items-center justify-center text-white/50 group-hover:text-indigo-400 transition-all active:scale-95">
+                                            <ArrowPathIcon className="w-6 h-6 rotate-90" />
+                                        </div>
+                                        <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Rotate</span>
+                                    </button>
+
+                                    <button onClick={toggleGrayscale} className="flex flex-col items-center gap-2 group">
+                                        <div className={`w-14 h-14 ${isGrayscale ? 'bg-indigo-500 text-white' : 'bg-white/5 text-white/50 hover:bg-indigo-500/20 group-hover:text-indigo-400'} rounded-full flex items-center justify-center transition-all active:scale-95`}>
+                                            <SwatchIcon className="w-6 h-6" />
+                                        </div>
+                                        <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">B&W</span>
+                                    </button>
+
+                                    <button onClick={handleRetake} className="flex flex-col items-center gap-2 group">
+                                        <div className="w-14 h-14 bg-white/5 hover:bg-rose-500/20 rounded-full flex items-center justify-center text-white/50 group-hover:text-rose-400 transition-all">
+                                            <ArrowPathIcon className="w-6 h-6" />
+                                        </div>
+                                        <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Retake</span>
+                                    </button>
+                                </div>
                             </motion.div>
                         ) : (
-                            <motion.div 
+                            <motion.div
                                 key="shutter" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                                className="relative flex flex-col items-center gap-6"
+                                className="flex flex-col items-center gap-10"
                             >
-                                <button 
-                                    onClick={capturePhoto} 
+                                <button
+                                    onClick={capturePhoto}
                                     disabled={!stream || isCapturing}
-                                    className="group relative flex items-center justify-center active:scale-90 transition-transform"
+                                    className="group relative flex items-center justify-center active:scale-90 transition-all"
                                 >
-                                    {/* Pulsing Outer Shield */}
-                                    <div className="absolute -inset-6 border-2 border-indigo-500/20 rounded-full animate-ping" />
-                                    <div className="absolute -inset-4 border-2 border-white/20 rounded-full" />
-                                    
-                                    {/* Main Lens Button */}
-                                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden">
+                                    <div className="absolute -inset-8 border-2 border-indigo-500/10 rounded-full animate-ping" />
+                                    <div className="absolute -inset-4 border border-white/10 rounded-full" />
+
+                                    <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.1)] relative overflow-hidden">
                                         {isInitializing ? (
-                                            <CpuChipIcon className="w-10 h-10 text-indigo-500 animate-spin" />
+                                            <CpuChipIcon className="w-12 h-12 text-indigo-500 animate-spin" />
                                         ) : (
-                                            <div className="w-20 h-20 border-2 border-slate-200 rounded-full flex items-center justify-center">
-                                                <div className="w-4 h-4 bg-indigo-500 rounded-full animate-pulse" />
+                                            <div className="flex flex-col items-center gap-1">
+                                                <div className="w-8 h-8 border-2 border-indigo-500 rounded-lg flex items-center justify-center bg-indigo-500/10">
+                                                    <SparklesIcon className="w-4 h-4 text-indigo-500 animate-pulse" />
+                                                </div>
+                                                <span className="text-[12px] font-black text-indigo-600 uppercase tracking-tighter">Snap</span>
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     {isCapturing && (
-                                        <svg className="absolute w-28 h-28 animate-spin text-indigo-500" viewBox="0 0 24 24">
+                                        <svg className="absolute w-32 h-32 animate-spin text-indigo-500" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                         </svg>
                                     )}
                                 </button>
-                                
-                                <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] flex items-center gap-2">
-                                    <ViewfinderCircleIcon className="w-4 h-4" />
-                                    Align Document with Frame
+
+                                <div className="[writing-mode:vertical-lr] text-[10px] font-black text-indigo-400/50 uppercase tracking-[0.4em] flex items-center gap-4">
+                                    <AdjustmentsHorizontalIcon className="w-4 h-4 rotate-90" />
+                                    <span>Drag Corners</span>
                                 </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
                 </div>
 
-                {/* Processing Canvases (Hidden) */}
+                {/* Hidden Processing Canvas */}
                 <canvas ref={canvasRef} className="hidden" />
-                <canvas ref={scanCanvasRef} className="hidden" />
             </motion.div>
         </AnimatePresence>,
         document.body

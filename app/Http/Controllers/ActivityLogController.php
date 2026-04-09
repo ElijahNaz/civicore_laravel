@@ -41,7 +41,7 @@ class ActivityLogController extends Controller
     {
         $logs = DB::table('activity_logs')
             ->orderBy('created_at', 'desc')
-            ->limit(100)
+            ->limit(500)
             ->get();
 
         return response()->json($logs);

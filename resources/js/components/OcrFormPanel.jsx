@@ -85,31 +85,46 @@ const NAIC_BARANGAYS = [
     'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
 ].sort();
 
+const SUFFIX_OPTIONS = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'M.D.', 'Esq.', 'Ph.D.'];
+
+const NAME_FIELDS = (prefix = '') => [
+    { key: `${prefix}last_name`, label: 'Surname', type: 'text', required: true, width: 'sm:col-span-1' },
+    { key: `${prefix}first_name`, label: 'First Name', type: 'text', required: true, width: 'sm:col-span-1' },
+    { key: `${prefix}middle_name`, label: 'Middle Name', type: 'text', required: false, width: 'sm:col-span-1' },
+    { key: `${prefix}suffix`, label: 'Suffix', type: 'select', options: SUFFIX_OPTIONS, required: false, width: 'sm:col-span-1' },
+];
+
 const FIELD_CONFIG = {
     birth: [
-        { key: 'full_name', label: 'Full Name', type: 'text', required: true },
-        { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
-        { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: false },
-        { key: 'place_of_birth', label: 'Place of Birth', type: 'text', required: false },
-        { key: 'fathers_name', label: "Father's Name", type: 'text', required: false },
-        { key: 'mothers_name', label: "Mother's Name", type: 'text', required: false },
-        { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: false },
+        { section: 'Child Identity', fields: NAME_FIELDS('') },
+        { fields: [
+            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
+            { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: true },
+            { key: 'place_of_birth', label: 'Place of Birth', type: 'text', required: false },
+            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
+        ]},
+        { section: "Father's Lineage", fields: NAME_FIELDS('father_') },
+        { section: "Mother's Lineage", fields: NAME_FIELDS('mother_') },
     ],
     death: [
-        { key: 'full_name', label: 'Full Name', type: 'text', required: true },
-        { key: 'date_of_death', label: 'Date of Death', type: 'date', required: true },
-        { key: 'age', label: 'Age', type: 'text', required: false },
-        { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: false },
-        { key: 'place_of_death', label: 'Place of Death', type: 'text', required: false },
-        { key: 'cause_of_death', label: 'Cause of Death', type: 'text', required: false },
-        { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: false },
+        { section: 'Deceased Person', fields: NAME_FIELDS('') },
+        { fields: [
+            { key: 'date_of_death', label: 'Date of Death', type: 'date', required: true },
+            { key: 'age', label: 'Age', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
+            { key: 'place_of_death', label: 'Place of Death', type: 'text', required: false },
+            { key: 'cause_of_death', label: 'Cause of Death', type: 'text', required: false },
+            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
+        ]}
     ],
     marriage: [
-        { key: 'husbands_name', label: "Husband's Name", type: 'text', required: true },
-        { key: 'wifes_name', label: "Wife's Name", type: 'text', required: true },
-        { key: 'date_of_marriage', label: 'Date of Marriage', type: 'date', required: false },
-        { key: 'place_of_marriage', label: 'Place of Marriage', type: 'text', required: false },
-        { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: false },
+        { section: "Husband's Profile", fields: NAME_FIELDS('husband_') },
+        { section: "Wife's Profile", fields: NAME_FIELDS('wife_') },
+        { section: 'Registry Details', fields: [
+            { key: 'date_of_marriage', label: 'Date of Marriage', type: 'date', required: false },
+            { key: 'place_of_marriage', label: 'Place of Marriage', type: 'text', required: false },
+            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
+        ]}
     ],
 };
 
@@ -124,15 +139,19 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
 
     const [formData, setFormData] = useState(() => {
         const init = {};
-        fields.forEach(f => {
-            let val = ef[f.key] || '';
-            if (f.type === 'date' && val) {
-                const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                if (!isNaN(d.getTime())) {
-                    val = d.toISOString().split('T')[0];
+        const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
+        
+        configSections.forEach(section => {
+            section.fields.forEach(f => {
+                let val = ef[f.key] || '';
+                if (f.type === 'date' && val) {
+                    const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                    if (!isNaN(d.getTime())) {
+                        val = d.toISOString().split('T')[0];
+                    }
                 }
-            }
-            init[f.key] = val;
+                init[f.key] = val;
+            });
         });
         return init;
     });
@@ -149,8 +168,35 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const age = effectiveType === 'birth' ? computeAge(formData.date_of_birth) : null;
     const isMinor = age !== null && age < 18;
 
+    const [errors, setErrors] = useState({});
+
     const handleSubmit = (e, minimize = false) => {
         if (e) e.preventDefault();
+        
+        // --- Strict Validation ---
+        const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
+        const newErrors = {};
+        let firstErrorField = null;
+
+        configSections.forEach(section => {
+            section.fields.forEach(f => {
+                if (f.required && !formData[f.key]) {
+                    newErrors[f.key] = true;
+                    if (!firstErrorField) firstErrorField = f.label;
+                }
+            });
+        });
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            // Focus the first error field automatically
+            setTimeout(() => {
+                const firstError = document.querySelector('.border-rose-300');
+                if (firstError) firstError.focus();
+            }, 100);
+            return;
+        }
+
         if (isMinor && !consentGiven) {
             setShowConsent(true);
             return;
@@ -242,14 +288,14 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         >
                             <ChevronDoubleDownIcon className="w-6 h-6" />
                         </button>
-                        <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer">
-                            <XMarkIcon className="w-6 h-6" />
+                        <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer group">
+                            <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                         </button>
                     </div>
                 </div>
 
                 <div className="flex-1 flex overflow-hidden">
-                    <div className="w-1/2 border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
+                    <div className="w-[35%] border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
                         <div className="flex items-center justify-between mb-3 shrink-0">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
                             <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
@@ -322,31 +368,49 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {fields.map(field => (
-                                        <div key={field.key} className={field.key === 'full_name' || field.key === 'husbands_name' || field.key === 'wifes_name' ? 'sm:col-span-2' : ''}>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                                {field.label} {field.required && <span className="text-rose-400">*</span>}
-                                            </label>
-                                            {field.type === 'select' ? (
-                                                <select
-                                                    value={formData[field.key] || ''}
-                                                    onChange={e => setFormData(p => ({ ...p, [field.key]: e.target.value }))}
-                                                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#d4a574]/40 focus:border-[#d4a574] transition-all"
-                                                >
-                                                    <option value="">Select…</option>
-                                                    {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                                </select>
-                                            ) : (
-                                                <input
-                                                    type={field.type === 'date' ? 'date' : 'text'}
-                                                    value={formData[field.key] || ''}
-                                                    onChange={e => setFormData(p => ({ ...p, [field.key]: e.target.value }))}
-                                                    required={field.required}
-                                                    placeholder={`Enter ${field.label.toLowerCase()}…`}
-                                                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#d4a574]/40 focus:border-[#d4a574] transition-all placeholder-slate-300"
-                                                />
+                                <div className="space-y-12">
+                                    {(FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth).map((section, sIdx) => (
+                                        <div key={sIdx} className="space-y-4">
+                                            {section.section && (
+                                                <div className="flex items-center gap-3 mb-6">
+                                                    <h4 className="text-base font-black text-slate-900 uppercase tracking-wider">{section.section}</h4>
+                                                    <div className="flex-1 h-px bg-slate-100"></div>
+                                                </div>
                                             )}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                                                {section.fields.map(field => (
+                                                    <div key={field.key} className={field.width || 'sm:col-span-1'}>
+                                                        <label className={`block text-[11px] font-black uppercase tracking-widest mb-2.5 transition-colors ${errors[field.key] ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                            {field.label} {field.required && <span className="text-rose-400">*</span>}
+                                                        </label>
+                                                        {field.type === 'select' ? (
+                                                            <select
+                                                                value={formData[field.key] || ''}
+                                                                onChange={e => {
+                                                                    setFormData(p => ({ ...p, [field.key]: e.target.value }));
+                                                                    if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
+                                                                }}
+                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all ${errors[field.key] ? 'border-rose-300 bg-rose-50/20 focus:ring-rose-100' : 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm'}`}
+                                                            >
+                                                                <option value="">Select…</option>
+                                                                {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                type={field.type === 'date' ? 'date' : 'text'}
+                                                                value={formData[field.key] || ''}
+                                                                onChange={e => {
+                                                                    setFormData(p => ({ ...p, [field.key]: e.target.value }));
+                                                                    if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
+                                                                }}
+                                                                required={field.required}
+                                                                placeholder={`…`}
+                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${errors[field.key] ? 'border-rose-300 bg-rose-50/20 focus:ring-rose-100' : 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm'}`}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -354,12 +418,22 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         )}
 
                         <div className="pt-6 border-t border-slate-100">
-                             <button
+                              <button
                                 onClick={handleSubmit}
-                                className="w-full py-3.5 bg-[#0f172a] hover:bg-slate-800 text-white rounded-xl font-extrabold text-sm shadow-lg shadow-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                disabled={isSaving}
+                                className={`w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer ${isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-slate-200'}`}
                             >
-                                <DocumentCheckIcon className="w-5 h-5 text-emerald-400" />
-                                Save & Sync Changes
+                                {isSaving ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Uploading...
+                                    </>
+                                ) : (
+                                    <>
+                                        <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
+                                        Save & Sync Changes
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

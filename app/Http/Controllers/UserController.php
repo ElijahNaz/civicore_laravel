@@ -125,7 +125,7 @@ class UserController extends Controller
         $validator = Validator::make($request->all(), [
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:7',
             'role'     => 'required|in:Admin,Staff,User',
         ]);
 
@@ -195,17 +195,9 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
+        // Only Admin can edit others. Non-admins only themselves.
         if ($actor->role !== 'Admin' && $actor->id != $id) {
             return response()->json(['error' => 'Forbidden.'], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'name'  => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
         $user = User::find($id);
@@ -213,11 +205,53 @@ class UserController extends Controller
             return response()->json(['error' => 'User not found.'], 404);
         }
 
-        $user->name  = $request->input('name');
-        $user->email = $request->input('email');
+        // Validation Rules
+        $rules = [
+            'name'   => 'required|string|max:255',
+            'avatar' => 'nullable|string', // Base64 expected
+        ];
+
+        // Only Admin can change email and role
+        if ($actor->role === 'Admin') {
+            $rules['email'] = 'required|email|unique:users,email,' . $id;
+            $rules['role']  = 'required|in:Admin,Staff,User';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 400);
+        }
+
+        // Apply changes
+        $user->name = $request->input('name');
+        
+        if ($actor->role === 'Admin') {
+            $user->email = $request->input('email');
+            $user->role  = $request->input('role');
+        }
+
+        // Handle Avatar (Base64 -> Binary BLOB)
+        if ($request->has('avatar')) {
+            $avatarData = $request->input('avatar');
+            if ($avatarData) {
+                // If it's a data URL, strip the header
+                if (strpos($avatarData, 'data:image') === 0) {
+                    $avatarData = substr($avatarData, strpos($avatarData, ',') + 1);
+                }
+                $user->avatar = base64_decode($avatarData);
+            } else {
+                $user->avatar = null;
+            }
+        }
+
         $user->save();
 
-        return response()->json(['success' => true, 'message' => 'Profile updated.', 'user' => $this->formatUser($user)]);
+        return response()->json([
+            'success' => true, 
+            'message' => 'Profile updated successfully.', 
+            'user'    => $this->formatUser($user)
+        ]);
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────
@@ -256,6 +290,7 @@ class UserController extends Controller
             'name'        => $user->name,
             'email'       => $user->email,
             'role'        => $user->role,
+            'avatar'      => $user->avatar ? 'data:image/png;base64,' . base64_encode($user->avatar) : null,
             'permissions' => $user->permissions ?? [],
             'created_at'  => $user->created_at,
         ];

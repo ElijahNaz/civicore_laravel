@@ -5,7 +5,8 @@ import {
     MagnifyingGlassIcon, PlusCircleIcon,
     AdjustmentsHorizontalIcon, EyeIcon,
     TrashIcon, CheckCircleIcon, ClockIcon, ArrowDownTrayIcon,
-    PencilSquareIcon, ShieldCheckIcon, XMarkIcon
+    PencilSquareIcon, ShieldCheckIcon, XMarkIcon, ArrowPathIcon,
+    ChevronDownIcon, ChevronUpIcon
 } from '@heroicons/react/24/outline';
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -30,9 +31,12 @@ const Issuances = () => {
         issuances: rawIssuances,
         documents: rawDocuments,
         loading: dataLoading,
+        backgroundTasks,
+        runBackgroundTask,
         refreshIssuances,
         refreshDocuments,
-        refreshStats
+        refreshStats,
+        refreshAll
     } = useData();
 
     const isLoading = dataLoading.issuances || dataLoading.documents;
@@ -50,6 +54,14 @@ const Issuances = () => {
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState([]);
+    const [isBarMinimized, setIsBarMinimized] = useState(false);
+
+    // Activity History Search/Filter
+    const [historySearch, setHistorySearch] = useState('');
+    const [historyActionFilter, setHistoryActionFilter] = useState('all');
+    const [historyUserFilter, setHistoryUserFilter] = useState('all');
+    const [historyStartDate, setHistoryStartDate] = useState('');
+    const [historyEndDate, setHistoryEndDate] = useState('');
 
     // Confirmation State
     const [confirmAction, setConfirmAction] = useState({
@@ -116,20 +128,6 @@ const Issuances = () => {
                     // Normalize data structure for the edit form panel
                     extracted_fields: i.extracted_data || i.extracted_fields
                 }
-            })),
-            // Ready Documents (Processed but not yet converted to issuance records)
-            ...rawDocuments.filter(d => d.status.toLowerCase() === 'processed' && !issuedDocIds.has(Number(d.id))).map(d => ({
-                id: `doc-${d.id}`,
-                realId: d.id,
-                number: 'REF-' + d.id,
-                type: (d.detected_type || d.type || 'unknown').toLowerCase(),
-                name: d.personName || d.extracted_fields?.full_name || d.extracted_fields?.husbands_name || 'Ready for Issuance',
-                barangay: d.barangay || '—',
-                date: d.created_at,
-                status: 'Ready',
-                encoded_by: d.encoded_by,
-                source: 'document',
-                raw: d
             }))
         ];
         // Sort by date descending
@@ -187,11 +185,6 @@ const Issuances = () => {
         }
     };
 
-    const refreshAll = () => {
-        refreshIssuances(true);
-        refreshDocuments(true);
-        refreshStats(true);
-    };
 
     const handleEdit = (cert) => {
         setPasswordModal({
@@ -210,11 +203,12 @@ const Issuances = () => {
         const fileId = editingCert.realId;
         const personName = fields.full_name || fields.husbands_name || fields.wifes_name || '';
         const barangay = fields.barangay || '';
+        
+        const certToClear = editingCert;
+        setEditingCert(null);
 
-        try {
-            const endpoint = editingCert.source === 'issuance' ? `/api/issuances/${fileId}` : `/api/documents/${fileId}`;
-            // If it's an issuance update, we handle differently or just use the same API if common
-            // For now, let's assume Document API handles both if they are linked
+        runBackgroundTask(`Updating: ${personName}`, async () => {
+            const endpoint = certToClear.source === 'issuance' ? `/api/issuances/${fileId}` : `/api/documents/${fileId}`;
             const res = await axios.put(endpoint, {
                 extracted_fields: fields,
                 ocr_text: ocr_text,
@@ -225,34 +219,34 @@ const Issuances = () => {
             });
 
             if (res.data.success) {
-                logActivity('Edited', editingCert);
+                logActivity('Edited', certToClear);
                 refreshAll();
-                setEditingCert(null);
-                showAlert({ title: 'Record Updated', message: 'Changes saved and logged.', type: 'success' });
+                return { success: true };
             }
-        } catch (e) {
-            showAlert({ title: 'Update Failed', message: 'Could not save changes.', type: 'error' });
-        }
+            throw new Error('Update failed');
+        }, { silent: true });
     };
 
     const handleDelete = (cert) => {
         setPasswordModal({
             isOpen: true,
             title: 'Authorize Deletion',
-            message: `This action will permanently remove ${cert.type} record for ${cert.name}. Proceed?`,
-            onConfirm: async () => {
+            message: `Remove record for ${cert.name}? This can be undone later.`,
+            onConfirm: () => {
                 setPasswordModal(prev => ({ ...prev, isOpen: false }));
-                try {
+                runBackgroundTask(`${cert.name}`, async () => {
                     const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}` : `/api/documents/${cert.realId}`;
                     const res = await axios.delete(endpoint);
                     if (res.data.success) {
                         logActivity('Deleted', cert);
                         refreshAll();
-                        showAlert({ title: 'Deleted', message: 'The record has been removed and logged.', type: 'success' });
+                        return { success: true, type: 'delete' };
                     }
-                } catch (error) {
-                    showAlert({ title: 'Error', message: 'Deletion failed.', type: 'error' });
-                }
+                    throw new Error('Delete failed');
+                }, { 
+                    type: 'delete', 
+                    undoFn: () => axios.post(`/api/documents/${cert.realId}/undo`) 
+                });
             }
         });
     };
@@ -304,23 +298,35 @@ const Issuances = () => {
         setPasswordModal({
             isOpen: true,
             title: `Delete ${selectedIds.length} Records?`,
-            message: `This will permanently remove ALL ${selectedIds.length} selected records. This action is irreversible.`,
-            onConfirm: async () => {
+            message: `Remove all ${selectedIds.length} selected records? They can be restored from the Activity Center.`,
+            onConfirm: () => {
                 setPasswordModal(prev => ({ ...prev, isOpen: false }));
-                try {
-                    for (const fullId of selectedIds) {
+                const idsToDelete = [...selectedIds];
+                setSelectedIds([]);
+                
+                runBackgroundTask(`Bulk Delete: ${idsToDelete.length} Records`, async () => {
+                    let ok = 0;
+                    for (const fullId of idsToDelete) {
                         const cert = certificates.find(c => c.id === fullId);
                         if (!cert) continue;
                         const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}` : `/api/documents/${cert.realId}`;
-                        await axios.delete(endpoint);
-                        logActivity('Deleted (Bulk)', cert);
+                        const res = await axios.delete(endpoint);
+                        if (res.data.success) {
+                            logActivity('Deleted (Bulk)', cert);
+                            ok++;
+                        }
                     }
-                    setSelectedIds([]);
                     refreshAll();
-                    showAlert({ title: 'Bulk Deletion Complete', message: 'All selected records have been removed.', type: 'success' });
-                } catch (e) {
-                    showAlert({ title: 'Bulk Action Failed', message: 'Some records could not be deleted.', type: 'error' });
-                }
+                    return { success: true, message: `Successfully removed ${ok} records.`, type: 'bulk-delete' };
+                }, {
+                    type: 'bulk-delete',
+                    undoFn: async () => {
+                        for (const fullId of idsToDelete) {
+                            const realId = fullId.split('-')[1];
+                            await axios.post(`/api/documents/${realId}/undo`);
+                        }
+                    }
+                });
             }
         });
     };
@@ -346,29 +352,37 @@ const Issuances = () => {
 
     const handleBulkIssue = () => {
         const documentsOnly = selectedIds.filter(id => id.startsWith('doc-'));
-        if (documentsOnly.length === 0) {
-            showAlert({ title: 'No Eligible Records', message: 'Bulk issuance only applies to Ready/Pending documents.', type: 'warning' });
-            return;
-        }
+        if (documentsOnly.length === 0) return;
 
         withConfirmation({
             title: `Issue ${documentsOnly.length} Certificates?`,
-            message: `This will finalize and issue certificates for all ${documentsOnly.length} selected ready documents.`,
+            message: `Finalize and issue for all ${documentsOnly.length} selected ready documents?`,
             type: 'success',
-            action: async () => {
-                try {
-                    for (const fullId of documentsOnly) {
-                        const cert = certificates.find(c => c.id === fullId);
-                        if (!cert) continue;
-                        await axios.post(`/api/documents/${cert.realId}/quick-approve`);
-                        logActivity('Issued (Bulk)', cert);
+            action: () => {
+                const idsToIssue = [...documentsOnly];
+                setSelectedIds([]);
+                runBackgroundTask(`Mass Issuance: ${idsToIssue.length} Records`, async () => {
+                    // Immediate visual feedback locally
+                    setCertificates(prev => prev.map(c => idsToIssue.includes(c.id) ? { ...c, status: 'uploading' } : c));
+
+                    let ok = 0;
+                    try {
+                        for (const fullId of idsToIssue) {
+                            const cert = certificates.find(c => c.id === fullId);
+                            if (!cert) continue;
+                            const res = await axios.post(`/api/documents/${cert.realId}/quick-approve`);
+                            if (res.data.success) {
+                                logActivity('Issued (Bulk)', cert);
+                                ok++;
+                            }
+                        }
+                        refreshAll();
+                        return { success: true, message: `Successfully issued ${ok} certificates.` };
+                    } catch (err) {
+                        refreshAll();
+                        throw err;
                     }
-                    setSelectedIds([]);
-                    refreshAll();
-                    showAlert({ title: 'Batch Issuance Complete', message: 'Selected documents have been finalized.', type: 'success' });
-                } catch (e) {
-                    showAlert({ title: 'Batch Issuance Partial Failure', message: 'Some documents could not be processed.', type: 'error' });
-                }
+                });
             }
         });
     };
@@ -385,6 +399,24 @@ const Issuances = () => {
             cert.barangay.toLowerCase().includes(searchTerm.toLowerCase());
 
         return matchesType && matchesBarangay && matchesEncoder && matchesSearch;
+    });
+
+    const filteredLogs = activityLogs.filter(log => {
+        const matchesSearch = !historySearch || 
+            (log.details || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+            (log.user_name || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+            (log.action || '').toLowerCase().includes(historySearch.toLowerCase());
+        
+        const matchesAction = historyActionFilter === 'all' || log.action === historyActionFilter;
+        const matchesUser = historyUserFilter === 'all' || log.user_name === historyUserFilter;
+
+        // Date Range filtering
+        const logDate = new Date(log.created_at).setHours(0,0,0,0);
+        const start = historyStartDate ? new Date(historyStartDate).setHours(0,0,0,0) : null;
+        const end = historyEndDate ? new Date(historyEndDate).setHours(0,0,0,0) : null;
+        const matchesDate = (!start || logDate >= start) && (!end || logDate <= end);
+        
+        return matchesSearch && matchesAction && matchesUser && matchesDate;
     });
 
     const resetFilters = () => {
@@ -495,9 +527,9 @@ const Issuances = () => {
                                     {(selectedType !== 'all' || selectedBarangay !== 'all' || selectedEncoder !== 'all' || searchTerm !== '') && (
                                         <button
                                             onClick={resetFilters}
-                                            className="px-4 py-2 text-xs font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 border border-rose-100 rounded-xl transition-all cursor-pointer flex items-center gap-2"
+                                            className="px-4 py-2 text-xs font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 border border-rose-100 rounded-xl transition-all cursor-pointer flex items-center gap-2 group"
                                         >
-                                            <XMarkIcon className="w-4 h-4" />
+                                            <XMarkIcon className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
                                             Reset Filters
                                         </button>
                                     )}
@@ -599,22 +631,129 @@ const Issuances = () => {
                     </>
                 ) : (
                     <div className="p-0">
-                        <div className="p-6 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
-                                    <ClockIcon className="w-6 h-6 text-indigo-500" />
-                                    Activity & Audit Trail
-                                </h3>
-                                <p className="text-sm text-slate-500 mt-1 font-medium">Tracking all document issuance and modification events</p>
+                        <div className="p-6 border-b border-slate-100 bg-slate-50/10">
+                            {/* Top Row: Title & Action */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 shadow-sm">
+                                            <ClockIcon className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">Activity & Audit Trail</h3>
+                                            <p className="text-[11px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Tracking all system events and modifications</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-200/50">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest tabular-nums italic">
+                                            {filteredLogs.length} of {activityLogs.length} Entries
+                                        </span>
+                                    </div>
+                                    <button 
+                                        onClick={fetchActivityLogs} 
+                                        disabled={logsLoading}
+                                        className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
+                                    >
+                                        <ArrowPathIcon className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${logsLoading ? 'animate-spin' : ''}`} />
+                                        Refresh Log
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-full">
-                                    {activityLogs.length} Total Activities
-                                </span>
-                                <button onClick={fetchActivityLogs} className="flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100 transition-all cursor-pointer active:scale-95">
-                                    <ArrowPathIcon className="w-4 h-4" />
-                                    Refresh Logs
-                                </button>
+
+                            {/* Filter Row: Search & Dropdowns */}
+                            <div className="space-y-4 pt-6 border-t border-slate-200/50">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                                    {/* Search Field */}
+                                    <div className="lg:col-span-4 space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Search Details</label>
+                                        <div className="relative">
+                                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Recipient name, action, or comment..."
+                                                value={historySearch}
+                                                onChange={(e) => setHistorySearch(e.target.value)}
+                                                className="block w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Action Type */}
+                                    <div className="lg:col-span-2 space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Action Type</label>
+                                        <select
+                                            value={historyActionFilter}
+                                            onChange={(e) => setHistoryActionFilter(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 block p-2.5 cursor-pointer transition-all outline-none"
+                                        >
+                                            <option value="all">Any Action</option>
+                                            <option value="Printed">Printed</option>
+                                            <option value="Downloaded">Downloaded</option>
+                                            <option value="Edited">Edited</option>
+                                            <option value="Viewed">Viewed</option>
+                                            <option value="Issued">Issued</option>
+                                            <option value="Deleted">Deleted</option>
+                                            <option value="Deleted (Bulk)">Deleted (Bulk)</option>
+                                            <option value="Issued (Bulk)">Issued (Bulk)</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Staff Selection */}
+                                    <div className="lg:col-span-2 space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Encoder / Staff</label>
+                                        <select
+                                            value={historyUserFilter}
+                                            onChange={(e) => setHistoryUserFilter(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 block p-2.5 cursor-pointer transition-all outline-none"
+                                        >
+                                            <option value="all">Any Staff member</option>
+                                            {uniqueEncoders.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* Date Range Fields */}
+                                    <div className="lg:col-span-4 grid grid-cols-2 gap-2 space-y-0">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">From Date</label>
+                                            <input 
+                                                type="date" 
+                                                value={historyStartDate} 
+                                                onChange={(e) => setHistoryStartDate(e.target.value)}
+                                                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl p-2.5 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">To Date</label>
+                                            <input 
+                                                type="date" 
+                                                value={historyEndDate} 
+                                                onChange={(e) => setHistoryEndDate(e.target.value)}
+                                                className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl p-2.5 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Active Filters & Clear */}
+                                {(historySearch || historyActionFilter !== 'all' || historyUserFilter !== 'all' || historyStartDate || historyEndDate) && (
+                                    <div className="flex items-center justify-between bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/50 animate-in fade-in slide-in-from-top-1">
+                                        <p className="text-[10px] font-bold text-indigo-600 pl-2">Filtering results...</p>
+                                        <button
+                                            onClick={() => { 
+                                                setHistorySearch(''); 
+                                                setHistoryActionFilter('all'); 
+                                                setHistoryUserFilter('all');
+                                                setHistoryStartDate('');
+                                                setHistoryEndDate('');
+                                            }}
+                                            className="text-[10px] font-black text-rose-500 hover:text-white hover:bg-rose-500 px-3 py-1.5 rounded-lg border border-rose-200 hover:border-rose-500 uppercase tracking-widest transition-all glass-effect cursor-pointer"
+                                        >
+                                            Clear All Filters
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -639,7 +778,7 @@ const Issuances = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {activityLogs.map((log) => (
+                                        {filteredLogs.map((log) => (
                                             <tr key={log.id} className="hover:bg-slate-50/30 transition-colors">
                                                 <td className="p-4 pl-8 font-bold text-slate-400 text-[10px] tabular-nums tracking-tighter">
                                                     {new Date(log.created_at).toLocaleString()}
@@ -685,33 +824,55 @@ const Issuances = () => {
                 {selectedIds.length > 0 && (
                     <motion.div
                         initial={{ y: 100, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
+                        animate={{ 
+                            y: isBarMinimized ? 80 : 0, 
+                            opacity: 1,
+                            scale: isBarMinimized ? 0.95 : 1
+                        }}
                         exit={{ y: 100, opacity: 0 }}
+                        transition={{ type: 'tween', duration: 0.1, ease: 'circOut' }}
                         className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4"
                     >
-                        <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-4 flex items-center justify-between">
+                        <div className={`bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-4 flex items-center justify-between relative transition-all ${isBarMinimized ? 'opacity-50 hover:opacity-100' : ''}`}>
+                            {/* Toggle Button */}
+                            <button 
+                                onClick={() => setIsBarMinimized(!isBarMinimized)}
+                                className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-slate-400 hover:text-white p-1.5 rounded-full shadow-lg transition-all cursor-pointer z-10"
+                                title={isBarMinimized ? "Expand Toolbar" : "Minimize Toolbar"}
+                            >
+                                {isBarMinimized ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
+                            </button>
+
                             <div className="flex items-center gap-4 pl-4">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-white text-xs font-black">
+                                <span className={`flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-white text-xs font-black transition-all ${isBarMinimized ? 'scale-75' : ''}`}>
                                     {selectedIds.length}
                                 </span>
-                                <div>
-                                    <p className="text-white text-sm font-bold leading-none tracking-tight">Records Selected</p>
-                                    <button onClick={() => setSelectedIds([])} className="text-[10px] text-slate-400 hover:text-white font-bold uppercase tracking-widest mt-1 transition-colors">Clear Selection</button>
-                                </div>
+                                {!isBarMinimized && (
+                                    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
+                                        <p className="text-white text-sm font-bold leading-none tracking-tight">Records Selected</p>
+                                        <button onClick={() => setSelectedIds([])} className="text-[10px] text-slate-400 hover:text-white font-bold uppercase tracking-widest mt-1 transition-colors">Clear Selection</button>
+                                    </motion.div>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-2 pr-2">
-                                <button onClick={handleBulkIssue} className="flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all shadow-lg shadow-emerald-900/20 active:scale-95 cursor-pointer">
-                                    <CheckCircleIcon className="w-4 h-4" />
-                                    Mass Issue
-                                </button>
-                                <button onClick={handleBulkDownload} className="flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 cursor-pointer">
-                                    <ArrowDownTrayIcon className="w-4 h-4" />
-                                    Download
-                                </button>
-                                <button onClick={handleBulkDelete} className="p-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl transition-all shadow-lg shadow-rose-900/20 active:scale-95 cursor-pointer">
-                                    <TrashIcon className="w-5 h-5" />
-                                </button>
+                                {isBarMinimized ? (
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-4">Selection active</span>
+                                ) : (
+                                    <>
+                                        <button onClick={handleBulkIssue} className="flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all shadow-lg shadow-emerald-900/20 active:scale-95 cursor-pointer">
+                                            <CheckCircleIcon className="w-4 h-4" />
+                                            Mass Issue
+                                        </button>
+                                        <button onClick={handleBulkDownload} className="flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 cursor-pointer">
+                                            <ArrowDownTrayIcon className="w-4 h-4" />
+                                            Download
+                                        </button>
+                                        <button onClick={handleBulkDelete} className="p-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl transition-all shadow-lg shadow-rose-900/20 active:scale-95 cursor-pointer">
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </motion.div>

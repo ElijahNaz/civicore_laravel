@@ -14,7 +14,6 @@ import { useModal } from './ModalContext.jsx';
 import { useData } from './DataContext.jsx';
 import CameraModal from './CameraModal.jsx';
 import ActionConfirmModal from './ActionConfirmModal.jsx';
-import SaveToasts from './SaveToasts.jsx';
 
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
@@ -57,9 +56,9 @@ const DocumentPreviewModal = ({ file, onClose }) => {
                     </a>
                     <button
                         onClick={onClose}
-                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all group"
                     >
-                        <XMarkIcon className="w-5 h-5" />
+                        <XMarkIcon className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                     </button>
                 </div>
             </div>
@@ -100,9 +99,14 @@ const Documents = () => {
     const { showAlert } = useModal();
     const {
         documents: globalFiles,
+        history: historyLogs,
         loading: dataLoading,
+        backgroundTasks,
+        runBackgroundTask,
         refreshDocuments,
-        refreshStats
+        refreshHistory,
+        refreshStats,
+        refreshAll
     } = useData();
     const isLoadingData = dataLoading.documents;
 
@@ -113,7 +117,6 @@ const Documents = () => {
     }, [globalFiles]);
 
     const [selectedDocType, setSelectedDocType] = useState('birth');
-    const [isUploading, setIsUploading] = useState(false);
     const [dragging, setDragging] = useState(false);
     const [activeOcr, setActiveOcr] = useState(null); // { file, ocrResult }
     const [activeTab, setActiveTab] = useState('queue');
@@ -129,7 +132,6 @@ const Documents = () => {
     const [previewFile, setPreviewFile] = useState(null); // file to preview
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '', type: 'info' });
-    const [backgroundTasks, setBackgroundTasks] = useState([]);
 
     useEffect(() => {
         const hasProcessing = files.some(f => f.status === 'processing' || f.status === 'uploading');
@@ -146,31 +148,21 @@ const Documents = () => {
         setDragging(false);
         if (!acceptedFiles.length) return;
         const file = acceptedFiles[0];
-        const tempId = Math.random().toString(36).substring(7);
-
-        setFiles(prev => [{
-            id: tempId, name: file.name, type: selectedDocType,
-            size: (file.size / 1024 / 1024).toFixed(2) + ' MB', status: 'uploading'
-        }, ...prev]);
-
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('docType', selectedDocType);
-
-        try {
+        
+        runBackgroundTask(`Uploading ${file.name}`, async () => {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('docType', selectedDocType);
+            
             const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                refreshDocuments(true);
-                refreshStats(true);
-            } else {
-                showAlert({ title: 'Upload Failed', message: data.error || 'Upload error.', type: 'error' });
+                refreshAll();
+                return { success: true };
             }
-        } catch {
-            showAlert({ title: 'Network Error', message: 'A network error occurred during upload.', type: 'error' });
-            setFiles(prev => prev.filter(f => f.id !== tempId));
-        }
-    }, [selectedDocType, refreshDocuments, refreshStats, showAlert]);
+            throw new Error(data.error || 'Upload failed');
+        }, { silent: true });
+    }, [selectedDocType, refreshAll, runBackgroundTask]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -181,9 +173,10 @@ const Documents = () => {
     });
 
     const processFile = async (fileId, fileObj) => {
+        // Instant local feedback
         setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing' } : f));
-
-        try {
+        
+        runBackgroundTask(`Extracting Data: ${fileObj?.name || 'Document'}`, async () => {
             const res = await fetch('/api/ocr/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -191,16 +184,12 @@ const Documents = () => {
                 body: JSON.stringify({ documentId: fileId, docType: fileObj?.type || selectedDocType }),
             });
             const data = await res.json();
-
             if (data.success) {
                 refreshDocuments(true);
-            } else {
-                const errMsg = data.error || 'Could not extract data.';
-                showAlert({ title: 'OCR Failed', message: errMsg, type: 'error' });
+                return { success: true };
             }
-        } catch {
-            showAlert({ title: 'Processing Error', message: 'Unexpected error during OCR.', type: 'error' });
-        }
+            throw new Error(data.error || 'OCR Extraction failed');
+        }, { silent: true });
     };
 
     const bulkProcess = async () => {
@@ -210,54 +199,74 @@ const Documents = () => {
             return;
         }
 
-        for (const f of pending) {
+        // Instant local feedback for ALL pending files
+        const pendingIds = pending.map(p => p.id);
+        setFiles(prev => prev.map(f => pendingIds.includes(f.id) ? { ...f, status: 'processing' } : f));
+
+        // Fire all requests simultaneously
+        await Promise.all(pending.map(f => 
             fetch('/api/ocr/process', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ documentId: f.id, docType: f.type }),
-            });
-        }
+            })
+        ));
 
-        setTimeout(() => refreshDocuments(true), 1000);
+        // Immediate refresh to sync with server-side queue
+        refreshDocuments(true);
     };
 
     const approveRecord = async (fileId) => {
-        try {
-            const res = await fetch(`/api/documents/${fileId}/quick-approve`, { method: 'POST', credentials: 'include' });
-            const data = await res.json();
-            if (data.success) {
+        const file = files.find(f => f.id === fileId);
+        // Show immediate local status update
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
+
+        runBackgroundTask(`Approving ${file?.name || 'Record'}`, async () => {
+            try {
+                const res = await fetch(`/api/documents/${fileId}/quick-approve`, { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                if (data.success) {
+                    refreshAll();
+                    return { success: true };
+                }
+                throw new Error(data.error || 'Approval failed');
+            } catch (err) {
+                // Revert status on failure
                 refreshDocuments(true);
-                showAlert({ title: 'Record Approved', message: 'The extracted data has been saved and issued.', type: 'success' });
-            } else {
-                showAlert({ title: 'Approval Failed', message: data.error || 'Failed to approve record.', type: 'error' });
+                throw err;
             }
-        } catch (err) {
-            showAlert({ title: 'Network Error', message: 'Could not communicate with the server.', type: 'error' });
-        }
+        });
     };
 
     const bulkApprove = async () => {
         const extracted = files.filter(f => f.status === 'extracted');
-        if (!extracted.length) {
-            showAlert({ title: 'Nothing to approve', message: 'No extracted records to approve.', type: 'info' });
-            return;
-        }
+        if (!extracted.length) return;
 
         setConfirmModal({
             isOpen: true,
             title: 'Mass Approval',
-            message: `Are you sure you want to approve all ${extracted.length} extracted records? This will issue them immediately.`,
+            message: `Approve all ${extracted.length} extracted records and issue them immediately?`,
             type: 'success',
-            onConfirm: async () => {
-                let ok = 0;
-                for (const f of extracted) {
-                    const res = await fetch(`/api/documents/${f.id}/quick-approve`, { method: 'POST', credentials: 'include' });
-                    const data = await res.json();
-                    if (data.success) ok++;
-                }
-                refreshDocuments(true);
-                showAlert({ title: 'Batch Approved', message: `Successfully approved ${ok} records.`, type: 'success' });
+            onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Mass Approval: ${extracted.length} Records`, async () => {
+                    // Show immediate local status update for all targeted files
+                    const idsToUpdate = extracted.map(f => f.id);
+                    setFiles(prev => prev.map(f => idsToUpdate.includes(f.id) ? { ...f, status: 'uploading' } : f));
+
+                    let ok = 0;
+                    try {
+                        for (const f of extracted) {
+                            const res = await fetch(`/api/documents/${f.id}/quick-approve`, { method: 'POST', credentials: 'include' });
+                            if (res.ok) ok++;
+                        }
+                        refreshAll();
+                        return { success: true, message: `Successfully approved ${ok} records.` };
+                    } catch (err) {
+                        refreshDocuments(true);
+                        throw err;
+                    }
+                });
             },
             onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
         });
@@ -270,95 +279,67 @@ const Documents = () => {
         const personName = fields.full_name || fields.husbands_name || fields.wifes_name || 'Document Data';
         const barangay = fields.barangay || '';
 
-        // 1. Add to Background Tasks immediately
-        const taskId = `save-${fileId}-${Date.now()}`;
-        const newTask = { id: taskId, name: personName, status: 'saving' };
-        setBackgroundTasks(prev => [...prev, newTask]);
-
-        // 2. Clear Modal if requested (Minimize) or after start
         if (minimizeRequested) {
             setActiveOcr(null);
+        } else {
+            // Keep modal open long enough to see the "Securing" state, then close
+            setTimeout(() => setActiveOcr(null), 800);
         }
 
-        try {
-            const res = await fetch(`/api/documents/${fileId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                    extracted_fields: fields,
-                    ocr_text: ocr_text,
-                    personName,
-                    barangay,
-                    status: 'Processed',
-                    parental_consent: parentalConsent,
-                    detectedType
-                }),
-            });
-            const data = await res.json();
+        // Immediate local status update in the main table
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
 
-            // 3. Update task status on completion
-            setBackgroundTasks(prev => prev.map(t =>
-                t.id === taskId ? { ...t, status: data.success ? 'success' : 'error' } : t
-            ));
-
-            if (data.success) {
-                if (!minimizeRequested) setActiveOcr(null);
+        runBackgroundTask(`Saving: ${personName}`, async () => {
+            try {
+                const res = await fetch(`/api/documents/${fileId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        extracted_fields: fields,
+                        ocr_text: ocr_text,
+                        personName,
+                        barangay,
+                        status: 'Processed',
+                        parental_consent: parentalConsent,
+                        detectedType
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    refreshAll();
+                    return { success: true, message: `Data for ${personName} has been secured.` };
+                }
+                throw new Error(data.message || 'Save failed');
+            } catch (err) {
                 refreshDocuments(true);
-                refreshStats(true);
-                // Auto-dismiss success toast after 4s
-                setTimeout(() => {
-                    setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));
-                }, 4000);
-            } else {
-                showAlert({ title: 'Save Failed', message: data.message || 'Could not save record.', type: 'error' });
+                throw err;
             }
-        } catch (err) {
-            setBackgroundTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'error' } : t));
-            showAlert({ title: 'Network Error', message: 'Failed to connect to the server.', type: 'error' });
-        }
+        });
     };
 
     const removeFile = async (fileId) => {
         const file = files.find(f => f.id === fileId);
-        const fileName = file ? file.name : 'Document';
+        if (!file) return;
 
         setConfirmModal({
             isOpen: true,
             title: 'Delete Document',
-            message: `Are you sure you want to remove \"${fileName}\" from the queue? This will archive the record.`,
+            message: `Archive \"${file.name}\"? This action can be undone from the Activity Center.`,
             type: 'danger',
-            onConfirm: async () => {
+            onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));
-
-                // 1. Add to Background Tasks
-                const taskId = `delete-${fileId}-${Date.now()}`;
-                const newTask = { id: taskId, name: fileName, status: 'deleting' };
-                setBackgroundTasks(prev => [...prev, newTask]);
-
-                try {
+                runBackgroundTask(`${file.name}`, async () => {
                     const res = await fetch(`/api/documents/${fileId}`, { method: 'DELETE', credentials: 'include' });
-                    const data = await res.json();
-
-                    // 2. Update task status
-                    setBackgroundTasks(prev => prev.map(t =>
-                        t.id === taskId ? { ...t, status: data.success || res.ok ? 'deleted' : 'error' } : t
-                    ));
-
-                    if (data.success || res.ok) {
-                        refreshDocuments(true);
-                        refreshStats(true);
-                        // Auto-dismiss after 3s
-                        setTimeout(() => {
-                            setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));
-                        }, 3000);
-                    } else {
-                        showAlert({ title: 'Delete Failed', message: data.message || 'Could not delete document.', type: 'error' });
+                    if (res.ok) {
+                        refreshAll();
+                        return { success: true, type: 'delete' };
                     }
-                } catch (err) {
-                    setBackgroundTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'error' } : t));
-                    showAlert({ title: 'Network Error', message: 'Failed to connect to the server.', type: 'error' });
-                }
+                    throw new Error('Deletion failed');
+                }, { 
+                    type: 'delete', 
+                    undoFn: () => fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' }) 
+                });
             },
             onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
         });
@@ -410,8 +391,24 @@ const Documents = () => {
     };
 
     // ── Data Splitting & Filtering ──────────────────────────────────────────
-    const queueFiles = files.filter(f => f.status?.toLowerCase() !== 'processed');
-    const historyFiles = files.filter(f => f.status?.toLowerCase() === 'processed');
+    const queueFiles = files.filter(f => 
+        f.status?.toLowerCase() !== 'processed' && 
+        f.status?.toLowerCase() !== 'issued'
+    );
+    
+    // Map history logs for the UI (using log fields but keeping logic compatible)
+    const historyFiles = historyLogs.map(log => ({
+        ...log,
+        id: log.id,
+        name: log.filename,
+        personName: log.person_name,
+        type: log.type,
+        barangay: log.barangay,
+        encoded_by: log.encoded_by,
+        created_at: log.created_at,
+        status: log.action.toLowerCase(),
+        isLog: true // flag to indicate this is a log record
+    }));
 
     const filteredQueue = queueFiles.filter(f =>
         !queueSearch || f.name.toLowerCase().includes(queueSearch.toLowerCase())
@@ -466,9 +463,6 @@ const Documents = () => {
 
     return (
         <div className="p-1 sm:p-4">
-            {/* Notifications */}
-            <SaveToasts tasks={backgroundTasks} />
-
             {/* View Modal */}
             <AnimatePresence>
                 {previewFile && (
@@ -617,7 +611,7 @@ const Documents = () => {
                                             </button>
                                         )}
                                         {queueFiles.some(f => ['pending', 'failed', 'uploaded'].includes(f.status?.toLowerCase())) && (
-                                            <button onClick={bulkProcess} disabled={isUploading}
+                                            <button onClick={bulkProcess}
                                                 className="text-xs font-bold text-[#d4a574] bg-[#d4a574]/10 hover:bg-[#d4a574] hover:text-[#0f172a] px-3 py-2 rounded-lg border border-[#d4a574]/20 transition-all flex items-center gap-1.5 disabled:opacity-50">
                                                 <CloudArrowUpIcon className="w-3.5 h-3.5" />
                                                 Process All
@@ -805,9 +799,9 @@ const Documents = () => {
                                                     setHistorySearch('');
                                                     setHistoryFilters({ type: 'all', staff: 'all', barangay: 'all', dateRange: 'all' });
                                                 }}
-                                                className="text-[10px] font-black text-rose-600 hover:text-rose-700 uppercase tracking-tighter px-2 flex items-center gap-1 transition-colors"
+                                                className="text-[10px] font-black text-rose-600 hover:text-rose-700 uppercase tracking-tighter px-2 flex items-center gap-1 transition-colors group"
                                             >
-                                                <XMarkIcon className="w-3.5 h-3.5" />
+                                                <XMarkIcon className="w-3.5 h-3.5 group-hover:rotate-90 transition-transform duration-300" />
                                                 Reset
                                             </button>
                                         )}
@@ -859,9 +853,7 @@ const Documents = () => {
                                                                         file.type === 'death' ? 'bg-slate-100 text-slate-600' :
                                                                         'bg-rose-50 text-rose-500'
                                                                     }`}>
-                                                                        {file.type === 'birth' ? <DocumentIcon className="w-5 h-5" /> : 
-                                                                         file.type === 'death' ? <ClipboardDocumentListIcon className="w-5 h-5" /> : 
-                                                                         <HeartIcon className="w-5 h-5" />}
+                                                                        <DocumentIcon className="w-5 h-5" />
                                                                     </div>
                                                                     <div className="min-w-0">
                                                                         <p className="text-[13px] font-bold text-slate-800 truncate max-w-[20ch]">
@@ -901,13 +893,19 @@ const Documents = () => {
                                                             </td>
                                                             <td className="px-5 py-4 text-right">
                                                                 <div className="flex items-center justify-end">
-                                                                    <button
-                                                                        onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
-                                                                        className="px-5 py-2.5 text-[11px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-xl shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-2"
-                                                                    >
-                                                                        <DocumentCheckIcon className="w-4 h-4" />
-                                                                        View Details
-                                                                    </button>
+                                                                    {file.isLog ? (
+                                                                        <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100/50 italic">
+                                                                            Persistent Record
+                                                                        </span>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
+                                                                            className="px-5 py-2.5 text-[11px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-xl shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-2"
+                                                                        >
+                                                                            <DocumentCheckIcon className="w-4 h-4" />
+                                                                            View Details
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </td>
                                                         </tr>

@@ -66,6 +66,22 @@ class DocumentController extends Controller
     }
 
     /**
+     * Get persistent submission history from logs
+     */
+    public function history(Request $request)
+    {
+        // Only show 'Processed' and 'Issued' actions for the Submission History tab
+        $logs = DB::table('document_history_logs')
+            ->whereIn('action', ['Processed', 'Issued'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        return response()->json([
+            'data' => $logs
+        ]);
+    }
+
+    /**
      * Create new document
      */
     public function store(Request $request)
@@ -145,9 +161,14 @@ class DocumentController extends Controller
         DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata, file_data, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
             [$originalName, $docType, date('m/d/Y'), $size, 'Pending', null, $personName, $barangay, $fileInfo, $fileContent, $encodedBy]);
 
+        $newId = DB::getPdo()->lastInsertId();
+        
+        // Log history
+        $this->logHistory($newId, 'Uploaded');
+
         return response()->json([
             'success' => true,
-            'id' => DB::getPdo()->lastInsertId(),
+            'id' => $newId,
             'filename' => $filename,
             'originalName' => $originalName,
             'size' => $size,
@@ -177,16 +198,36 @@ class DocumentController extends Controller
      */
     public function quickApprove(Request $request, $id)
     {
-        $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
-        if (count($doc) === 0) return response()->json(['error' => 'Document not found'], 404);
+        $docData = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$id]);
+        if (!$docData) return response()->json(['error' => 'Document not found'], 404);
         
-        $document = $doc[0];
-        $fields = json_decode($document->extracted_fields, true) ?? [];
-        $personName = $fields['full_name'] ?? $fields['husbands_name'] ?? $document->name;
+        $fields = json_decode($docData->extracted_fields, true) ?? [];
         $barangay = $fields['barangay'] ?? '';
-        $detectedType = $document->detected_type ?: $document->type;
+        $detectedType = $docData->detected_type ?: $docData->type;
         
-        return $this->performSave($request, $id, $fields, $document->ocr_text, $personName, $barangay, 'Processed', false, $detectedType);
+        // Build personName from split fields
+        $personName = $this->buildFullName($fields, $detectedType) ?: $docData->name;
+        
+        return $this->performSave($request, $id, $fields, $docData->ocr_text, $personName, $barangay, 'Processed', false, $detectedType);
+    }
+
+    private function buildFullName($fields, $type)
+    {
+        if ($type === 'marriage') {
+            $h = trim(($fields['husband_last_name'] ?? '') . ', ' . ($fields['husband_first_name'] ?? '') . ' ' . ($fields['husband_middle_name'] ?? '') . ' ' . ($fields['husband_suffix'] ?? ''));
+            $w = trim(($fields['wife_last_name'] ?? '') . ', ' . ($fields['wife_first_name'] ?? '') . ' ' . ($fields['wife_middle_name'] ?? '') . ' ' . ($fields['wife_suffix'] ?? ''));
+            return trim("$h & $w", " &");
+        }
+        
+        // Default for Birth/Death
+        $last = $fields['last_name'] ?? '';
+        $first = $fields['first_name'] ?? '';
+        $middle = $fields['middle_name'] ?? '';
+        $suffix = $fields['suffix'] ?? '';
+        
+        if (!$last && !$first) return null;
+        
+        return trim("$last, $first $middle $suffix");
     }
 
     /**
@@ -194,7 +235,13 @@ class DocumentController extends Controller
      */
     private function performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType = null)
     {
-        try {
+        // Re-calculate personName if it wasn't explicitly provided (safety for the main update call)
+        if (empty($personName)) {
+            $personName = $this->buildFullName($extractedFields, $detectedType);
+        }
+
+        return DB::transaction(function () use ($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType) {
+            try {
             // Get current user encoded_by logic based on custom session setup
             $userId = $request->session()->get('user_id');
             $user = $userId ? \App\Models\User::find($userId) : null;
@@ -215,8 +262,8 @@ class DocumentController extends Controller
                 ]
             );
 
-            // --- Automatically inject or UPDATE in Issuances (Master Registry) if Processed ---
-            if ($status === 'Processed') {
+            // --- Automatically inject or UPDATE in Issuances (Master Registry) if Processed or Issued ---
+            if ($status === 'Processed' || $status === 'Issued') {
                 // 1. Check if a Master Record already exists for this document
                 $existing = DB::select("SELECT id, certNumber FROM issuances WHERE document_id = ?", [$id]);
                 
@@ -245,8 +292,10 @@ class DocumentController extends Controller
                         $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
                         $year = date('Y');
                         
-                        $results = DB::select("SELECT certNumber FROM issuances WHERE type = ? AND certNumber LIKE ? ORDER BY id DESC LIMIT 1", 
-                            [$docType, $prefix . '-' . $year . '%']);
+                        // Check for the maximum existing number with this prefix/year across ALL types to prevent collisions
+                        $pattern = $prefix . '-' . $year . '-%';
+                        $results = DB::select("SELECT certNumber FROM issuances WHERE certNumber LIKE ? ORDER BY certNumber DESC LIMIT 1", 
+                            [$pattern]);
                         
                         $nextNum = 1;
                         if (count($results) > 0) {
@@ -266,8 +315,16 @@ class DocumentController extends Controller
                 }
             }
 
+            // Log history for the save action
+            $this->logHistory($id, $status, [
+                'person_name' => $personName,
+                'barangay' => $barangay,
+                'type' => $detectedType
+            ]);
+
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
+            DB::rollBack();
             \Log::error("Document Save/Approve Error: " . $e->getMessage(), [
                 'id' => $id,
                 'trace' => $e->getTraceAsString()
@@ -277,13 +334,17 @@ class DocumentController extends Controller
                 'error' => 'System sync failure: ' . $e->getMessage()
             ], 500);
         }
-    }
+    });
+}
 
     /**
      * Delete document
      */
     public function destroy($id)
     {
+        // Log deletion before soft-deleting
+        $this->logHistory($id, 'Deleted');
+
         // Soft delete from database
         DB::update("UPDATE documents SET deleted_at = NOW() WHERE id = ?", [$id]);
         
@@ -395,5 +456,50 @@ class DocumentController extends Controller
         return response($doc->ocr_text)
             ->header('Content-Type', 'text/plain')
             ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    /**
+     * Helper to log document activity persistently
+     */
+    private function logHistory($id, $action, $overrides = [])
+    {
+        try {
+            // Select ONLY non-binary columns to prevent UTF-8 encoding issues in logs/exceptions
+            $doc = DB::selectOne("SELECT id, name, personName, type, detected_type, barangay, encoded_by FROM documents WHERE id = ?", [$id]);
+            if (!$doc) return;
+
+            $userId = request()->session()->get('user_id');
+            $user = $userId ? \App\Models\User::find($userId) : null;
+            $encodedBy = $user ? $user->name : ($doc->encoded_by ?? 'System');
+
+            $data = [
+                'filename'    => $overrides['filename'] ?? $doc->name,
+                'person_name' => $overrides['person_name'] ?? $doc->personName,
+                'type'        => $overrides['type'] ?? ($doc->detected_type ?: $doc->type),
+                'barangay'    => $overrides['barangay'] ?? $doc->barangay,
+                'encoded_by'  => $encodedBy,
+                'details'     => json_encode($overrides['details'] ?? []),
+                'updated_at'  => now()
+            ];
+
+            // Check if this action for this document already exists to prevent duplication
+            $exists = DB::table('document_history_logs')
+                ->where('document_id', $id)
+                ->where('action', $action)
+                ->first();
+
+            if ($exists) {
+                DB::table('document_history_logs')
+                    ->where('id', $exists->id)
+                    ->update($data);
+            } else {
+                $data['document_id'] = $id;
+                $data['action']      = $action;
+                $data['created_at']  = now();
+                DB::table('document_history_logs')->insert($data);
+            }
+        } catch (\Exception $e) {
+            \Log::error("Failed to log document history: " . $e->getMessage());
+        }
     }
 }

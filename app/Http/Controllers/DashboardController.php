@@ -32,8 +32,8 @@ class DashboardController extends Controller
         $pendingIssuancesResult = DB::select("SELECT COUNT(*) as count FROM issuances WHERE (status = 'Pending' OR status = 'pending') AND deleted_at IS NULL");
         $pendingIssuances = $pendingIssuancesResult[0]->count ?? 0;
 
-        // 2. Document Types Distribution (Only Processed docs)
-        $docTypes = DB::select("SELECT type, COUNT(*) as count FROM documents WHERE (status = 'processed' OR status = 'Processed') AND deleted_at IS NULL GROUP BY type");
+        // 2. Document Types Distribution (Official Registry Only)
+        $docTypes = DB::select("SELECT type, COUNT(*) as count FROM issuances WHERE deleted_at IS NULL GROUP BY type");
         $chartData = [
             'labels' => [],
             'data' => []
@@ -51,21 +51,22 @@ class DashboardController extends Controller
             ];
         }
 
-        // 3. Process Status (Pipeline overview)
-        $failedDocsResult = DB::select("SELECT COUNT(*) as count FROM documents WHERE (status = 'failed' OR status = 'Failed') AND deleted_at IS NULL");
-        $failedDocs = $failedDocsResult[0]->count ?? 0;
+        // 3. Processing Status (Registry Lifecycle - Official Data Only)
+        $completeIssuances = DB::table('issuances')->whereNull('deleted_at')->count();
+        $pendingIssuances = DB::table('issuances')->whereIn('status', ['pending', 'Pending'])->whereNull('deleted_at')->count();
+        $failedIssuances = DB::table('issuances')->whereIn('status', ['failed', 'Failed'])->whereNull('deleted_at')->count();
 
         $processStatus = [
-            'labels' => ['Processed', 'Pending OCR', 'Failed'],
+            'labels' => ['Complete', 'In Queue', 'Action Needed'],
             'data' => [
-                (int) $processedDocs,
-                (int) $pendingDocs,
-                (int) $failedDocs
+                (int) $completeIssuances,
+                (int) $pendingIssuances,
+                (int) $failedIssuances
             ]
         ];
 
-        // 4. Monthly Processing Trend (Last 6 Months - Approved Only)
-        $monthlyUploads = [];
+        // 4. Monthly Growth Trend (Tracking Official Registry Records)
+        $monthlyRegistrations = [];
         $months = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = now()->subMonths($i);
@@ -75,18 +76,17 @@ class DashboardController extends Controller
             $start = $month->copy()->startOfMonth();
             $end = $month->copy()->endOfMonth();
             
-            $count = DB::table('documents')
-                ->where('status', 'Processed')
+            $count = DB::table('issuances')
                 ->whereNull('deleted_at')
                 ->whereBetween('created_at', [$start, $end])
                 ->count();
             
-            $monthlyUploads[] = $count;
+            $monthlyRegistrations[] = $count;
         }
 
         $trendChart = [
             'labels' => $months,
-            'data' => $monthlyUploads
+            'data' => $monthlyRegistrations
         ];
 
         // 5. Geographic Distribution (Replacing simulated Accuracy with real Barangay data)

@@ -47,17 +47,85 @@ export const DataProvider = ({ children }) => {
         return cached ? JSON.parse(cached) : [];
     });
 
+    // ── State for History Logs ───────────────────────────────────────────────
+    const [history, setHistory] = useState(() => {
+        const cached = sessionStorage.getItem('civicore_history');
+        return cached ? JSON.parse(cached) : [];
+    });
+
     const [loading, setLoading] = useState({
         stats: !sessionStorage.getItem('civicore_stats'),
         documents: !sessionStorage.getItem('civicore_documents'),
-        issuances: !sessionStorage.getItem('civicore_issuances')
+        issuances: !sessionStorage.getItem('civicore_issuances'),
+        history: !sessionStorage.getItem('civicore_history')
     });
 
     const lastFetch = useRef({
         stats: 0,
         documents: 0,
-        issuances: 0
+        issuances: 0,
+        history: 0
     });
+
+    // ── Background Task Management ──────────────────────────────────────────
+    const [backgroundTasks, setBackgroundTasks] = useState([]);
+    const [undoableTasks, setUndoableTasks] = useState([]);
+
+    const runBackgroundTask = useCallback(async (name, actionFn, options = {}) => {
+        // High-precision ID to prevent state-update collisions
+        const taskId = `${options.id || Math.random().toString(36).substring(2, 9)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        
+        try {
+            const result = await actionFn();
+            
+            // Only show toast if it was successful AND not silent
+            if (result && result.success !== false && !options.silent) {
+                const newTask = {
+                    id: taskId,
+                    name,
+                    status: 'success',
+                    type: options.type,
+                    message: result.message,
+                    timestamp: new Date(),
+                    ...options.meta
+                };
+
+                // Add to background tasks for the toast
+                setBackgroundTasks(prev => {
+                    if (prev.some(t => t.id === taskId)) return prev;
+                    return [...prev, newTask];
+                });
+
+                // Auto-remove toast
+                setTimeout(() => {
+                    setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));
+                }, 4000);
+            }
+            return result;
+        } catch (err) {
+            console.error(`Task ${name} failed:`, err);
+            
+            // ALWAYS show error toasts even if the task was otherwise silent
+            const errorTask = {
+                id: taskId,
+                name,
+                status: 'error',
+                message: err.message || 'Operation failed',
+                timestamp: new Date()
+            };
+
+            setBackgroundTasks(prev => [...prev, errorTask]);
+            
+            setTimeout(() => {
+                setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));
+            }, 6000);
+            throw err;
+        }
+    }, []);
+
+    const clearUndoableTask = useCallback((taskId) => {
+        setUndoableTasks(prev => prev.filter(t => t.id !== taskId));
+    }, []);
 
     // ── Fetching Logic ────────────────────────────────────────────────────────
     
@@ -151,36 +219,66 @@ export const DataProvider = ({ children }) => {
         }
     }, []);
 
+    const refreshHistory = useCallback(async (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastFetch.current.history < 5000) return;
+
+        try {
+            const response = await fetch('/api/documents/history', { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to fetch history');
+            const data = await response.json();
+            
+            if (data.data) {
+                setHistory(data.data);
+                sessionStorage.setItem('civicore_history', JSON.stringify(data.data));
+            }
+            lastFetch.current.history = now;
+        } catch (err) {
+            console.error('Error refreshing history:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, history: false }));
+        }
+    }, []);
+
     // ── Global Polling ────────────────────────────────────────────────────────
     useEffect(() => {
         // Refresh everything on mount
         refreshStats(true);
         refreshDocuments(true);
         refreshIssuances(true);
+        refreshHistory(true);
 
         // Set up polling (every 15 seconds)
         const interval = setInterval(() => {
             refreshStats();
             refreshDocuments();
             refreshIssuances();
+            refreshHistory();
         }, 15000);
 
         return () => clearInterval(interval);
-    }, [refreshStats, refreshDocuments, refreshIssuances]);
+    }, [refreshStats, refreshDocuments, refreshIssuances, refreshHistory]);
 
     const value = {
         stats,
         documents,
         issuances,
+        history,
         loading,
+        backgroundTasks,
+        undoableTasks,
+        runBackgroundTask,
+        clearUndoableTask,
         refreshStats,
         refreshDocuments,
         refreshIssuances,
+        refreshHistory,
         // Helper to refresh everything at once (e.g. after a mutation)
         refreshAll: () => {
             refreshStats(true);
             refreshDocuments(true);
             refreshIssuances(true);
+            refreshHistory(true);
         }
     };
 

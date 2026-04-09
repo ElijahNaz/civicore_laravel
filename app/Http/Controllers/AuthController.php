@@ -88,7 +88,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'userId'          => 'required|integer',
             'currentPassword' => 'required|string',
-            'newPassword'     => 'required|string|min:6',
+            'newPassword'     => 'required|string|min:7',
         ]);
 
         if ($validator->fails()) {
@@ -155,6 +155,7 @@ class AuthController extends Controller
             'name'        => $user->name,
             'email'       => $user->email,
             'role'        => $user->role,
+            'avatar'      => $user->avatar ? 'data:image/png;base64,' . base64_encode($user->avatar) : null,
             'permissions' => $user->permissions ?? [],
             'created_at'  => $user->created_at,
         ];

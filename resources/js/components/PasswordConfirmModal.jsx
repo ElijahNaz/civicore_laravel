@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LockClosedIcon, XMarkIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon, XMarkIcon, ShieldCheckIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
 const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) => {
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -57,8 +58,8 @@ const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) =
                         </div>
                         <h3 className="text-lg font-bold text-white">{title || 'Confirm Security Password'}</h3>
                     </div>
-                    <button onClick={onCancel} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
-                        <XMarkIcon className="w-6 h-6" />
+                    <button onClick={onCancel} className="text-slate-400 hover:text-white transition-all cursor-pointer group p-1.5 hover:bg-white/5 rounded-full">
+                        <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                     </button>
                 </div>
 
@@ -74,15 +75,24 @@ const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) =
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Your Password</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                required
-                                autoFocus
-                                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    autoFocus
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-sans pr-10"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                                </button>
+                            </div>
                             {error && <p className="text-xs font-bold text-rose-500 mt-2 flex items-center gap-1">⚠ {error}</p>}
                         </div>
 
