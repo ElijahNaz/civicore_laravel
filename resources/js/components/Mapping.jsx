@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    MapPinIcon, 
-    DocumentChartBarIcon, 
+import {
+    MapPinIcon,
+    DocumentChartBarIcon,
     ArrowPathIcon,
     ArrowDownTrayIcon,
     TableCellsIcon,
@@ -22,20 +22,20 @@ const Mapping = () => {
     const mapRef = useRef(null);
     const chartRef = useRef(null);
     const canvasRef = useRef(null);
-    const { 
-        issuances: apiData, 
-        documents: docsData, 
+    const {
+        issuances: apiData,
+        documents: docsData,
         loading: dataLoading,
         refreshAll
     } = useData();
-    
+
 
     const isLoading = dataLoading.issuances || dataLoading.documents;
     const [activeFilter, setActiveFilter] = useState('all');
     const [hoveredBrgy, setHoveredBrgy] = useState(null);
     const [showHeatmap, setShowHeatmap] = useState(false);
     const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
-    
+
     // Maintain references to markers for interactivity
     const markersRef = useRef({});
 
@@ -115,7 +115,7 @@ const Mapping = () => {
                 { coords: [14.3438, 120.7808], name: 'Timalan Balsahan' },
                 { coords: [14.33699, 120.7790], name: 'Timalan Concepcion' }
             ];
-            
+
             const brgyCounts = {};
             let birthCount = 0;
             let deathCount = 0;
@@ -168,7 +168,7 @@ const Mapping = () => {
                     }
                 }
             });
-            
+
             // Match TOTAL UPLOADED to the sum of all categorized Master Registry records
             const totalDocs = apiData.length;
 
@@ -184,7 +184,7 @@ const Mapping = () => {
 
             barangaysForMap.forEach(barangay => {
                 const total = barangay.births + barangay.deaths + barangay.marriages;
-                
+
                 if (showHeatmap) {
                     // Heatmap mode: Large soft circles
                     if (total > 0) {
@@ -209,7 +209,7 @@ const Mapping = () => {
                     }
 
                     const isHovered = hoveredBrgy === barangay.name;
-                    
+
                     const pinIcon = L.divIcon({
                         className: 'bg-transparent border-none',
                         html: `<div class="relative ${isHovered ? 'scale-125 z-[1000]' : ''} transition-all duration-300">
@@ -244,7 +244,7 @@ const Mapping = () => {
                             </div>
                         </div>
                     `, { closeButton: false });
-                    
+
                     markersRef.current[barangay.name] = marker;
                 }
             });
@@ -286,11 +286,11 @@ const Mapping = () => {
             p.status,
             p.encoded_by || 'System'
         ]);
-        
-        let csvContent = "data:text/csv;charset=utf-8," 
+
+        let csvContent = "data:text/csv;charset=utf-8,"
             + headers.join(",") + "\n"
             + rows.map(e => e.join(",")).join("\n");
-            
+
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -305,7 +305,7 @@ const Mapping = () => {
         if (marker && mapRef.current) {
             mapRef.current.setView(marker.getLatLng(), 15, { animate: true });
             marker.openPopup();
-            
+
             // Temporary pulse effect class could be added here if CSS is defined
             setHoveredBrgy(brgyName);
             setTimeout(() => setHoveredBrgy(null), 3000);
@@ -319,7 +319,7 @@ const Mapping = () => {
     };
 
 
-    const filteredPrints = apiData.filter(print => 
+    const filteredPrints = apiData.filter(print =>
         activeFilter === 'all' || (print.type || '').toLowerCase().includes(activeFilter)
     );
 
@@ -337,7 +337,7 @@ const Mapping = () => {
 
     // Render layout immediately, skeletons for data sections
     return (
-        <motion.div 
+        <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
@@ -353,7 +353,7 @@ const Mapping = () => {
                     <p className="text-slate-500 font-medium text-sm mt-1">Live distribution of civil documents across Naic barangays.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button 
+                    <button
                         onClick={exportToCSV}
                         disabled={isLoading || filteredPrints.length === 0}
                         className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all cursor-pointer active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
@@ -361,11 +361,11 @@ const Mapping = () => {
                         <ArrowDownTrayIcon className="w-4 h-4 text-emerald-500" />
                         Export CSV
                     </button>
-                    <button 
-                        onClick={() => fetchData()} 
+                    <button
+                        onClick={() => fetchData()}
                         className="flex items-center gap-2 bg-[#0f172a] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all cursor-pointer active:scale-95 group"
                     >
-                        <ArrowPathIcon className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${isLoading ? 'animate-spin' : ''}`} /> 
+                        <ArrowPathIcon className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${isLoading ? 'animate-spin' : ''}`} />
                         Refresh
                     </button>
                 </div>
@@ -406,19 +406,19 @@ const Mapping = () => {
 
             {/* Map and Charts Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Map Section - 2 columns */}
                 <motion.div variants={itemVariants} className="lg:col-span-2 relative bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 p-1 flex flex-col overflow-hidden h-[450px]">
                     {/* Floating Map Controls */}
                     <div className="absolute top-4 right-4 z-[1001] flex flex-col gap-2">
-                        <button 
+                        <button
                             onClick={() => setShowHeatmap(!showHeatmap)}
                             className={`p-2.5 rounded-xl shadow-lg border transition-all cursor-pointer ${showHeatmap ? 'bg-rose-500 text-white border-rose-400' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                             title={showHeatmap ? "Switch to Pin View" : "Switch to Heatmap View"}
                         >
                             <FireIcon className="w-5 h-5" />
                         </button>
-                        <button 
+                        <button
                             onClick={resetMapView}
                             className="bg-white p-2.5 rounded-xl text-slate-600 shadow-lg border border-slate-200 hover:bg-slate-50 transition-all cursor-pointer"
                             title="Reset Map View"
@@ -442,6 +442,10 @@ const Mapping = () => {
                             <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
                                 <span className="text-[10px] font-bold text-slate-700">Marriages</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#0f172a]"></span>
+                                <span className="text-[10px] font-bold text-slate-700">No Records</span>
                             </div>
                         </div>
                     </div>
@@ -477,18 +481,17 @@ const Mapping = () => {
                         <h3 className="text-lg font-bold text-slate-800">Recent Document Prints</h3>
                         <p className="text-xs text-slate-500 mt-1">Track physical issuance logs</p>
                     </div>
-                    
+
                     {/* Filter Pills */}
                     <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
                         {['all', 'birth', 'death', 'marriage'].map(type => (
                             <button
                                 key={type}
                                 onClick={() => setActiveFilter(type)}
-                                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                                    activeFilter === type 
-                                        ? 'bg-white text-slate-800 shadow-sm' 
+                                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${activeFilter === type
+                                        ? 'bg-white text-slate-800 shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                    }`}
                             >
                                 {type}
                             </button>
@@ -524,8 +527,8 @@ const Mapping = () => {
                                 </tr>
                             ) : (
                                 filteredPrints.map((print, index) => (
-                                    <tr 
-                                        key={index} 
+                                    <tr
+                                        key={index}
                                         onMouseEnter={() => setHoveredBrgy(print.barangay)}
                                         onMouseLeave={() => setHoveredBrgy(null)}
                                         className={`hover:bg-slate-50 transition-colors text-xs group/row ${hoveredBrgy === print.barangay ? 'bg-slate-50' : ''}`}
@@ -537,11 +540,10 @@ const Mapping = () => {
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
-                                                print.type?.toLowerCase().includes('birth') ? 'bg-[#d4a574]/10 text-[#d4a574] border-[#d4a574]/20' :
-                                                print.type?.toLowerCase().includes('death') ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                            }`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${print.type?.toLowerCase().includes('birth') ? 'bg-[#d4a574]/10 text-[#d4a574] border-[#d4a574]/20' :
+                                                    print.type?.toLowerCase().includes('death') ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                                        'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                                }`}>
                                                 {print.type}
                                             </span>
                                         </td>
@@ -571,14 +573,14 @@ const Mapping = () => {
                                         </td>
                                         <td className="p-4 text-right pr-6">
                                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                                <button 
+                                                <button
                                                     onClick={() => locateBarangay(print.barangay)}
                                                     className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#d4a574] transition-all cursor-pointer"
                                                     title="Locate on Map"
                                                 >
                                                     <MagnifyingGlassIcon className="w-4 h-4" />
                                                 </button>
-                                                <a 
+                                                <a
                                                     href={`/api/documents/view/${print.document_id || print.id}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"

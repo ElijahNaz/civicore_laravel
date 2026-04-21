@@ -10,6 +10,10 @@ use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\OcrController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\PublicController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\VerificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,6 +26,10 @@ use App\Http\Controllers\ActivityLogController;
 */
 
 Route::middleware('web')->group(function () {
+
+    // ── Public APIs (No Auth required, despite using web session middleware bounds)
+    Route::get('/public/config',    [PublicController::class, 'config']);
+    Route::get('/public/stats',     [PublicController::class, 'stats']);
 
     // ── Auth ───────────────────────────────────────────────────────────────
     Route::post('/login',           [AuthController::class, 'login']);
@@ -41,6 +49,17 @@ Route::middleware('web')->group(function () {
 
     // ── Dashboard ──────────────────────────────────────────────────────────
     Route::get('/dashboard/stats',      [DashboardController::class, 'stats']);
+
+    // ── Settings & Announcements ───────────────────────────────────────────
+    Route::post('/settings',            [SettingController::class, 'update']);
+    Route::get('/announcements',        [AnnouncementController::class, 'index']);
+    Route::post('/announcements',       [AnnouncementController::class, 'store']);
+    Route::put('/announcements/{id}',   [AnnouncementController::class, 'update']);
+    Route::delete('/announcements/{id}',[AnnouncementController::class, 'destroy']);
+
+    // ── Email Verification ─────────────────────────────────────────────────────
+    Route::post('/verification/send',   [VerificationController::class, 'send']);
+    Route::post('/verification/verify', [VerificationController::class, 'verify']);
 
     // ── Documents ──────────────────────────────────────────────────────────
     Route::get('/documents',                    [DocumentController::class, 'index']);

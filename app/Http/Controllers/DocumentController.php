@@ -117,7 +117,7 @@ class DocumentController extends Controller
     public function upload(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|max:10240', // 10MB max
+            'file' => 'required|file|max:10240|mimes:pdf,png,jpg,jpeg,tiff,bmp,docx,doc,txt', // 10MB max
             'docType' => 'nullable|string',
             'personName' => 'nullable|string',
             'barangay' => 'nullable|string',
@@ -148,7 +148,7 @@ class DocumentController extends Controller
         // Get file size
         $size = number_format($file->getSize() / (1024 * 1024), 2) . ' MB';
 
-        // Save file info metadata (without filesystem path)
+        // Save file info metadata
         $fileInfo = json_encode([
             'originalName' => $originalName,
             'filename' => $filename,
@@ -157,12 +157,23 @@ class DocumentController extends Controller
             'storedIn' => 'database'
         ]);
 
-        // Save to database with file content and encoded_by
-        DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata, file_data, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            [$originalName, $docType, date('m/d/Y'), $size, 'Pending', null, $personName, $barangay, $fileInfo, $fileContent, $encodedBy]);
+        // Save to database using Query Builder (Safer for large BLOBs/binary data)
+        $newId = DB::table('documents')->insertGetId([
+            'name' => $originalName,
+            'type' => $docType,
+            'date' => date('m/d/Y'),
+            'size' => $size,
+            'status' => 'Pending',
+            'previewData' => null,
+            'personName' => $personName,
+            'barangay' => $barangay,
+            'metadata' => $fileInfo,
+            'file_data' => $fileContent,
+            'encoded_by' => $encodedBy,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        $newId = DB::getPdo()->lastInsertId();
-        
         // Log history
         $this->logHistory($newId, 'Uploaded');
 

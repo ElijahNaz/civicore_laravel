@@ -11,7 +11,9 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     protected $fillable = [
-        'name',
+        'first_name',
+        'middle_name',
+        'last_name',
         'email',
         'password',
         'role',
@@ -30,6 +32,13 @@ class User extends Authenticatable
             'password'          => 'hashed',
             'permissions'       => 'array',
         ];
+    }
+
+    protected $appends = ['name'];
+
+    public function getNameAttribute()
+    {
+        return trim("{$this->first_name} {$this->last_name}");
     }
 
     // ─── Role helpers ────────────────────────────────────────────────────────

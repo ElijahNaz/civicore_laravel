@@ -8,6 +8,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import easyocr
 from PIL import Image
+try:
+    import docx
+except ImportError:
+    docx = None
 
 app = Flask(__name__)
 CORS(app)
@@ -192,16 +196,24 @@ def process_ocr():
 
     print(f"Processing OCR for: {file_path}")
     ext = Path(file_path).suffix.lower()
-    
-    # Simple image processing for now (PDF handled by converting in server if needed)
-    # But for Option B, the worker usually converts PDF to images anyway.
-    # Let's handle image directly for speed.
-    results = _reader.readtext(file_path)
+    avg_conf = 0
     lines, scores = [], []
-    for (_bbox, text, prob) in results:
-        if text.strip():
-            lines.append(text.strip())
-            scores.append(round(prob, 3))
+
+    if ext == '.docx' and docx:
+        print(f"Extracting text from DOCX: {file_path}")
+        try:
+            doc = docx.Document(file_path)
+            lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            scores = [1.0] * len(lines) # Perfect confidence for digital text
+        except Exception as e:
+            return jsonify({"success": False, "error": f"DOCX extraction failed: {str(e)}"}), 500
+    else:
+        # Simple image processing for now
+        results = _reader.readtext(file_path)
+        for (_bbox, text, prob) in results:
+            if text.strip():
+                lines.append(text.strip())
+                scores.append(round(prob, 3))
     
     full_text = '\n'.join(lines)
     avg_conf = round(sum(scores) / len(scores), 3) if scores else 0

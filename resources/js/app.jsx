@@ -12,6 +12,7 @@ import Documents        from './components/Documents.jsx';
 import Issuances        from './components/Issuances.jsx';
 import Mapping          from './components/Mapping.jsx';
 import Accounts         from './components/Accounts.jsx';
+import Announcements    from './components/Announcements.jsx';
 import Layout           from './components/Layout.jsx';
 import PublicLayout     from './components/PublicLayout.jsx';
 import AboutPortal      from './components/AboutPortal.jsx';
@@ -76,9 +77,9 @@ function App() {
                         <Route path="/login"    element={<Login />} />
 
                         {/* ── Protected ──────────────────────────────────────── */}
-                        {/* Dashboard — Admin + Staff */}
+                        {/* Dashboard — Admin + SuperAdmin */}
                         <Route path="/dashboard" element={
-                            <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
                                 <Layout><Dashboard /></Layout>
                             </ProtectedRoute>
                         } />
@@ -90,17 +91,24 @@ function App() {
                             </ProtectedRoute>
                         } />
 
-                        {/* Issuances — Admin + Staff */}
+                        {/* Issuances — Admin + SuperAdmin */}
                         <Route path="/issuances" element={
-                            <ProtectedRoute allowedRoles={['Admin', 'Staff']}>
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
                                 <Layout><Issuances /></Layout>
                             </ProtectedRoute>
                         } />
 
-                        {/* Mapping — Admin only */}
+                        {/* Mapping — SuperAdmin only */}
                         <Route path="/mapping" element={
-                            <ProtectedRoute allowedRoles={['Admin']}>
+                            <ProtectedRoute allowedRoles={['SuperAdmin']}>
                                 <Layout><Mapping /></Layout>
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Announcements — Admin + SuperAdmin */}
+                        <Route path="/announcements" element={
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
+                                <Layout><Announcements /></Layout>
                             </ProtectedRoute>
                         } />
 

@@ -7,7 +7,7 @@ export default function PublicLayout({ children }) {
     
     const navLinks = [
         { name: 'Home', path: '/' },
-        { name: 'About Portal', path: '/about' },
+        { name: 'About', path: '/about' },
         { name: 'Digital Services', path: '/services' },
         { name: 'Contact Directory', path: '/contact' }
     ];

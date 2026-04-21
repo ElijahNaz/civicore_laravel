@@ -3,12 +3,12 @@ import { motion } from 'framer-motion';
 
 export default function DigitalServices() {
     const services = [
-        { title: 'Birth Registry', icon: '👶', desc: 'Secure management of birth records with automated certificate numbering and easy extraction.' },
-        { title: 'Marriage Files', icon: '💍', desc: 'Comprehensive digital archiving of marriage contracts, legal documents, and official registrations.' },
-        { title: 'Death Records', icon: '🕊️', desc: 'Efficient monitoring, storage, and issuance of municipal death certificates for the local community.' },
-        { title: 'Document OCR', icon: '🔍', desc: 'Advanced text extraction from scanned physical documents to enable searchable digital archives.' },
-        { title: 'Public Mapping', icon: '🗺️', desc: 'Geospatial visualization of municipal data to support demographic and urban planning.' },
-        { title: 'Account Verification', icon: '🔐', desc: 'Multi-level authentication for municipal staff to ensure secure access to sensitive vital records.' }
+        { title: 'Birth Registration', icon: '👶', desc: 'Processing and archiving of birth certificates to establish the fundamental legal identity of every citizen.' },
+        { title: 'Marriage Licensing', icon: '💍', desc: 'Filing of marriage contracts and issuances of official certifications for legal matrimonial validation.' },
+        { title: 'Death Certification', icon: '🕊️', desc: 'Secure administration of death records, ensuring proper legal documentation for the deceased.' },
+        { title: 'Timely Issuances', icon: '📜', desc: 'Providing authenticated copies of civil registry documents to citizens for official and legal purposes.' },
+        { title: 'Demographic Archiving', icon: '🗺️', desc: 'Maintaining the official local database of life events to support municipal planning and statistics.' },
+        { title: 'Records Verification', icon: '🔐', desc: 'Authenticating historical and contemporary vital records to confirm citizen identities and rights.' }
     ];
 
     return (
@@ -28,15 +28,15 @@ export default function DigitalServices() {
                         transition={{ delay: 0.1 }}
                         className="text-5xl font-black text-white"
                     >
-                        Streamlined Digital Solutions
+                        Civil Registry Services
                     </motion.h2>
                     <motion.p 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
-                        className="text-slate-400 max-w-2xl mx-auto"
+                        className="text-slate-400 max-w-2xl mx-auto text-justify"
                     >
-                        Modernizing essential civic services through technology. Our suite of digital tools is built for speed, accuracy, and absolute reliability.
+                        Dedicated to serving the public interest, our office facilitates the legal recording of vital events. We ensure every milestone in a citizen's life is properly documented, securely archived, and readily authenticated.
                     </motion.p>
                 </div>
                 

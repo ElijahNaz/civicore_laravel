@@ -99,8 +99,8 @@ class AuthController extends Controller
         $targetId      = (int) $request->input('userId');
         $sessionUser   = User::find($sessionUserId);
 
-        // Only Admin can change another user's password
-        if ($sessionUser?->role !== 'Admin' && $sessionUserId !== $targetId) {
+        // Only SuperAdmin can change another user's password
+        if ($sessionUser?->role !== 'SuperAdmin' && $sessionUserId !== $targetId) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
@@ -153,6 +153,9 @@ class AuthController extends Controller
         return [
             'id'          => $user->id,
             'name'        => $user->name,
+            'first_name'  => $user->first_name,
+            'middle_name' => $user->middle_name,
+            'last_name'   => $user->last_name,
             'email'       => $user->email,
             'role'        => $user->role,
             'avatar'      => $user->avatar ? 'data:image/png;base64,' . base64_encode($user->avatar) : null,

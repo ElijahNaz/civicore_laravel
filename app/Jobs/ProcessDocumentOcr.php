@@ -59,7 +59,12 @@ class ProcessDocumentOcr implements ShouldQueue
         // Determine extension
         $metadata = json_decode($doc->metadata, true);
         $mimetype = $metadata['mimetype'] ?? 'image/jpeg';
-        $extension = str_contains($mimetype, 'pdf') ? 'pdf' : 'jpg';
+        
+        $extension = 'jpg';
+        if (str_contains($mimetype, 'pdf')) $extension = 'pdf';
+        elseif (str_contains($mimetype, 'wordprocessingml') || str_contains($mimetype, 'msword')) $extension = 'docx';
+        elseif (str_contains($mimetype, 'png')) $extension = 'png';
+        elseif (str_contains($mimetype, 'tiff')) $extension = 'tiff';
 
         // Write to temp file for the Python server to read
         // (In a distributed system we'd send binary, but since it's local, path is faster)

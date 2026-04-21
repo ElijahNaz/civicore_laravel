@@ -13,28 +13,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Admin — full system access
+        // SuperAdmin — full system access
         User::create([
-            'name'     => 'Admin Officer',
+            'first_name' => 'SuperAdmin',
+            'last_name'  => 'Officer',
+            'email'    => 'superadmin@civicore.gov.ph',
+            'password' => Hash::make('superadmin2024'),
+            'role'     => 'SuperAdmin',
+        ]);
+
+        // Admin — internal employee, restricted to operational functions
+        User::create([
+            'first_name' => 'Admin',
+            'last_name'  => 'Officer',
             'email'    => 'admin@civicore.gov.ph',
             'password' => Hash::make('admin2024'),
             'role'     => 'Admin',
-        ]);
-
-        // Staff — internal employee, restricted to own account
-        User::create([
-            'name'     => 'Staff Member',
-            'email'    => 'staff@civicore.gov.ph',
-            'password' => Hash::make('staff2024'),
-            'role'     => 'Staff',
-        ]);
-
-        // User — external/civilian, restricted to own account
-        User::create([
-            'name'     => 'Civilian User',
-            'email'    => 'user@civicore.gov.ph',
-            'password' => Hash::make('user2024'),
-            'role'     => 'User',
         ]);
     }
 }

@@ -125,5 +125,53 @@ For convenience, a **One-Click Launcher** has been provided.
 
 ---
 
+## 📜 Final System Overhaul & Deployment Log
+
+The following features, fixes, and architectural refinements have been successfully implemented and verified:
+
+### 🏛️ UI/UX & Layout Consistency
+- **Standardized Aesthetics**: Unified icons, fonts, and sub-heading styles across the entire platform.
+- **Optimized Sidebar**: 
+  - Logout button relocated to the absolute bottom for better ergonomics.
+  - Sidebar fixed position logic implemented; scrolling main content no longer affects navigation visibility.
+- **Mapping Refinement**: 
+  - Pin Mapping Color (Black) added to signify missing meanings or zero-record barangays.
+  - Aligned mapping tooltips and interactivity.
+- **Performance**: Resolved "laggy" occurrences through requirement-based code optimization and background job offloading.
+
+### 🔐 Security & Account Management
+- **Verification Pipeline**: Integrated **Mailtrap** for robust Gmail/OTP verification testing.
+- **Strict Validation**: 
+  - Implemented Name validation logic.
+  - Enforced Minimum Password Requirements (One Capital, One Small, Number, Special Character).
+- **UI Sophistication**:
+  - Fixed "Set Password" eye icon alignment.
+  - Enhanced "System Role" dropdown with improved clickable aesthetics and carets.
+- **Role Simplification**: 
+  - Removed generic 'User' role.
+  - Defined strict boundaries: **Staff (Admin)** and **SuperAdmin (Former Admin)**.
+  - Standardized Role colors across Distribution and Matrix overviews.
+
+### 📊 Dashboard & Public Portal
+- **Dashboard Refinements**:
+  - Added decorative "Underline" to 'Breakdown by Type' for emphasis.
+  - Unified color coding for Marriage, Master Database, Birth, and Death certificates across Dashboard, Upload, and Mapping.
+- **Home Page Enhancements**:
+  - Implemented Real-Time stats labels: **PROCESSED** and **RESPONSE**.
+  - Added Admin-controlled **Announcement Section** for service availability alerts.
+- **Portal Content**:
+  - Justified "About Portal" text for premium typography.
+  - Renamed "About Portal" to **"About CiviCore"** with content focused specifically on the Civil Registry mission/vision.
+  - Added **"Vision of Civil Registry"** section.
+  - Standardized sub-heading consistency across About, Digital Services, and Contact Directory.
+
+---
+
+## ⚠️ Known Issues / Technical Debt
+- **Document Pipeline**: Document upload functionality and OCR processing are currently experiencing persistence issues. Data extraction is functional in the engine, but database saving requires a patch in the next cycle.
+- **Current Status**: "upload document doesnt work for some reason need to fix nextime"
+
+---
+
 ## License
 Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).

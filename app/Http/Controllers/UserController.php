@@ -34,7 +34,7 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        if ($actor->role !== 'Admin') {
+        if ($actor->role !== 'SuperAdmin') {
             // Non-admins only see themselves
             return response()->json([
                 'data' => [$this->formatUser($actor)],
@@ -83,7 +83,7 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        if ($actor->role !== 'Admin' && $actor->id != $id) {
+        if ($actor->role !== 'SuperAdmin' && $actor->id != $id) {
             return response()->json(['error' => 'Forbidden.'], 403);
         }
 
@@ -118,15 +118,17 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        if ($actor->role !== 'Admin') {
-            return response()->json(['error' => 'Only Admins can create accounts.'], 403);
+        if ($actor->role !== 'SuperAdmin') {
+            return response()->json(['error' => 'Only SuperAdmins can create accounts.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|email|unique:users,email',
-            'password' => 'required|string|min:7',
-            'role'     => 'required|in:Admin,Staff,User',
+            'first_name' => 'required|string|max:255',
+            'middle_name'=> 'nullable|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'email'      => 'required|email|unique:users,email',
+            'password'   => 'required|string|min:7',
+            'role'       => 'required|in:Admin,SuperAdmin',
         ]);
 
         if ($validator->fails()) {
@@ -134,10 +136,12 @@ class UserController extends Controller
         }
 
         $user = User::create([
-            'name'     => $request->input('name'),
-            'email'    => $request->input('email'),
-            'password' => Hash::make($request->input('password')),
-            'role'     => $request->input('role'),
+            'first_name' => $request->input('first_name'),
+            'middle_name'=> $request->input('middle_name'),
+            'last_name'  => $request->input('last_name'),
+            'email'      => $request->input('email'),
+            'password'   => Hash::make($request->input('password')),
+            'role'       => $request->input('role'),
         ]);
 
         return response()->json([
@@ -161,12 +165,12 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        if ($actor->role !== 'Admin') {
-            return response()->json(['error' => 'Only Admins can change roles.'], 403);
+        if ($actor->role !== 'SuperAdmin') {
+            return response()->json(['error' => 'Only SuperAdmins can change roles.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'role' => 'required|in:Admin,Staff,User',
+            'role' => 'required|in:Admin,SuperAdmin',
         ]);
 
         if ($validator->fails()) {
@@ -195,8 +199,8 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        // Only Admin can edit others. Non-admins only themselves.
-        if ($actor->role !== 'Admin' && $actor->id != $id) {
+        // Only SuperAdmin can edit others. Non-admins only themselves.
+        if ($actor->role !== 'SuperAdmin' && $actor->id != $id) {
             return response()->json(['error' => 'Forbidden.'], 403);
         }
 
@@ -207,14 +211,16 @@ class UserController extends Controller
 
         // Validation Rules
         $rules = [
-            'name'   => 'required|string|max:255',
-            'avatar' => 'nullable|string', // Base64 expected
+            'first_name' => 'required|string|max:255',
+            'middle_name'=> 'nullable|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'avatar'     => 'nullable|string', // Base64 expected
         ];
 
-        // Only Admin can change email and role
-        if ($actor->role === 'Admin') {
+        // Only SuperAdmin can change email and role
+        if ($actor->role === 'SuperAdmin') {
             $rules['email'] = 'required|email|unique:users,email,' . $id;
-            $rules['role']  = 'required|in:Admin,Staff,User';
+            $rules['role']  = 'required|in:Admin,SuperAdmin';
         }
 
         $validator = Validator::make($request->all(), $rules);
@@ -224,9 +230,11 @@ class UserController extends Controller
         }
 
         // Apply changes
-        $user->name = $request->input('name');
+        $user->first_name  = $request->input('first_name');
+        $user->middle_name = $request->input('middle_name');
+        $user->last_name   = $request->input('last_name');
         
-        if ($actor->role === 'Admin') {
+        if ($actor->role === 'SuperAdmin') {
             $user->email = $request->input('email');
             $user->role  = $request->input('role');
         }
@@ -267,7 +275,7 @@ class UserController extends Controller
             return response()->json(['error' => 'Unauthenticated.'], 401);
         }
 
-        if ($actor->role !== 'Admin' && $actor->id != $id) {
+        if ($actor->role !== 'SuperAdmin' && $actor->id != $id) {
             return response()->json(['error' => 'Forbidden.'], 403);
         }
 
@@ -288,6 +296,9 @@ class UserController extends Controller
         return [
             'id'          => $user->id,
             'name'        => $user->name,
+            'first_name'  => $user->first_name,
+            'middle_name' => $user->middle_name,
+            'last_name'   => $user->last_name,
             'email'       => $user->email,
             'role'        => $user->role,
             'avatar'      => $user->avatar ? 'data:image/png;base64,' . base64_encode($user->avatar) : null,

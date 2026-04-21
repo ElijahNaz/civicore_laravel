@@ -119,6 +119,7 @@ const Documents = () => {
     const [selectedDocType, setSelectedDocType] = useState('birth');
     const [dragging, setDragging] = useState(false);
     const [activeOcr, setActiveOcr] = useState(null); // { file, ocrResult }
+    const [uploadStatus, setUploadStatus] = useState(null); // 'success' | 'error'
     const [activeTab, setActiveTab] = useState('queue');
     const [queueSearch, setQueueSearch] = useState('');
     const [historySearch, setHistorySearch] = useState('');
@@ -158,15 +159,23 @@ const Documents = () => {
             const data = await res.json();
             if (data.success) {
                 refreshAll();
+                setUploadStatus('success');
                 return { success: true };
             }
+            setUploadStatus('error');
             throw new Error(data.error || 'Upload failed');
         }, { silent: true });
     }, [selectedDocType, refreshAll, runBackgroundTask]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        accept: { 'application/pdf': ['.pdf'], 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.tiff', '.bmp'] },
+        accept: {
+            'application/pdf': ['.pdf'],
+            'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.tiff', '.bmp'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+            'application/msword': ['.doc'],
+            'text/plain': ['.txt']
+        },
         multiple: false,
         onDragEnter: () => setDragging(true),
         onDragLeave: () => setDragging(false),
@@ -510,21 +519,31 @@ const Documents = () => {
 
                         <div className="space-y-2.5 mb-5">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Document Category</label>
-                            {docTypes.map(doc => (
-                                <div key={doc.type} onClick={() => setSelectedDocType(doc.type)}
-                                    className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border-2 ${selectedDocType === doc.type
-                                        ? 'border-[#d4a574] bg-[#d4a574]/5 shadow-sm'
-                                        : 'border-transparent bg-slate-50 hover:bg-slate-100'
-                                        }`}>
-                                    <div className={`text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm ${selectedDocType === doc.type ? 'ring-1 ring-[#d4a574]/30' : ''}`}>
-                                        {doc.icon}
+                            {docTypes.map(doc => {
+                                const tColors = {
+                                    birth: 'border-[#d4a574] bg-[#d4a574]/5 text-[#d4a574] ring-[#d4a574]/30',
+                                    death: 'border-rose-500 bg-rose-50 text-rose-500 ring-rose-500/30',
+                                    marriage: 'border-indigo-500 bg-indigo-50 text-indigo-500 ring-indigo-500/30'
+                                }[doc.type] || 'border-slate-500 bg-slate-50 text-slate-500 ring-slate-500/30';
+                                
+                                const isSelected = selectedDocType === doc.type;
+                                
+                                return (
+                                    <div key={doc.type} onClick={() => setSelectedDocType(doc.type)}
+                                        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border-2 ${isSelected
+                                            ? `${tColors.split(' ')[0]} ${tColors.split(' ')[1]} shadow-sm`
+                                            : 'border-transparent bg-slate-50 hover:bg-slate-100'
+                                            }`}>
+                                        <div className={`text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm ${isSelected ? `ring-1 ${tColors.split(' ')[3]}` : ''}`}>
+                                            {doc.icon}
+                                        </div>
+                                        <div>
+                                            <div className={`font-semibold text-sm ${isSelected ? tColors.split(' ')[2] : 'text-slate-700'}`}>{doc.name}</div>
+                                            <div className="text-xs text-slate-400">{doc.desc}</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div className={`font-semibold text-sm ${selectedDocType === doc.type ? 'text-[#d4a574]' : 'text-slate-700'}`}>{doc.name}</div>
-                                        <div className="text-xs text-slate-400">{doc.desc}</div>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         <div className="space-y-3">
@@ -536,8 +555,40 @@ const Documents = () => {
                                 <input {...getInputProps()} />
                                 <CloudArrowUpIcon className={`w-10 h-10 mb-2 ${isDragActive ? 'text-[#d4a574]' : 'text-slate-300'}`} />
                                 <p className="text-sm font-semibold text-slate-600 mb-0.5">Drop file here or click</p>
-                                <p className="text-xs text-slate-400">PDF, JPG, PNG, TIFF — max 10 MB</p>
+                                <p className="text-xs text-slate-400">PDF, JPG, PNG, TIFF, DOCX — max 10 MB</p>
                             </div>
+
+                            {uploadStatus && (
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className={`p-3 rounded-xl flex items-center gap-3 border ${
+                                        uploadStatus === 'success' 
+                                        ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                                        : 'bg-rose-50 border-rose-100 text-rose-700'
+                                    }`}
+                                >
+                                    {uploadStatus === 'success' ? (
+                                        <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
+                                    ) : (
+                                        <XMarkIcon className="w-5 h-5 flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold leading-tight">
+                                            {uploadStatus === 'success' ? 'Upload Successful' : 'Upload Failed'}
+                                        </p>
+                                        <p className="text-[10px] opacity-70">
+                                            {uploadStatus === 'success' ? 'Document added to queue' : 'Please check file type/size'}
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setUploadStatus(null)}
+                                        className="p-1 hover:bg-black/5 rounded-lg transition-colors"
+                                    >
+                                        <XMarkIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                </motion.div>
+                            )}
 
                             <div className="relative">
                                 <button

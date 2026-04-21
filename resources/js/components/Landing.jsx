@@ -1,9 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Landing() {
     const navigate = useNavigate();
+
+    const [config, setConfig] = useState(null);
+    const [stats, setStats] = useState({ processed: '...', response_s: '...' });
+
+    useEffect(() => {
+        fetch('/api/public/config')
+            .then(res => res.json())
+            .then(data => setConfig(data))
+            .catch(err => console.error(err));
+
+        fetch('/api/public/stats')
+            .then(res => res.json())
+            .then(data => setStats(data))
+            .catch(err => console.error(err));
+    }, []);
 
     // Animation Variants for staggered, smooth entrance
     const containerVars = {
@@ -24,10 +39,10 @@ export default function Landing() {
     };
 
     return (
-        <div className="relative overflow-visible">
+        <div className="relative overflow-visible pb-24">
             {/* Ambient Lighting FX */}
             <div className="absolute top-0 right-[-10%] w-[60%] h-[60%] bg-[#d4a574]/10 blur-[150px] rounded-full pointer-events-none" />
-            
+
             {/* Hero Section */}
             <main className="min-h-[85vh] flex items-center px-6 md:px-12 lg:px-24 z-10 relative">
                 <motion.div
@@ -38,7 +53,7 @@ export default function Landing() {
                 >
                     {/* Status Badge */}
                     <motion.div variants={itemVars} className="mb-6 flex items-center gap-3">
-                        <span className="px-3 py-1 rounded-full bg-[#d4a574]/10 border border-[#d4a574]/20 text-[#d4a574] text-xs font-bold uppercase tracking-widest">v2.0 System Online</span>
+                        <span className="px-3 py-1 rounded-full bg-[#d4a574]/10 border border-[#d4a574]/20 text-[#d4a574] text-xs font-bold uppercase tracking-widest">Office of the Civil Registrar</span>
                         <span className="text-slate-400 text-sm font-medium">Official Registry Platform</span>
                     </motion.div>
 
@@ -47,14 +62,14 @@ export default function Landing() {
                         variants={itemVars}
                         className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8"
                     >
-                        MODERN.<br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#d4a574] to-[#f3d0a2] drop-shadow-sm">SECURE.</span><br />
-                        EFFICIENT.
+                        RECORDING.<br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#d4a574] to-[#f3d0a2] drop-shadow-sm">PRESERVING.</span><br />
+                        SERVING.
                     </motion.h1>
 
                     <motion.div variants={itemVars} className="space-y-8">
                         <p className="text-slate-300 text-lg md:text-xl max-w-2xl leading-relaxed font-light border-l-2 border-[#d4a574]/30 pl-6">
-                            The centralized digital portal for seamless management and issuance of Birth, Death, and Marriage Certificates for the Municipality of Naic.
+                            The centralized hub for authenticating and managing civil events—Births, Marriages, and Deaths—for the Municipality of Naic.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -76,6 +91,54 @@ export default function Landing() {
                                 Services Info
                             </motion.button>
                         </div>
+
+                        {/* Operating Hours — skeleton while loading */}
+                        {config === null ? (
+                            <div className="mt-8 max-w-sm animate-pulse">
+                                <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+                                    <div className="w-7 h-7 rounded-full bg-white/10" />
+                                    <div className="flex-1 space-y-1.5">
+                                        <div className="h-2.5 w-24 bg-white/10 rounded-full" />
+                                        <div className="h-3.5 w-48 bg-white/10 rounded-full" />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : config?.opening_hours ? (
+                            <motion.div variants={itemVars} className="mt-8 flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-4 max-w-sm">
+                                <span className="text-xl">🕒</span>
+                                <div>
+                                    <div className="text-[10px] text-[#d4a574] font-bold uppercase tracking-widest leading-none mb-1">Operating Hours</div>
+                                    <div className="text-white font-medium text-sm">{config.opening_hours}</div>
+                                </div>
+                            </motion.div>
+                        ) : null}
+
+                        {/* Announcements — skeleton while loading */}
+                        {config === null ? (
+                            <div className="mt-4 space-y-3 max-w-md animate-pulse">
+                                {[...Array(2)].map((_, i) => (
+                                    <div key={i} className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4">
+                                        <div className="h-2 w-28 bg-white/10 rounded-full mb-2" />
+                                        <div className="h-3.5 w-full bg-white/10 rounded-full" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : config?.announcements && config.announcements.length > 0 ? (
+                            <motion.div variants={itemVars} className="mt-4 flex flex-col gap-3 max-w-md">
+                                {config.announcements.slice(0, 2).map((ann) => (
+                                    <div key={ann.id} className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 relative overflow-hidden group">
+                                        <div className="absolute top-0 left-0 w-1 h-full bg-rose-500 opacity-80"></div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-rose-400 text-sm">📢</span>
+                                            <span className="text-[10px] text-rose-300 font-bold uppercase tracking-widest">
+                                                Active Alert • {new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        <p className="text-white font-medium text-sm leading-snug">{ann.message}</p>
+                                    </div>
+                                ))}
+                            </motion.div>
+                        ) : null}
                     </motion.div>
                 </motion.div>
 
@@ -90,26 +153,26 @@ export default function Landing() {
                     <div className="absolute inset-0 border border-[#d4a574]/20 rounded-3xl rotate-6 transition-transform duration-700" />
                     <div className="absolute inset-4 border border-white/5 bg-white/[0.02] backdrop-blur-3xl rounded-3xl -rotate-3 overflow-hidden shadow-2xl flex flex-col justify-end p-8 group/card">
                         <div className="absolute top-10 -right-10 w-32 h-32 bg-[#d4a574]/20 blur-3xl rounded-full" />
-                        
+
                         {/* Dynamic Mini Dashboard Visual */}
                         <div className="flex-1 flex flex-col justify-center gap-6 mb-8 mt-4">
                             <div className="relative group/scan">
                                 <div className="flex items-end gap-1 h-12 mb-2">
                                     {[40, 70, 45, 90, 65, 80, 50].map((h, i) => (
-                                        <motion.div 
+                                        <motion.div
                                             key={i}
                                             initial={{ height: 0 }}
                                             animate={{ height: `${h}%` }}
-                                            transition={{ repeat: Infinity, repeatType: "reverse", duration: 1 + i*0.2 }}
+                                            transition={{ repeat: Infinity, repeatType: "reverse", duration: 1 + i * 0.2 }}
                                             className="w-full bg-gradient-to-t from-[#d4a574]/40 to-[#d4a574] rounded-t-sm"
                                         />
                                     ))}
                                 </div>
                                 <div className="flex justify-between text-[8px] font-bold text-slate-500 uppercase tracking-widest">
-                                    <span>OCR Scan Accuracy</span>
-                                    <span className="text-[#d4a574]">99.9%</span>
+                                    <span>Records Verification</span>
+                                    <span className="text-[#d4a574]">100% Authentic</span>
                                 </div>
-                                <motion.div 
+                                <motion.div
                                     animate={{ top: ['0%', '100%', '0%'] }}
                                     transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
                                     className="absolute left-0 right-0 h-[1px] bg-[#d4a574] shadow-[0_0_15px_#d4a574] z-10 opacity-50"
@@ -119,18 +182,18 @@ export default function Landing() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                     <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Processed</div>
-                                    <div className="text-white font-black text-xl tracking-tight">12.4K</div>
+                                    <div className="text-white font-black text-xl tracking-tight">{stats.processed >= 1000 ? (stats.processed / 1000).toFixed(1) + 'K' : stats.processed}</div>
                                 </div>
                                 <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                     <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Response</div>
-                                    <div className="text-white font-black text-xl tracking-tight">0.8s</div>
+                                    <div className="text-white font-black text-xl tracking-tight">{stats.response_s}s</div>
                                 </div>
                             </div>
                         </div>
 
                         <div className="w-16 h-1 bg-[#d4a574]/50 mb-6 rounded-full" />
-                        <h3 className="text-white font-bold text-2xl tracking-tight mb-2">Digital Automation</h3>
-                        <p className="text-slate-400 text-sm font-medium">Processing certificates with precision through advanced Registry technology.</p>
+                        <h3 className="text-white font-bold text-2xl tracking-tight mb-2">Registry Excellence</h3>
+                        <p className="text-slate-400 text-sm font-medium">Securing our citizens' legal rights through definitive civil documentation.</p>
                     </div>
                 </motion.div>
             </main>

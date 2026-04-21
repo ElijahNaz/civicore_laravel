@@ -1,7 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import SkeletonLoader from './SkeletonLoader';
 
 export default function ContactDirectory() {
+    const [openingHours, setOpeningHours] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        fetch('/api/public/config')
+            .then(res => res.json())
+            .then(data => {
+                setOpeningHours(data.opening_hours);
+                setIsLoading(false);
+            })
+            .catch(err => {
+                console.error("Config load error:", err);
+                setIsLoading(false);
+            });
+    }, []);
     return (
         <section className="py-24 px-6 md:px-24">
             <div className="max-w-5xl mx-auto flex flex-col items-center text-center space-y-16">
@@ -69,8 +85,10 @@ export default function ContactDirectory() {
                         Operating Hours
                         <span className="w-10 h-[1px] bg-white/10"></span>
                     </div>
-                    <p className="font-semibold text-sm">Monday — Friday: 8:00 AM - 5:00 PM</p>
-                    <p className="text-xs opacity-60">Closed on Weekends and Public Holidays</p>
+                    <p className="font-semibold text-sm">
+                        {isLoading ? <div className="w-48 h-4 bg-white/10 rounded animate-pulse inline-block"></div> : openingHours}
+                    </p>
+                    <p className="text-xs opacity-60">Unless specified due to Public Holidays</p>
                 </div>
             </div>
         </section>

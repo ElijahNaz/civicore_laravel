@@ -483,10 +483,10 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest mb-1">Birth Documents Issued</p>
+                                <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Documents Issued</p>
                                 <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length}</h3>
                             </div>
-                            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 border border-emerald-100 shadow-sm">👶</div>
+                            <div className="w-12 h-12 bg-[#d4a574]/10 rounded-2xl flex items-center justify-center text-[#d4a574] border border-[#d4a574]/20 shadow-sm">👶</div>
                         </motion.div>
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
@@ -499,10 +499,10 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Certificates Issued</p>
+                                <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Certificates Issued</p>
                                 <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length}</h3>
                             </div>
-                            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 border border-amber-100 shadow-sm">💍</div>
+                            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 border border-indigo-100 shadow-sm">💍</div>
                         </motion.div>
                     </>
                 )}

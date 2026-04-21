@@ -4,11 +4,11 @@ import { motion } from 'framer-motion';
 import LoadingSpinner from './LoadingSpinner';
 import { AnimatedStatCard } from './AnimatedCounter';
 import SkeletonLoader from './SkeletonLoader';
-import { 
-    DocumentTextIcon, 
-    ClipboardDocumentCheckIcon, 
-    ClockIcon, 
-    UsersIcon, 
+import {
+    DocumentTextIcon,
+    ClipboardDocumentCheckIcon,
+    ClockIcon,
+    UsersIcon,
     ArrowUpTrayIcon,
     ShieldCheckIcon,
     ArrowPathIcon
@@ -18,7 +18,7 @@ import { useData } from './DataContext';
 // Helper Component for the traveling light effect
 const BorderBeam = ({ color = "#4f46e5", duration = 8, delay = 0 }) => (
     <div className="absolute inset-0 pointer-events-none rounded-[inherit] overflow-hidden">
-        <svg 
+        <svg
             className="absolute inset-0 w-full h-full"
             xmlns="http://www.w3.org/2000/svg"
         >
@@ -72,7 +72,7 @@ function Dashboard() {
         "Your work today shapes the digital foundation of tomorrow.",
         "Dedicated to data integrity and community service."
     ];
-    
+
     const motto = React.useMemo(() => mottos[Math.floor(Math.random() * mottos.length)], []);
 
     // Real-time synchronization on mount
@@ -114,10 +114,10 @@ function Dashboard() {
                     data: chartData?.docTypes?.data || [],
                     backgroundColor: (chartData?.docTypes?.labels || []).map(label => {
                         const l = label.toLowerCase();
-                        if (l === 'birth') return '#10b981';
-                        if (l === 'death') return '#ef4444';
-                        if (l === 'marriage') return '#4f46e5';
-                        return '#6366f1';
+                        if (l === 'birth') return '#d4a574';
+                        if (l === 'death') return '#f43f5e';
+                        if (l === 'marriage') return '#6366f1';
+                        return '#0f172a';
                     }),
                     hoverOffset: 30,
                     hoverBorderWidth: 4,
@@ -126,15 +126,15 @@ function Dashboard() {
                     borderColor: '#ffffff'
                 }]
             },
-            options: { 
-                responsive: true, 
+            options: {
+                responsive: true,
                 maintainAspectRatio: false,
                 cutout: '70%',
                 animation: {
                     animateRotate: true,
                     animateScale: true
                 },
-                plugins: { 
+                plugins: {
                     legend: { position: 'bottom', labels: { color: '#0f172a', padding: 25, font: { size: 12, weight: '700' } } },
                     tooltip: {
                         enabled: true,
@@ -145,7 +145,7 @@ function Dashboard() {
                         cornerRadius: 10,
                         displayColors: true
                     }
-                } 
+                }
             }
         });
 
@@ -161,21 +161,21 @@ function Dashboard() {
                     barThickness: 50
                 }]
             },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                scales: { 
-                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#0f172a', font: { weight: '700' } } }, 
-                    x: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '700', size: 12 } } } 
-                }, 
-                plugins: { 
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#0f172a', font: { weight: '700' } } },
+                    x: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '700', size: 12 } } }
+                },
+                plugins: {
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: '#0f172a',
                         padding: 12,
                         cornerRadius: 10
                     }
-                } 
+                }
             }
         });
 
@@ -199,21 +199,21 @@ function Dashboard() {
                     pointBorderWidth: 3
                 }]
             },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                scales: { 
-                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#0f172a', stepSize: 1 } }, 
-                    x: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '700' } } } 
-                }, 
-                plugins: { 
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#0f172a', stepSize: 1 } },
+                    x: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '700' } } }
+                },
+                plugins: {
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: '#0f172a',
                         padding: 12,
                         cornerRadius: 10
                     }
-                } 
+                }
             }
         });
 
@@ -229,11 +229,11 @@ function Dashboard() {
                     borderColor: '#ffffff'
                 }]
             },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
                 scales: { r: { grid: { color: '#f1f5f9' }, ticks: { display: false } } },
-                plugins: { 
+                plugins: {
                     legend: { position: 'right', labels: { color: '#0f172a', font: { weight: '700', size: 11 } } },
                     tooltip: {
                         backgroundColor: '#0f172a',
@@ -257,10 +257,10 @@ function Dashboard() {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-12 max-w-7xl mx-auto font-['Inter'] min-h-screen relative z-10">
             {/* High Contrast Welcome Hero with Aesthetic Background Glow & Hover Interaction */}
-            <motion.div 
-                variants={itemVariants} 
-                initial="hidden" 
-                animate="visible" 
+            <motion.div
+                variants={itemVariants}
+                initial="hidden"
+                animate="visible"
                 className="relative p-10 rounded-[2.5rem] bg-slate-900 border-2 border-slate-800 shadow-2xl overflow-hidden group hover:scale-[1.02] hover:border-indigo-500/50 hover:shadow-[0_20px_50px_rgba(79,70,229,0.2)] transition-all duration-500 ease-out"
             >
                 {/* Aesthetic Background Glows - Retained for Depth */}
@@ -275,13 +275,17 @@ function Dashboard() {
                             <span className="text-indigo-200 text-sm font-bold">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                         <h1 className="text-5xl font-black text-white tracking-tighter mb-2">
-                             {greeting}, <span className="text-indigo-400 capitalize">{user.name?.split(' ')[0]}</span>
+                            {greeting}, <span className="text-indigo-400 capitalize">{user.name?.split(' ')[0]}</span>
                         </h1>
                         <p className="text-slate-400 text-lg font-medium tracking-tight italic">"{motto}"</p>
                     </div>
-                    <div className="hidden md:block">
-                        <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-sm">
-                             <ShieldCheckIcon className="w-10 h-10 text-indigo-400 animate-pulse" />
+                    <div className="hidden md:flex items-center gap-4">
+                        <a href="/" target="_blank" rel="noopener noreferrer" className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl flex items-center gap-2 text-white font-bold text-sm transition-colors backdrop-blur-sm cursor-pointer shadow-lg shadow-black/30 group">
+                            <svg className="w-5 h-5 opacity-80 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            Live Website
+                        </a>
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-sm shadow-inner shadow-white/5">
+                            <ShieldCheckIcon className="w-8 h-8 text-indigo-400 animate-pulse drop-shadow-[0_0_15px_rgba(129,140,248,0.5)]" />
                         </div>
                     </div>
                 </div>
@@ -295,9 +299,9 @@ function Dashboard() {
                     { label: 'Total Issued Files', val: stats.totalIssuances, icon: ClipboardDocumentCheckIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Finalized' },
                     { label: 'Active Users', val: stats.totalUsers, icon: UsersIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Current' }
                 ].map((s, i) => (
-                    <motion.div 
-                        key={i} 
-                        variants={itemVariants} 
+                    <motion.div
+                        key={i}
+                        variants={itemVariants}
                         className={`${s.bg} rounded-[2rem] p-8 border-2 ${s.border} shadow-sm relative group hover:shadow-xl hover:scale-[1.02] hover:border-indigo-500 transition-all duration-300 ease-out`}
                     >
                         <div className="flex justify-between items-start mb-6 relative z-10">
@@ -319,7 +323,7 @@ function Dashboard() {
                 <motion.div variants={itemVariants} className="lg:col-span-1 bg-white p-8 rounded-[2.5rem] border-2 border-slate-300 shadow-sm flex flex-col h-[520px] relative group hover:shadow-xl transition-shadow duration-300">
                     <div className="mb-10 text-center relative z-10">
                         <h3 className="font-black text-slate-950 text-xl tracking-tight leading-none mb-2">Document Types</h3>
-                        <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest underline decoration-indigo-500 decoration-2">Breakdown by Type</p>
+                        <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest">Breakdown by Type</p>
                     </div>
                     <div className="flex-1 relative flex items-center justify-center z-10">
                         <canvas id="docTypesChart"></canvas>

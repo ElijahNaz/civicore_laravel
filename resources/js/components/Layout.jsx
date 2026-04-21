@@ -6,7 +6,8 @@ import {
     ArrowUpTrayIcon,
     ClipboardDocumentCheckIcon,
     UsersIcon,
-    MapPinIcon
+    MapPinIcon,
+    MegaphoneIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import SaveToasts from './SaveToasts.jsx';
@@ -16,21 +17,21 @@ import Avatar from './Avatar.jsx';
 const Layout = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { backgroundTasks } = useData();
     const location = useLocation();
     const navigate = useNavigate();
     const user = JSON.parse(sessionStorage.getItem('user') || '{}');
 
-    // Role-based menu items
-    // Admin   → all items
-    // Staff   → Dashboard, Documents, Issuances, Accounts
-    // User    → Dashboard, Documents, Accounts
+    // SuperAdmin → all items
+    // Admin   → Dashboard, Documents, Issuances, Accounts
     const allMenuItems = [
-        { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard', roles: ['Admin', 'Staff', 'User'] },
-        { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document', roles: ['Admin', 'Staff', 'User'] },
-        { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance', roles: ['Admin', 'Staff'] },
-        { path: '/mapping', icon: MapPinIcon, label: 'Mapping', roles: ['Admin'] },
-        { path: '/accounts', icon: UsersIcon, label: 'Account Management', roles: ['Admin', 'Staff', 'User'] },
+        { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/mapping', icon: MapPinIcon, label: 'Mapping', roles: ['SuperAdmin'] },
+        { path: '/announcements', icon: MegaphoneIcon, label: 'Announcements', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/accounts', icon: UsersIcon, label: 'Account Management', roles: ['SuperAdmin', 'Admin'] },
     ];
 
     const menuItems = allMenuItems.filter(item => item.roles.includes(user.role));
@@ -39,11 +40,15 @@ const Layout = ({ children }) => {
     const closeSidebar = () => setSidebarOpen(false);
 
     const handleLogout = async () => {
+        if (isLoggingOut) return;
+        setIsLoggingOut(true);
         try {
             await fetch(`${window.location.origin}/api/logout`, {
                 method: 'POST',
                 credentials: 'include'
             });
+            // Give a tiny delay for visual confirmation of the animation
+            await new Promise(r => setTimeout(r, 600));
         } catch (e) {
             // Ignore errors
         }
@@ -54,7 +59,7 @@ const Layout = ({ children }) => {
 
 
     return (
-        <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
+        <div className="h-screen w-screen bg-slate-50 flex relative overflow-hidden">
             {/* Ambient Glassmorphism Background Glows */}
             <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
             <div className="fixed bottom-[-10%] right-[-5%] w-[30%] h-[40%] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none z-0"></div>
@@ -105,41 +110,51 @@ const Layout = ({ children }) => {
                 </div>
 
                 {/* Menu */}
-                <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto w-full custom-scrollbar">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = location.pathname === item.path;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                onClick={closeSidebar}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
-                                    ? 'bg-[#d4a574]/10 text-[#d4a574] font-medium shadow-sm ring-1 ring-[#d4a574]/30'
-                                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                                    }`}
-                            >
-                                <Icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-[#d4a574]' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                                <span className="text-sm tracking-wide">{item.label}</span>
-                            </Link>
-                        );
-                    })}
+                <nav className="flex-1 p-4 flex flex-col overflow-y-auto w-full custom-scrollbar">
+                    <div className="space-y-1.5 flex-1">
+                        {menuItems.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname === item.path;
+                            return (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    onClick={closeSidebar}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
+                                        ? 'bg-[#d4a574]/10 text-[#d4a574] font-medium shadow-sm ring-1 ring-[#d4a574]/30'
+                                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+                                        }`}
+                                >
+                                    <Icon className={`w-5 h-5 flex-shrink-0 transition-colors ${isActive ? 'text-[#d4a574]' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                    <span className="text-sm tracking-wide">{item.label}</span>
+                                </Link>
+                            );
+                        })}
+                    </div>
 
                     {/* Integrated Logout Button */}
-                    <div className="pt-4 mt-6 border-t border-slate-800/50">
+                    <div className="mt-auto pt-4 border-t border-slate-800/50">
                         <button
                             onClick={handleLogout}
-                            className="cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 hover:ring-1 hover:ring-rose-500/30"
+                            disabled={isLoggingOut}
+                            className={`cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isLoggingOut ? 'text-rose-400 bg-rose-500/10 ring-1 ring-rose-500/30 opacity-70 cursor-not-allowed' : 'text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 hover:ring-1 hover:ring-rose-500/30'}`}
                         >
-                            <svg className="w-5 h-5 flex-shrink-0 transition-colors text-slate-500 group-hover:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                            <span className="text-sm tracking-wide">Logout</span>
+                            {isLoggingOut ? (
+                                <svg className="animate-spin w-5 h-5 flex-shrink-0 text-rose-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (
+                                <svg className="w-5 h-5 flex-shrink-0 transition-colors text-slate-500 group-hover:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                            )}
+                            <span className="text-sm tracking-wide">{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
                         </button>
                     </div>
                 </nav>
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col min-w-0 bg-transparent min-h-screen pt-14 md:pt-0 relative z-10 w-full">
+            <main className="flex-1 flex flex-col min-w-0 bg-transparent h-screen pt-14 md:pt-0 relative z-10 w-full overflow-hidden">
                 {/* Top Bar - Desktop */}
                 <header className="hidden md:flex items-center justify-between h-[5rem] px-8 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm/50 backdrop-blur-md bg-white/90">
                     <h1 id="pageTitle" className="text-2xl font-bold text-slate-800 tracking-tight">
