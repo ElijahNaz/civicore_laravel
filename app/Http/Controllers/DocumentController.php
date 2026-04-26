@@ -317,19 +317,23 @@ class DocumentController extends Controller
 
                     if (count($existing) > 0) {
                         // 2. UPDATE existing Master Record (Keep certNumber)
-                        DB::update(
-                            "UPDATE issuances SET type = ?, name = ?, barangay = ?, status = ?, encoded_by = ?, extracted_data = ?, file_data = ? WHERE document_id = ?",
-                            [$docType, $personName, $barangay, 'Active', $encodedBy, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData, $id]
-                        );
+                        DB::table('issuances')->where('document_id', $id)->update([
+                            'type' => $docType,
+                            'name' => $personName,
+                            'barangay' => $barangay,
+                            'status' => 'Active',
+                            'encoded_by' => $encodedBy,
+                            'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                            'file_data' => $pdfData,
+                            'updated_at' => now()
+                        ]);
                     } else {
                         // 3. INSERT new Master Record (Generate NEW certNumber)
                         $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
                         $year = date('Y');
                         
-                        // Check for the maximum existing number with this prefix/year across ALL types to prevent collisions
                         $pattern = $prefix . '-' . $year . '-%';
-                        $results = DB::select("SELECT certNumber FROM issuances WHERE certNumber LIKE ? ORDER BY certNumber DESC LIMIT 1", 
-                            [$pattern]);
+                        $results = DB::select("SELECT certNumber FROM issuances WHERE certNumber LIKE ? ORDER BY certNumber DESC LIMIT 1", [$pattern]);
                         
                         $nextNum = 1;
                         if (count($results) > 0) {
@@ -343,13 +347,24 @@ class DocumentController extends Controller
                         $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
                         $issuanceDate = date('m/d/Y');
 
-                        DB::insert("INSERT INTO issuances (certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                            [$certNumber, $docType, $personName, $barangay, $issuanceDate, 'Active', $encodedBy, $id, json_encode($extractedFields, JSON_UNESCAPED_UNICODE), $pdfData]);
+                        DB::table('issuances')->insert([
+                            'certNumber' => $certNumber,
+                            'type' => $docType,
+                            'name' => $personName,
+                            'barangay' => $barangay,
+                            'issuanceDate' => $issuanceDate,
+                            'status' => 'Active',
+                            'encoded_by' => $encodedBy,
+                            'document_id' => $id,
+                            'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                            'file_data' => $pdfData,
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ]);
                     }
                 }
             }
 
-            // Log history for the save action
             $this->logHistory($id, $status, [
                 'person_name' => $personName,
                 'barangay' => $barangay,
@@ -359,13 +374,14 @@ class DocumentController extends Controller
             return response()->json(['success' => true]);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error("Document Save/Approve Error: " . $e->getMessage(), [
-                'id' => $id,
-                'trace' => $e->getTraceAsString()
-            ]);
+            // Use mb_convert_encoding to ensure the error message is safe for JSON/Logging
+            // We EXPLICITLY do NOT log the trace here because it may contain binary PDF data
+            $safeError = mb_convert_encoding($e->getMessage(), 'UTF-8', 'UTF-8');
+            \Log::error("Document Save/Approve Error: " . $safeError . " on line " . $e->getLine() . " in " . $e->getFile());
+            
             return response()->json([
                 'success' => false, 
-                'error' => 'System sync failure: ' . $e->getMessage()
+                'error' => 'System sync failure: ' . $safeError
             ], 500);
         }
     });

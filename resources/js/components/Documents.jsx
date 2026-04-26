@@ -6,7 +6,7 @@ import {
     CloudArrowUpIcon, DocumentIcon, TrashIcon, CheckCircleIcon,
     ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon,
     PencilSquareIcon, ShieldExclamationIcon, DocumentCheckIcon,
-    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon
+    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import OcrFormPanel from './OcrFormPanel.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -150,6 +150,8 @@ const Documents = () => {
     const onDrop = useCallback(async (acceptedFiles) => {
         setDragging(false);
         if (!acceptedFiles.length) return;
+        
+        setUploadStatus('uploading');
         const isBulk = acceptedFiles.length > 1;
         const taskName = isBulk ? `Uploading ${acceptedFiles.length} files` : `Uploading ${acceptedFiles[0].name}`;
 
@@ -175,12 +177,14 @@ const Documents = () => {
             }
 
             if (successCount > 0) {
+                setUploadStatus('success');
                 refreshAll();
                 const message = isBulk 
                     ? `Successfully uploaded ${successCount} of ${acceptedFiles.length} files` 
                     : 'Document uploaded successfully';
                 return { success: true, message, id: lastId };
             }
+            setUploadStatus('error');
             throw new Error('Upload failed');
         });
     }, [selectedDocType, refreshAll, runBackgroundTask]);
@@ -594,28 +598,34 @@ const Documents = () => {
                                     className={`p-3 rounded-xl flex items-center gap-3 border ${
                                         uploadStatus === 'success' 
                                         ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                                        : uploadStatus === 'uploading'
+                                        ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
                                         : 'bg-rose-50 border-rose-100 text-rose-700'
                                     }`}
                                 >
                                     {uploadStatus === 'success' ? (
                                         <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
+                                    ) : uploadStatus === 'uploading' ? (
+                                        <ArrowPathIcon className="w-5 h-5 flex-shrink-0 animate-spin" />
                                     ) : (
                                         <XMarkIcon className="w-5 h-5 flex-shrink-0" />
                                     )}
                                     <div className="flex-1">
                                         <p className="text-xs font-bold leading-tight">
-                                            {uploadStatus === 'success' ? 'Upload Successful' : 'Upload Failed'}
+                                            {uploadStatus === 'success' ? 'Upload Successful' : uploadStatus === 'uploading' ? 'Uploading...' : 'Upload Failed'}
                                         </p>
                                         <p className="text-[10px] opacity-70">
-                                            {uploadStatus === 'success' ? 'Document added to queue' : 'Please check file type/size'}
+                                            {uploadStatus === 'success' ? 'Document added to queue' : uploadStatus === 'uploading' ? 'Transferring to server' : 'Please check file type/size'}
                                         </p>
                                     </div>
-                                    <button 
-                                        onClick={() => setUploadStatus(null)}
-                                        className="p-1 hover:bg-black/5 rounded-lg transition-colors"
-                                    >
-                                        <XMarkIcon className="w-3.5 h-3.5" />
-                                    </button>
+                                    {uploadStatus !== 'uploading' && (
+                                        <button 
+                                            onClick={() => setUploadStatus(null)}
+                                            className="p-1 hover:bg-black/5 rounded-lg transition-colors"
+                                        >
+                                            <XMarkIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
                                 </motion.div>
                             )}
 
@@ -711,18 +721,18 @@ const Documents = () => {
                                         <p className="text-xs mt-1 max-w-[200px]">{queueSearch ? 'Adjust your search query' : 'Upload documents to begin processing'}</p>
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto flex-1">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50/50 text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-100">
-                                                    <th className="px-4 py-3 font-extrabold text-slate-500">Document</th>
-                                                    <th className="px-2 py-3 font-extrabold text-slate-500">Type</th>
-                                                    <th className="px-2 py-3 font-extrabold text-slate-500">Size</th>
-                                                    <th className="px-2 py-3 font-extrabold text-slate-500">Uploader</th>
-                                                    <th className="px-2 py-3 text-center font-extrabold text-slate-500">Status</th>
-                                                    <th className="px-4 py-3 text-right font-extrabold text-slate-500">Actions</th>
-                                                </tr>
-                                            </thead>
+                                <div className="overflow-x-auto custom-scrollbar flex-1 w-full">
+                                    <table className="w-full text-left border-collapse table-auto">
+                                        <thead>
+                                            <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500 w-20">Type</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500 w-16">Size</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500 w-24">Uploader</th>
+                                                <th className="px-2 py-2.5 text-center font-black text-slate-500 w-28">Status</th>
+                                                <th className="px-3 py-2.5 text-right font-black text-slate-500 w-32">Actions</th>
+                                            </tr>
+                                        </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {filteredQueue.map(file => (
                                                     <tr key={file.id} className="hover:bg-slate-50/60 transition-colors">
@@ -733,11 +743,11 @@ const Documents = () => {
                                                             </td>
                                                         ) : (
                                                             <>
-                                                                <td className="px-4 py-4">
+                                                                <td className="px-3 py-2.5">
                                                                     <div className="flex items-center">
                                                                         <div className="min-w-0">
                                                                             <p
-                                                                                className="text-[12px] font-bold text-slate-800 truncate max-w-[35ch] hover:text-[#d4a574] cursor-pointer transition-colors"
+                                                                                className="text-[11px] font-bold text-slate-800 truncate max-w-[25ch] hover:text-[#d4a574] cursor-pointer transition-colors"
                                                                                 title={file.name}
                                                                                 onClick={() => setPreviewFile(file)}
                                                                             >
@@ -749,16 +759,16 @@ const Documents = () => {
                                                                         </div>
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-1 py-4">
+                                                                <td className="px-2 py-2.5">
                                                                     <span className="text-[9.5px] font-black px-1.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-100 rounded-md uppercase tracking-tighter">
                                                                         {file.detected_type || file.type}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-1 py-4 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap">{file.size}</td>
-                                                                <td className="px-1 py-4 text-[10px] font-bold text-slate-400 truncate max-w-[12ch] uppercase tracking-tighter">{file.encoded_by || '—'}</td>
-                                                                <td className="px-2 py-4 text-center whitespace-nowrap">{statusBadge(file)}</td>
-                                                                <td className="px-4 py-4 text-right">
-                                                                    <div className="flex items-center justify-end gap-1.5 px-1">
+                                                                <td className="px-2 py-2.5 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap">{file.size}</td>
+                                                                <td className="px-2 py-2.5 text-[10px] font-bold text-slate-400 truncate max-w-[12ch] uppercase tracking-tighter">{file.encoded_by || '—'}</td>
+                                                                <td className="px-2 py-2.5 text-center whitespace-nowrap">{statusBadge(file)}</td>
+                                                                <td className="px-3 py-2.5 text-right">
+                                                                    <div className="flex items-center justify-end gap-1 px-1">
                                                                         {['pending', 'failed', 'uploaded'].includes(file.status?.toLowerCase()) && (
                                                                             <button onClick={() => processFile(file.id, file)}
                                                                                 className="p-2.5 text-slate-600 hover:text-white hover:bg-slate-900 rounded-xl transition-all shadow-sm active:scale-90 group border border-slate-100"
@@ -913,22 +923,22 @@ const Documents = () => {
                                     <div className="overflow-x-auto flex-1">
                                         <table className="w-full text-left border-collapse">
                                             <thead>
-                                                <tr className="bg-slate-50/50 text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-100">
-                                                    <th className="px-5 py-4 font-extrabold text-slate-500">Person / Document</th>
-                                                    <th className="px-2 py-4 font-extrabold text-slate-500">Barangay</th>
-                                                    <th className="px-2 py-4 font-extrabold text-slate-500">Process Date</th>
-                                                    <th className="px-2 py-4 font-extrabold text-slate-500">Staff / Admin</th>
-                                                    <th className="px-5 py-4 text-right font-extrabold text-slate-500">Record</th>
-                                                </tr>
+                                            <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                <th className="px-3 py-2.5 font-black text-slate-500">Person / Document</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500">Barangay</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500">Process Date</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500">Staff / Admin</th>
+                                                <th className="px-3 py-2.5 text-right font-black text-slate-500">Record</th>
+                                            </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {filteredHistory.map(file => {
                                                     const dateObj = new Date(file.created_at);
                                                     return (
                                                         <tr key={file.id} className="hover:bg-slate-50/60 transition-colors group">
-                                                            <td className="px-5 py-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+                                                            <td className="px-3 py-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
                                                                         file.type === 'birth' ? 'bg-blue-50 text-blue-500' :
                                                                         file.type === 'death' ? 'bg-slate-100 text-slate-600' :
                                                                         'bg-rose-50 text-rose-500'
@@ -936,7 +946,7 @@ const Documents = () => {
                                                                         <DocumentIcon className="w-5 h-5" />
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <p className="text-[13px] font-bold text-slate-800 truncate max-w-[20ch]">
+                                                                        <p className="text-[11px] font-bold text-slate-800 truncate max-w-[20ch]">
                                                                             {(!file.personName || file.personName.toLowerCase().includes('unnamed')) ? file.name : file.personName}
                                                                         </p>
                                                                         <p className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1.5">
@@ -947,13 +957,13 @@ const Documents = () => {
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-2 py-4">
+                                                            <td className="px-2 py-3">
                                                                 <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
                                                                     <div className="w-1.5 h-1.5 rounded-full bg-[#d4a574]" />
                                                                     {file.barangay || '—'}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-2 py-4">
+                                                            <td className="px-2 py-3">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[11px] font-bold text-slate-700 tabular-nums">
                                                                         {file.created_at ? new Date(file.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
@@ -963,7 +973,7 @@ const Documents = () => {
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-2 py-4">
+                                                            <td className="px-2 py-3">
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-slate-200">
                                                                         {file.encoded_by ? file.encoded_by.charAt(0).toUpperCase() : '?'}
@@ -971,7 +981,7 @@ const Documents = () => {
                                                                     <span className="text-[11px] font-bold text-slate-600 truncate max-w-[10ch]">{file.encoded_by || 'Unknown'}</span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-5 py-4 text-right">
+                                                            <td className="px-3 py-3 text-right">
                                                                 <div className="flex items-center justify-end">
                                                                     {file.isLog ? (
                                                                         <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100/50 italic">
@@ -979,9 +989,9 @@ const Documents = () => {
                                                                         </span>
                                                                     ) : (
                                                                         <button
-                                                                            onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
-                                                                            className="px-5 py-2.5 text-[11px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-xl shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-2"
-                                                                        >
+    onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
+    className="px-3 py-1.5 text-[10px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-lg shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-1.5"
+>
                                                                             <DocumentCheckIcon className="w-4 h-4" />
                                                                             View Details
                                                                         </button>

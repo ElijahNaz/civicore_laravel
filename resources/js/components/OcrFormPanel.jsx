@@ -162,6 +162,41 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
 
+    // Sync form data if background extraction finishes while modal is open
+    useEffect(() => {
+        const latestFields = ocrResult?.extracted_fields || file.extracted_fields;
+        if (latestFields && Object.keys(latestFields).length > 0) {
+            setFormData(prev => {
+                const next = { ...prev };
+                let changed = false;
+                
+                const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
+                configSections.forEach(section => {
+                    section.fields.forEach(f => {
+                        // Only fill if the current value is empty to avoid overwriting user typing
+                        if (!next[f.key] && latestFields[f.key]) {
+                            let val = latestFields[f.key];
+                            if (f.type === 'date' && val) {
+                                const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                                if (!isNaN(d.getTime())) {
+                                    val = d.toISOString().split('T')[0];
+                                }
+                            }
+                            next[f.key] = val;
+                            changed = true;
+                        }
+                    });
+                });
+                
+                return changed ? next : prev;
+            });
+            
+            if (!ocrText && (file.ocr_text || ocrResult?.text)) {
+                setOcrText(file.ocr_text || ocrResult?.text);
+            }
+        }
+    }, [file.extracted_fields, ocrResult, effectiveType]);
+
     const typeMismatch = ocrResult?.type_mismatch;
     const mismatchMessage = ocrResult?.mismatch_message;
 

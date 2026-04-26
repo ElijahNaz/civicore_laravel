@@ -54,14 +54,32 @@ class ProcessImageOcrJob implements ShouldQueue
             $result = $response->json();
             $newText = $result['text'] ?? '';
             $detectedType = $result['detected_type'] ?? '';
+            $newFields = $result['extracted_fields'] ?? [];
+
+            // Get existing data to merge
+            $currentDoc = DB::selectOne("SELECT ocr_text, detected_type, extracted_fields FROM documents WHERE id = ?", [$this->documentId]);
+            $existingFields = json_decode($currentDoc->extracted_fields ?? '[]', true) ?: [];
+            
+            // Merge fields (prefer non-empty values from the new extraction)
+            foreach ($newFields as $key => $value) {
+                if (!empty($value) || empty($existingFields[$key])) {
+                    $existingFields[$key] = $value;
+                }
+            }
 
             // Ensure null handling for string concat
             DB::update(
                 "UPDATE documents SET 
                  ocr_text = CONCAT(IFNULL(ocr_text, ''), '\n', ?), 
-                 detected_type = IF(detected_type = '' OR detected_type IS NULL, ?, detected_type) 
+                 detected_type = IF(detected_type = '' OR detected_type IS NULL, ?, detected_type),
+                 extracted_fields = ?
                  WHERE id = ?",
-                [$newText, $detectedType, $this->documentId]
+                [
+                    $newText, 
+                    $detectedType, 
+                    json_encode($existingFields, JSON_UNESCAPED_UNICODE),
+                    $this->documentId
+                ]
             );
 
             Log::info("ProcessImageOcrJob finished for image: {$this->imagePath}");

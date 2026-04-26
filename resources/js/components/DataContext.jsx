@@ -75,46 +75,59 @@ export const DataProvider = ({ children }) => {
         // High-precision ID to prevent state-update collisions
         const taskId = `${options.id || Math.random().toString(36).substring(2, 9)}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         
+        // Add "Running" task immediately for UI feedback
+        if (!options.silent) {
+            setBackgroundTasks(prev => [...prev, {
+                id: taskId,
+                name,
+                status: 'running',
+                timestamp: new Date()
+            }]);
+        }
+
         try {
             const result = await actionFn();
             
-            // Only show toast if it was successful AND not silent
+            // Update or remove task
+            setBackgroundTasks(prev => {
+                const filtered = prev.filter(t => t.id !== taskId);
+                // Only show success toast if not silent
+                if (result && result.success !== false && !options.silent) {
+                    return [...filtered, {
+                        id: taskId,
+                        name,
+                        status: 'success',
+                        type: options.type,
+                        message: result.message,
+                        timestamp: new Date(),
+                        ...options.meta
+                    }];
+                }
+                return filtered;
+            });
+
+            // If it was a success toast, set a timeout to remove it
             if (result && result.success !== false && !options.silent) {
-                const newTask = {
-                    id: taskId,
-                    name,
-                    status: 'success',
-                    type: options.type,
-                    message: result.message,
-                    timestamp: new Date(),
-                    ...options.meta
-                };
-
-                // Add to background tasks for the toast
-                setBackgroundTasks(prev => {
-                    if (prev.some(t => t.id === taskId)) return prev;
-                    return [...prev, newTask];
-                });
-
-                // Auto-remove toast
                 setTimeout(() => {
                     setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));
                 }, 4000);
             }
+            
             return result;
         } catch (err) {
             console.error(`Task ${name} failed:`, err);
             
-            // ALWAYS show error toasts even if the task was otherwise silent
-            const errorTask = {
-                id: taskId,
-                name,
-                status: 'error',
-                message: err.message || 'Operation failed',
-                timestamp: new Date()
-            };
-
-            setBackgroundTasks(prev => [...prev, errorTask]);
+            // Update to error status
+            setBackgroundTasks(prev => {
+                const filtered = prev.filter(t => t.id !== taskId);
+                return [...filtered, {
+                    id: taskId,
+                    name,
+                    status: 'error',
+                    message: err.message || 'Operation failed',
+                    timestamp: new Date()
+                }];
+            });
             
             setTimeout(() => {
                 setBackgroundTasks(prev => prev.filter(t => t.id !== taskId));

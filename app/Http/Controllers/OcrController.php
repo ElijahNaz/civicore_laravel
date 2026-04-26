@@ -18,7 +18,7 @@ class OcrController extends Controller
      */
     public function process(Request $request)
     {
-        $documentId = $request->input('documentId');
+        $documentId = $request->input('documentId') ?? $request->input('document_id');
         $docType    = strtolower(trim($request->input('docType', '')));
         $languages  = $request->input('languages', 'en,tl');
 
