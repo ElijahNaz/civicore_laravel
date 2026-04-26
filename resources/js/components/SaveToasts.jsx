@@ -50,7 +50,9 @@ const SaveToasts = ({ tasks }) => {
                                     {task.name || 'Document Processed'}
                                 </p>
                                 <p className="text-[10px] font-bold opacity-80">
-                                    {task.status === 'error' ? (task.message || 'Operation failed') : 'Successfully secured records'}
+                                    {task.status === 'error' 
+                                        ? (task.message || 'Operation failed') 
+                                        : (task.message || 'Successfully secured records')}
                                 </p>
                             </div>
 

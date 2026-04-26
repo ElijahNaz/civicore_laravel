@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -10,25 +11,19 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Bus;
+use Throwable;
 
 class ProcessDocumentOcr implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The number of seconds the job can run before timing out.
-     *
-     * @var int
-     */
-    public $timeout = 600; // 10 minutes max (extra safe for large files)
+    public $timeout = 600;
 
     protected $documentId;
     protected $docType;
     protected $languages;
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct($documentId, $docType = '', $languages = 'en,tl')
     {
         $this->documentId = $documentId;
@@ -36,27 +31,16 @@ class ProcessDocumentOcr implements ShouldQueue
         $this->languages = $languages;
     }
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
-        Log::info("Starting OCR Job (v2 - Server Mode) for Document ID: " . $this->documentId);
+        Log::info("ProcessDocumentOcr Coordinator starting for Document ID: " . $this->documentId);
 
-        // Fetch document
         $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$this->documentId]);
-        if (!$doc) {
-            Log::error("Document not found: " . $this->documentId);
+        if (!$doc || empty($doc->file_data)) {
+            Log::error("Invalid document or empty file data: " . $this->documentId);
             return;
         }
 
-        if (empty($doc->file_data)) {
-            Log::error("No file data for document: " . $this->documentId);
-            DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-            return;
-        }
-
-        // Determine extension
         $metadata = json_decode($doc->metadata, true);
         $mimetype = $metadata['mimetype'] ?? 'image/jpeg';
         
@@ -65,51 +49,71 @@ class ProcessDocumentOcr implements ShouldQueue
         elseif (str_contains($mimetype, 'wordprocessingml') || str_contains($mimetype, 'msword')) $extension = 'docx';
         elseif (str_contains($mimetype, 'png')) $extension = 'png';
         elseif (str_contains($mimetype, 'tiff')) $extension = 'tiff';
+        elseif (str_contains($mimetype, 'text')) $extension = 'txt';
 
-        // Write to temp file for the Python server to read
-        // (In a distributed system we'd send binary, but since it's local, path is faster)
-        $tempFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ocr_v2_' . $this->documentId . '.' . $extension;
+        $tempFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ocr_source_' . $this->documentId . '.' . $extension;
         file_put_contents($tempFile, $doc->file_data);
 
         try {
-            Log::info("Calling OCR Server for ID: " . $this->documentId);
-            
-            $response = Http::timeout(300)->post('http://127.0.0.1:5000/ocr', [
-                'file_path' => $tempFile,
-                'doc_type' => $this->docType ?: 'birth',
-                'languages' => $this->languages ?: 'en,tl'
-            ]);
+            $jobs = [];
 
-            if ($response->failed()) {
-                throw new \Exception("OCR Server returned error: " . $response->body());
+            // If it's a PDF, we must split it into images first
+            if ($extension === 'pdf') {
+                Log::info("PDF detected. Requesting Python to split into pages...");
+                $response = Http::timeout(300)->post('http://127.0.0.1:5000/split', [
+                    'file_path' => $tempFile
+                ]);
+
+                if ($response->failed() || !($response->json()['success'] ?? false)) {
+                    throw new \Exception("Failed to split PDF: " . $response->body());
+                }
+
+                $pages = $response->json()['pages'];
+                Log::info("PDF split into " . count($pages) . " pages.");
+
+                foreach ($pages as $pageImage) {
+                    // low priority queue for batch pages
+                    $jobs[] = (new ProcessImageOcrJob($this->documentId, $pageImage, $this->docType, $this->languages))->onQueue('low');
+                }
+                
+                // Cleanup original PDF since we have images
+                @unlink($tempFile);
+            } else {
+                // Single image or native document (docx/txt bypass)
+                // high priority
+                $jobs[] = (new ProcessImageOcrJob($this->documentId, $tempFile, $this->docType, $this->languages))->onQueue('high');
             }
 
-            $result = $response->json();
-            
-            if (!($result['success'] ?? false)) {
-                throw new \Exception("OCR Result indicates failure: " . ($result['error'] ?? 'Unknown error'));
-            }
+            $docId = $this->documentId;
 
-            // Standardize status: 'extracted' is our "Done" state
-            DB::update(
-                "UPDATE documents SET ocr_text = ?, extracted_fields = ?, detected_type = ?, status = 'extracted' WHERE id = ?",
-                [
-                    $result['text'] ?? '',
-                    json_encode($result['extracted_fields'] ?? [], JSON_UNESCAPED_UNICODE),
-                    $result['detected_type'] ?? '',
-                    $this->documentId,
-                ]
-            );
+            // Dispatch batch
+            $batch = Bus::batch($jobs)
+                ->name("Document OCR - {$docId}")
+                ->then(function (Batch $batch) use ($docId) {
+                    // All jobs completed successfully
+                    Log::info("Batch {$batch->id} completed for doc {$docId}");
+                    DB::update("UPDATE documents SET status = 'extracted' WHERE id = ?", [$docId]);
+                })
+                ->catch(function (Batch $batch, Throwable $e) use ($docId) {
+                    // First batch job failure detected
+                    Log::error("Batch {$batch->id} failed for doc {$docId}: " . $e->getMessage());
+                    DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$docId]);
+                })
+                ->finally(function (Batch $batch) use ($docId) {
+                    // The batch has finished executing (whether successful or not)
+                })
+                ->dispatch();
 
-            Log::info("OCR Job (v2) completed successfully for ID: " . $this->documentId);
+            // Store batch ID in document metadata so frontend can poll progress
+            $metadata['batch_id'] = $batch->id;
+            DB::update("UPDATE documents SET metadata = ? WHERE id = ?", [json_encode($metadata), $docId]);
+
+            Log::info("Dispatched batch {$batch->id} for Document ID: " . $docId);
 
         } catch (\Exception $e) {
-            Log::error("OCR Job (v2) failed: " . $e->getMessage());
+            Log::error("ProcessDocumentOcr coordinator failed: " . $e->getMessage());
             DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-        } finally {
-            if (file_exists($tempFile)) {
-                @unlink($tempFile);
-            }
+            if (file_exists($tempFile)) @unlink($tempFile);
         }
     }
 }

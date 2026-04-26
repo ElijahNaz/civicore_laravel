@@ -111,10 +111,12 @@ const Documents = () => {
     const isLoadingData = dataLoading.documents;
 
     const [files, setFiles] = useState([]);
+    const [archivedIds, setArchivedIds] = useState([]);
 
     useEffect(() => {
-        setFiles(globalFiles);
-    }, [globalFiles]);
+        // Filter out any IDs that were optimistically archived to prevent "flickering" during background refreshes
+        setFiles(globalFiles.filter(f => !archivedIds.includes(f.id)));
+    }, [globalFiles, archivedIds]);
 
     const [selectedDocType, setSelectedDocType] = useState('birth');
     const [dragging, setDragging] = useState(false);
@@ -148,23 +150,39 @@ const Documents = () => {
     const onDrop = useCallback(async (acceptedFiles) => {
         setDragging(false);
         if (!acceptedFiles.length) return;
-        const file = acceptedFiles[0];
-        
-        runBackgroundTask(`Uploading ${file.name}`, async () => {
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('docType', selectedDocType);
-            
-            const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
-            const data = await res.json();
-            if (data.success) {
-                refreshAll();
-                setUploadStatus('success');
-                return { success: true };
+        const isBulk = acceptedFiles.length > 1;
+        const taskName = isBulk ? `Uploading ${acceptedFiles.length} files` : `Uploading ${acceptedFiles[0].name}`;
+
+        runBackgroundTask(taskName, async () => {
+            let successCount = 0;
+            let lastId = null;
+
+            for (const file of acceptedFiles) {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('docType', selectedDocType);
+                
+                try {
+                    const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
+                    const data = await res.json();
+                    if (data.success) {
+                        successCount++;
+                        lastId = data.id;
+                    }
+                } catch (err) {
+                    console.error(`Failed to upload ${file.name}`, err);
+                }
             }
-            setUploadStatus('error');
-            throw new Error(data.error || 'Upload failed');
-        }, { silent: true });
+
+            if (successCount > 0) {
+                refreshAll();
+                const message = isBulk 
+                    ? `Successfully uploaded ${successCount} of ${acceptedFiles.length} files` 
+                    : 'Document uploaded successfully';
+                return { success: true, message, id: lastId };
+            }
+            throw new Error('Upload failed');
+        });
     }, [selectedDocType, refreshAll, runBackgroundTask]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -176,7 +194,7 @@ const Documents = () => {
             'application/msword': ['.doc'],
             'text/plain': ['.txt']
         },
-        multiple: false,
+        multiple: true,
         onDragEnter: () => setDragging(true),
         onDragLeave: () => setDragging(false),
     });
@@ -338,12 +356,17 @@ const Documents = () => {
             type: 'danger',
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                // Optimistic UI update: Track this ID to hide it immediately and keep it hidden
+                setArchivedIds(prev => [...prev, fileId]);
+
                 runBackgroundTask(`${file.name}`, async () => {
                     const res = await fetch(`/api/documents/${fileId}`, { method: 'DELETE', credentials: 'include' });
                     if (res.ok) {
                         refreshAll();
-                        return { success: true, type: 'delete' };
+                        return { success: true, type: 'delete', message: 'Document archived successfully' };
                     }
+                    // Revert on failure
+                    refreshAll();
                     throw new Error('Deletion failed');
                 }, { 
                     type: 'delete', 
@@ -366,7 +389,8 @@ const Documents = () => {
         { type: 'marriage', icon: '💍', name: 'Marriage License', desc: 'Marriage contracts' },
     ];
 
-    const statusBadge = (status) => {
+    const statusBadge = (file) => {
+        const status = file.status;
         const map = {
             processed: 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]',
             extracted: 'bg-blue-50 text-blue-700 border-blue-100 shadow-[0_0_12px_-4px_rgba(59,130,246,0.3)]',
@@ -375,16 +399,21 @@ const Documents = () => {
             failed: 'bg-rose-50 text-rose-700 border-rose-100',
             pending: 'bg-amber-50 text-amber-700 border-amber-100 shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
         };
-        const labels = {
-            processed: '✓ Saved',
-            extracted: '⚡ Done',
-            processing: 'Processing…',
-            uploading: 'Uploading…',
-            failed: 'Failed',
-            pending: 'Pending OCR',
-        };
+        
+        let labelStr = status;
+        if (status?.toLowerCase() === 'processed') labelStr = '✓ Saved';
+        else if (status?.toLowerCase() === 'extracted') labelStr = '⚡ Done';
+        else if (status?.toLowerCase() === 'processing') {
+            if (file.batch_total > 1) {
+                labelStr = `Processing ${file.batch_processed}/${file.batch_total}`;
+            } else {
+                labelStr = 'Processing…';
+            }
+        }
+        else if (status?.toLowerCase() === 'uploading') labelStr = 'Uploading…';
+        else if (status?.toLowerCase() === 'failed') labelStr = 'Failed';
+        else if (status?.toLowerCase() === 'pending') labelStr = 'Pending OCR';
         const cls = map[status?.toLowerCase()] || map.pending;
-        const labelStr = labels[status?.toLowerCase()] || status;
 
         return (
             <motion.span
@@ -727,7 +756,7 @@ const Documents = () => {
                                                                 </td>
                                                                 <td className="px-1 py-4 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap">{file.size}</td>
                                                                 <td className="px-1 py-4 text-[10px] font-bold text-slate-400 truncate max-w-[12ch] uppercase tracking-tighter">{file.encoded_by || '—'}</td>
-                                                                <td className="px-2 py-4 text-center whitespace-nowrap">{statusBadge(file.status)}</td>
+                                                                <td className="px-2 py-4 text-center whitespace-nowrap">{statusBadge(file)}</td>
                                                                 <td className="px-4 py-4 text-right">
                                                                     <div className="flex items-center justify-end gap-1.5 px-1">
                                                                         {['pending', 'failed', 'uploaded'].includes(file.status?.toLowerCase()) && (

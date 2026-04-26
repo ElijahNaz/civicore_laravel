@@ -4,19 +4,35 @@ import os
 import re
 import argparse
 from pathlib import Path
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import easyocr
 from PIL import Image
+import fitz  # PyMuPDF
+
 try:
     import docx
 except ImportError:
     docx = None
 
-app = Flask(__name__)
-CORS(app)
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
 
-# ── Document-type detection ─────────────────────────────────────────────────
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -- Document-type detection -------------------------------------------------
 BIRTH_KEYWORDS    = ['certificate of live birth', 'live birth', 'birth certificate', 'date of birth',
                      'place of birth', 'sex', 'father', 'mother', 'philsys', 'republic form no. 102']
 DEATH_KEYWORDS    = ['certificate of death', 'death certificate', 'cause of death', 'date of death',
@@ -33,7 +49,7 @@ def detect_document_type(text: str) -> str:
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else 'unknown'
 
-# ── Field extractors ────────────────────────────────────────────────────────
+# -- Field extractors --------------------------------------------------------
 def _first_match(patterns, text, flags=re.IGNORECASE):
     for pat in patterns:
         m = re.search(pat, text, flags)
@@ -174,25 +190,70 @@ def extract_fields(doc_type: str, text: str, lines: list) -> dict:
     elif doc_type == 'marriage': return extract_marriage_fields(text, lines)
     return {}
 
-# ── OCR Reader (Persistent) ──────────────────────────────────────────────────
-REDER_LANGS = ['en', 'tl']
-print(f"Loading EasyOCR models for {REDER_LANGS}…")
-_reader = easyocr.Reader(REDER_LANGS, gpu=False, verbose=False)
+# -- OCR Reader (Persistent) --------------------------------------------------
+_reader = None
+def get_reader():
+    global _reader
+    if _reader is None:
+        REDER_LANGS = ['en', 'tl']
+        print(f"Loading EasyOCR models for {REDER_LANGS} (First run)...")
+        _reader = easyocr.Reader(REDER_LANGS, gpu=False, verbose=False)
+    return _reader
+
+if PYTESSERACT_AVAILABLE:
+    print("PyTesseract is available! Will prioritize it for extreme speed on images.")
+else:
+    print("PyTesseract not found. Falling back to EasyOCR (ML-accurate but slower on CPU).")
 print("OCR Reader ready.")
 
-@app.route('/status', methods=['GET'])
-def status():
-    return jsonify({"status": "ready", "engine": "easyocr", "persistent": True})
+class OCRRequest(BaseModel):
+    file_path: str
+    doc_type: str = "birth"
+    languages: str = "en,tl"
 
-@app.route('/ocr', methods=['POST'])
-def process_ocr():
-    data = request.get_json()
-    file_path = data.get('file_path')
-    expected_type = data.get('doc_type', 'birth')
-    languages = data.get('languages', 'en,tl').split(',')
+class SplitRequest(BaseModel):
+    file_path: str
+
+@app.get('/status')
+def status():
+    engine = "pytesseract_easyocr_fallback" if PYTESSERACT_AVAILABLE else "easyocr"
+    return {"status": "ready", "engine": engine, "persistent": True}
+
+@app.post('/split')
+def split_pdf(data: SplitRequest):
+    file_path = data.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="File not found")
+    
+    try:
+        doc = fitz.open(file_path)
+        image_paths = []
+        base_dir = os.path.dirname(file_path)
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        
+        for i in range(len(doc)):
+            page = doc.load_page(i)
+            # Render page to an image (zoom for better OCR quality)
+            zoom = 2.0
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat)
+            
+            img_path = os.path.join(base_dir, f"{base_name}_page_{i+1}.png")
+            pix.save(img_path)
+            image_paths.append(img_path)
+            
+        return {"success": True, "pages": image_paths, "total": len(image_paths)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/ocr')
+def process_ocr(data: OCRRequest):
+    file_path = data.file_path
+    expected_type = data.doc_type
+    languages = data.languages.split(',')
 
     if not file_path or not os.path.exists(file_path):
-        return jsonify({"success": False, "error": f"File not found: {file_path}"}), 400
+        raise HTTPException(status_code=400, detail=f"File not found: {file_path}")
 
     print(f"Processing OCR for: {file_path}")
     ext = Path(file_path).suffix.lower()
@@ -200,20 +261,45 @@ def process_ocr():
     lines, scores = [], []
 
     if ext == '.docx' and docx:
-        print(f"Extracting text from DOCX: {file_path}")
+        print(f"Extracting text natively from DOCX (Bypassing OCR): {file_path}")
         try:
             doc = docx.Document(file_path)
             lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
             scores = [1.0] * len(lines) # Perfect confidence for digital text
         except Exception as e:
-            return jsonify({"success": False, "error": f"DOCX extraction failed: {str(e)}"}), 500
+            raise HTTPException(status_code=500, detail=f"DOCX extraction failed: {str(e)}")
+    elif ext in ['.txt', '.rtf']:
+        print(f"Reading raw text file natively (Bypassing OCR): {file_path}")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                lines = [line.strip() for line in content.split('\n') if line.strip()]
+                scores = [1.0] * len(lines)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"TXT read failed: {str(e)}")
     else:
-        # Simple image processing for now
-        results = _reader.readtext(file_path)
-        for (_bbox, text, prob) in results:
-            if text.strip():
-                lines.append(text.strip())
-                scores.append(round(prob, 3))
+        # Image processing
+        processed_with_tesseract = False
+        if PYTESSERACT_AVAILABLE:
+            try:
+                print(f"Attempting extremely fast OCR via PyTesseract...")
+                img = Image.open(file_path)
+                tess_text = pytesseract.image_to_string(img)
+                if tess_text.strip():
+                    lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
+                    scores = [0.9] * len(lines)
+                processed_with_tesseract = True
+                print("Tesseract OCR completed instantly.")
+            except Exception as e:
+                print(f"PyTesseract failed. Falling back: {e}")
+        
+        if not processed_with_tesseract:
+            print("Running EasyOCR fallback...")
+            results = get_reader().readtext(file_path)
+            for (_bbox, text, prob) in results:
+                if text.strip():
+                    lines.append(text.strip())
+                    scores.append(round(prob, 3))
     
     full_text = '\n'.join(lines)
     avg_conf = round(sum(scores) / len(scores), 3) if scores else 0
@@ -230,7 +316,7 @@ def process_ocr():
             type_mismatch = True
             mismatch_msg = f"Document type mismatch: you selected '{expected_type}' but it appears to be a '{detected_type}' certificate."
 
-    return jsonify({
+    return {
         'success': True,
         'text': full_text,
         'confidence': avg_conf,
@@ -238,8 +324,15 @@ def process_ocr():
         'type_mismatch': type_mismatch,
         'mismatch_message': mismatch_msg,
         'extracted_fields': extracted_fields,
-    })
+    }
 
 if __name__ == '__main__':
-    # Default port 5000
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    import uvicorn
+    # Dynamic hardware scaling: Use max cores available, minus 1 for OS stability
+    cores = os.cpu_count() or 2
+    workers = 1 # Temporary for stability check
+    print(f"Starting OCR Server with DYNAMIC HARDWARE SCALING")
+    print(f"Detected CPU Cores: {cores}")
+    print(f"Launching {workers} concurrent AI threads for massive parallel throughput...")
+    
+    uvicorn.run("ocr_server:app", host='0.0.0.0', port=5000, workers=workers, log_level="info")

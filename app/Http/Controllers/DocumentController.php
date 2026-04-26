@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Bus;
+use App\Jobs\ProcessDocumentOcr;
 
 class DocumentController extends Controller
 {
@@ -53,6 +55,24 @@ class DocumentController extends Controller
         $params[] = ($page - 1) * $perPage;
         
         $documents = DB::select($query, $params);
+        
+        // Enhance documents with real-time batch progress if processing
+        foreach ($documents as $doc) {
+            $status = strtolower($doc->status ?? '');
+            if ($status === 'processing' || $status === 'pending') {
+                $metadata = json_decode($doc->metadata, true);
+                if (isset($metadata['batch_id'])) {
+                    $batch = Bus::findBatch($metadata['batch_id']);
+                    if ($batch) {
+                        $doc->batch_progress = $batch->progress();
+                        $doc->batch_total = $batch->totalJobs;
+                        $doc->batch_processed = $batch->processedJobs;
+                        $doc->batch_failed = $batch->failedJobs;
+                        $doc->batch_finished = $batch->finished();
+                    }
+                }
+            }
+        }
         
         return response()->json([
             'data' => $documents,
@@ -117,7 +137,7 @@ class DocumentController extends Controller
     public function upload(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|max:10240|mimes:pdf,png,jpg,jpeg,tiff,bmp,docx,doc,txt', // 10MB max
+            'file' => 'required|file|max:20480|mimes:pdf,png,jpg,jpeg,tiff,bmp,docx,doc,txt,webp,rtf', // 20MB max
             'docType' => 'nullable|string',
             'personName' => 'nullable|string',
             'barangay' => 'nullable|string',
@@ -176,6 +196,9 @@ class DocumentController extends Controller
 
         // Log history
         $this->logHistory($newId, 'Uploaded');
+
+        // AUTO-DISPATCH OCR PROCESSING
+        ProcessDocumentOcr::dispatch($newId, $docType)->onQueue('high');
 
         return response()->json([
             'success' => true,

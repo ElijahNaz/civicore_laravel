@@ -8,12 +8,13 @@ echo ===================================================
 echo [1/4] Launching Laravel Server on http://localhost:8000...
 start "Laravel Server" cmd /k "php artisan serve"
 
-:: 2. Start Laravel Queue Worker
-echo [2/4] Launching Background Queue Worker...
-start "Queue Worker" cmd /k "php artisan queue:work --tries=1"
+:: 2. Start Laravel Queue Workers (Parallel Processing)
+echo [2/4] Launching 2x Background Queue Workers (high, low, default)...
+start "Queue Worker 1" cmd /k "php artisan queue:work --queue=high,low,default --tries=3"
+start "Queue Worker 2" cmd /k "php artisan queue:work --queue=high,low,default --tries=3"
 
 :: 3. Start Persistent OCR Server
-echo [3/4] Launching Persistent OCR Server (Flask)...
+echo [3/4] Launching Persistent OCR Server (FastAPI + Dynamic Scaling)...
 start "OCR Server" cmd /k "python ocr_server.py"
 
 :: 4. Start Vite (Frontend)

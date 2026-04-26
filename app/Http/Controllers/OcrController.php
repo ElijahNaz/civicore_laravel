@@ -48,6 +48,7 @@ class OcrController extends Controller
         elseif (str_contains($mimetype, 'png'))  $extension = 'png';
         elseif (str_contains($mimetype, 'tiff')) $extension = 'tiff';
         elseif (str_contains($mimetype, 'bmp'))  $extension = 'bmp';
+        elseif (str_contains($mimetype, 'text')) $extension = 'txt';
 
         // Ensure the status is set to processing
         DB::update("UPDATE documents SET status = 'processing' WHERE id = ?", [$documentId]);
