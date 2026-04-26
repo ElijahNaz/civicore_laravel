@@ -761,7 +761,7 @@ const Documents = () => {
                                                                 </td>
                                                                 <td className="px-2 py-2.5">
                                                                     <span className="text-[9.5px] font-black px-1.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-100 rounded-md uppercase tracking-tighter">
-                                                                        {file.detected_type || file.type}
+                                                                        {(file.detected_type && file.detected_type.toLowerCase() !== 'unknown') ? file.detected_type : (file.type && file.type.toLowerCase() !== 'unknown' ? file.type : 'birth')}
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-2 py-2.5 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap">{file.size}</td>

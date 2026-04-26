@@ -39,6 +39,15 @@ class OcrController extends Controller
             return response()->json(['success' => false, 'error' => 'File content not found in database'], 404);
         }
 
+        // --- Prevent duplicate processing ---
+        if (($doc->status ?? '') === 'processing') {
+            return response()->json([
+                'success' => true,
+                'status' => 'processing',
+                'message' => 'OCR is already running for this document.'
+            ]);
+        }
+
         // ── Determine extension ──────────────────────────────────────────────
         $metadata  = json_decode($doc->metadata, true);
         $mimetype  = $metadata['mimetype'] ?? 'image/jpeg';

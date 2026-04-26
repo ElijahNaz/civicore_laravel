@@ -81,7 +81,7 @@ CiviCORE uses a specialized Python server for document scanning.
 1. Ensure Python is added to your system's PATH.
 2. Install the required Python packages:
    ```bash
-   pip install flask flask-cors easyocr Pillow
+   pip install fastapi uvicorn easyocr Pillow pytesseract python-docx
    ```
    *Note: On the first run, the OCR engine will download about 150MB of machine learning models. Ensure you have an internet connection.*
 
@@ -120,7 +120,7 @@ For convenience, a **One-Click Launcher** has been provided.
 ## 📂 Project Highlights
 - **`app/`**: Laravel core logic and API.
 - **`resources/js/components/`**: React 19 Frontend components.
-- **`ocr_server.py`**: The Python Flask server that handles AI vision.
+- **`ocr_server.py`**: The Python FastAPI server that handles AI vision.
 - **`civicore-export-4-9-2026.sql`**: The production-ready database dump.
 
 ---
@@ -129,14 +129,18 @@ For convenience, a **One-Click Launcher** has been provided.
 
 The following features, fixes, and architectural refinements have been successfully implemented and verified:
 
+### ⚡ OCR & Document Processing (Latest Updates)
+- **Multi-Engine Support**: Integrated **Tesseract** as a high-speed fallback for **EasyOCR**.
+- **Binary Safety**: Converted `issuances` table to use `LONGBLOB` for PDF storage, resolving 500 errors during approval.
+- **Reactive Extraction**: OCR results now populate the form fields in real-time as background jobs complete.
+- **Improved Accuracy**: Enhanced regex patterns to support Form 102 (Birth) and Form 103 (Death) standard layouts.
+- **UI Compaction**: Re-engineered the document queue to be significantly more compact, eliminating horizontal scrolling.
+
 ### 🏛️ UI/UX & Layout Consistency
 - **Standardized Aesthetics**: Unified icons, fonts, and sub-heading styles across the entire platform.
 - **Optimized Sidebar**: 
   - Logout button relocated to the absolute bottom for better ergonomics.
   - Sidebar fixed position logic implemented; scrolling main content no longer affects navigation visibility.
-- **Mapping Refinement**: 
-  - Pin Mapping Color (Black) added to signify missing meanings or zero-record barangays.
-  - Aligned mapping tooltips and interactivity.
 - **Performance**: Resolved "laggy" occurrences through requirement-based code optimization and background job offloading.
 
 ### 🔐 Security & Account Management
@@ -144,32 +148,13 @@ The following features, fixes, and architectural refinements have been successfu
 - **Strict Validation**: 
   - Implemented Name validation logic.
   - Enforced Minimum Password Requirements (One Capital, One Small, Number, Special Character).
-- **UI Sophistication**:
-  - Fixed "Set Password" eye icon alignment.
-  - Enhanced "System Role" dropdown with improved clickable aesthetics and carets.
-- **Role Simplification**: 
-  - Removed generic 'User' role.
-  - Defined strict boundaries: **Staff (Admin)** and **SuperAdmin (Former Admin)**.
-  - Standardized Role colors across Distribution and Matrix overviews.
-
-### 📊 Dashboard & Public Portal
-- **Dashboard Refinements**:
-  - Added decorative "Underline" to 'Breakdown by Type' for emphasis.
-  - Unified color coding for Marriage, Master Database, Birth, and Death certificates across Dashboard, Upload, and Mapping.
-- **Home Page Enhancements**:
-  - Implemented Real-Time stats labels: **PROCESSED** and **RESPONSE**.
-  - Added Admin-controlled **Announcement Section** for service availability alerts.
-- **Portal Content**:
-  - Justified "About Portal" text for premium typography.
-  - Renamed "About Portal" to **"About CiviCore"** with content focused specifically on the Civil Registry mission/vision.
-  - Added **"Vision of Civil Registry"** section.
-  - Standardized sub-heading consistency across About, Digital Services, and Contact Directory.
 
 ---
 
 ## ⚠️ Known Issues / Technical Debt
-- **Document Pipeline**: Document upload functionality and OCR processing are currently experiencing persistence issues. Data extraction is functional in the engine, but database saving requires a patch in the next cycle.
-- **Current Status**: "upload document doesnt work for some reason need to fix nextime"
+- **OCR Stability**: On machines with low RAM (e.g., 4GB), running multiple EasyOCR workers may cause system instability. Recommendation: Use Tesseract for high-speed CPU processing or limit to 1 worker.
+- **Document Type Detection**: Occasional "UNKNOWN" classification when scan quality is poor. **Fallback Logic**: The system now defaults these to "Birth Certificate" automatically.
+- **Database Race Conditions**: In very high-concurrency environments, multiple OCR pages may compete to update the same record. (Patch: Implemented Row-Level Locking in April 2026).
 
 ---
 

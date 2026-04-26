@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import easyocr
+# import easyocr (Moved to get_reader for memory efficiency)
 from PIL import Image
 import fitz  # PyMuPDF
 
@@ -18,8 +18,15 @@ except ImportError:
 
 try:
     import pytesseract
+    # Common Windows path for Tesseract
+    TESS_PATH = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    if os.path.exists(TESS_PATH):
+        pytesseract.pytesseract.tesseract_cmd = TESS_PATH
+    
+    # Verify it works
+    pytesseract.get_tesseract_version()
     PYTESSERACT_AVAILABLE = True
-except ImportError:
+except Exception:
     PYTESSERACT_AVAILABLE = False
 
 app = FastAPI()
@@ -47,7 +54,8 @@ def detect_document_type(text: str) -> str:
     marriage_hits = sum(1 for kw in MARRIAGE_KEYWORDS if kw in lower)
     scores = {'birth': birth_hits, 'death': death_hits, 'marriage': marriage_hits}
     best = max(scores, key=scores.get)
-    return best if scores[best] > 0 else 'unknown'
+    # Default to 'birth' instead of 'unknown' if no clear indicators are found
+    return best if scores[best] > 0 else 'birth'
 
 # -- Field extractors --------------------------------------------------------
 def _first_match(patterns, text, flags=re.IGNORECASE):
@@ -141,47 +149,64 @@ def smart_split_name(full_name: str) -> dict:
 
 def extract_birth_fields(text: str, lines: list) -> dict:
     fields = {}
-    name_str = _first_match([r'(?:name of child|child\'s name|name)[:\s]+([A-Z][A-Za-z\s,.\-]+)'], text)
+    # Use a more aggressive search for the child's name
+    name_str = _first_match([
+        r'(?:name of child|child\'s name|name)[:\s]*([A-Z][A-Za-z\s,.\-]+)',
+        r'1\.\s*NAME\s*\([A-Za-z\s]+\)\s*([A-Z\s,.\-]+)', # Form 102 style
+    ], text)
+    
     if not name_str:
-        for line in lines[:15]:
-            if re.match(r'^[A-Z][A-Z\s,.\-]{5,}$', line.strip()) and 'BIRTH' not in line:
-                name_str = line.strip(); break
+        for line in lines[:20]:
+            clean = line.strip()
+            # Look for lines that are clearly names (all caps or Title Case)
+            if re.match(r'^[A-Z][A-Z\s,.\-]{5,}$', clean) and not any(kw in clean.upper() for kw in ['BIRTH', 'CERTIFICATE', 'CITY', 'MUNICIPALITY']):
+                name_str = clean
+                break
     
     fields.update(smart_split_name(name_str))
-    fields['date_of_birth'] = _first_match([r'(?:date of birth|birth date|born)[:\s]+([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
-    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
-    fields['place_of_birth'] = _first_match([r'(?:place of birth|municipality|city)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
+    
+    fields['date_of_birth'] = _first_match([
+        r'(?:date of birth|birth date|born)[:\s]*([A-Za-z0-9\s,/\-]+)',
+        r'3\.\s*DATE OF BIRTH\s*([A-Za-z0-9\s,/\-]+)',
+        r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'
+    ], text) or ''
+    
+    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]*(male|female)', r'\b(male|female)\b'], text) or ''
+    fields['place_of_birth'] = _first_match([r'(?:place of birth|municipality|city)[:\s]*([A-Za-z\s,.\-]+)'], text) or ''
+    fields['registry_number'] = _first_match([r'(?:registry no\.|reg\.?\s*no\.)[:\s]*([A-Z0-9\s\-]+)'], text) or ''
 
-    f_name = _first_match([r"(?:father'?s?\s*name|father)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    f_name = _first_match([r"(?:father'?s?\s*name|father)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(f_name).items(): fields[f'father_{k}'] = v
 
-    m_name = _first_match([r"(?:mother'?s?\s*name|mother)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    m_name = _first_match([r"(?:mother'?s?\s*name|mother)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(m_name).items(): fields[f'mother_{k}'] = v
 
-    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]*([A-Za-z\s\d\-]+)'], text) or ''
     return fields
 
 def extract_death_fields(text: str, lines: list) -> dict:
     fields = {}
-    name_str = _first_match([r'(?:name of deceased|deceased name|name)[:\s]+([A-Za-z\s,.\-]+)'], text)
+    name_str = _first_match([r'(?:name of deceased|deceased name|name)[:\s]*([A-Za-z\s,.\-]+)'], text)
     fields.update(smart_split_name(name_str))
-    fields['date_of_death'] = _first_match([r'(?:date of death|died)[:\s]+([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
-    fields['age'] = _first_match([r'(?:age at death|age)[:\s]+(\d+)', r'\b(\d{1,3})\s*(?:years?|yr)'], text) or ''
-    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]+(male|female)', r'\b(male|female)\b'], text) or ''
-    fields['place_of_death'] = _first_match([r'(?:place of death|died at|hospital|municipality)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
-    fields['cause_of_death'] = _first_match([r'(?:cause of death|immediate cause)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
-    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
+    fields['date_of_death'] = _first_match([r'(?:date of death|died)[:\s]*([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
+    fields['age'] = _first_match([r'(?:age at death|age)[:\s]*(\d+)', r'\b(\d{1,3})\s*(?:years?|yr)'], text) or ''
+    fields['sex'] = _first_match([r'(?:sex|gender)[:\s]*(male|female)', r'\b(male|female)\b'], text) or ''
+    fields['place_of_death'] = _first_match([r'(?:place of death|died at|hospital|municipality)[:\s]*([A-Za-z\s,.\-]+)'], text) or ''
+    fields['cause_of_death'] = _first_match([r'(?:cause of death|immediate cause)[:\s]*([A-Za-z\s,.\-]+)'], text) or ''
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]*([A-Za-z\s\d\-]+)'], text) or ''
+    fields['registry_number'] = _first_match([r'(?:registry no\.|reg\.?\s*no\.)[:\s]*([A-Z0-9\s\-]+)'], text) or ''
     return fields
 
 def extract_marriage_fields(text: str, lines: list) -> dict:
     fields = {}
-    h_name = _first_match([r"(?:husband'?s?\s*name|groom|husband)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    h_name = _first_match([r"(?:husband'?s?\s*name|groom|husband)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(h_name).items(): fields[f'husband_{k}'] = v
-    w_name = _first_match([r"(?:wife'?s?\s*name|bride|wife)[:\s]+([A-Za-z\s,.\-]+)"], text)
+    w_name = _first_match([r"(?:wife'?s?\s*name|bride|wife)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(w_name).items(): fields[f'wife_{k}'] = v
-    fields['date_of_marriage'] = _first_match([r'(?:date of marriage|married on|wedding date)[:\s]+([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
-    fields['place_of_marriage'] = _first_match([r'(?:place of marriage|married at|municipality)[:\s]+([A-Za-z\s,.\-]+)'], text) or ''
-    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]+([A-Za-z\s\d\-]+)'], text) or ''
+    fields['date_of_marriage'] = _first_match([r'(?:date of marriage|married on|wedding date)[:\s]*([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
+    fields['place_of_marriage'] = _first_match([r'(?:place of marriage|married at|municipality)[:\s]*([A-Za-z\s,.\-]+)'], text) or ''
+    fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]*([A-Za-z\s\d\-]+)'], text) or ''
+    fields['registry_number'] = _first_match([r'(?:registry no\.|reg\.?\s*no\.)[:\s]*([A-Z0-9\s\-]+)'], text) or ''
     return fields
 
 def extract_fields(doc_type: str, text: str, lines: list) -> dict:
@@ -195,16 +220,21 @@ _reader = None
 def get_reader():
     global _reader
     if _reader is None:
-        REDER_LANGS = ['en', 'tl']
-        print(f"Loading EasyOCR models for {REDER_LANGS} (First run)...")
-        _reader = easyocr.Reader(REDER_LANGS, gpu=False, verbose=False)
+        try:
+            import easyocr
+            REDER_LANGS = ['en', 'tl']
+            print(f"Loading EasyOCR models for {REDER_LANGS} (First run)...")
+            _reader = easyocr.Reader(REDER_LANGS, gpu=False, verbose=False)
+        except Exception as e:
+            print(f"Failed to load EasyOCR: {e}")
+            return None
     return _reader
 
 if PYTESSERACT_AVAILABLE:
     print("PyTesseract is available! Will prioritize it for extreme speed on images.")
 else:
-    print("PyTesseract not found. Falling back to EasyOCR (ML-accurate but slower on CPU).")
-print("OCR Reader ready.")
+    print("PyTesseract not found. EasyOCR will be loaded on first use (Accurate but slower on CPU).")
+print("OCR Server initialized.")
 
 class OCRRequest(BaseModel):
     file_path: str
@@ -279,34 +309,46 @@ def process_ocr(data: OCRRequest):
             raise HTTPException(status_code=500, detail=f"TXT read failed: {str(e)}")
     else:
         # Image processing
-        processed_with_tesseract = False
-        if PYTESSERACT_AVAILABLE:
-            try:
-                print(f"Attempting extremely fast OCR via PyTesseract...")
-                img = Image.open(file_path)
-                tess_text = pytesseract.image_to_string(img)
-                if tess_text.strip():
-                    lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
-                    scores = [0.9] * len(lines)
-                processed_with_tesseract = True
-                print("Tesseract OCR completed instantly.")
-            except Exception as e:
-                print(f"PyTesseract failed. Falling back: {e}")
+        processed_with_easyocr = False
         
-        if not processed_with_tesseract:
-            print("Running EasyOCR fallback...")
-            results = get_reader().readtext(file_path)
-            for (_bbox, text, prob) in results:
-                if text.strip():
-                    lines.append(text.strip())
-                    scores.append(round(prob, 3))
+        # Try EasyOCR first as requested by user
+        print("Running EasyOCR...")
+        reader = get_reader()
+        if reader:
+            try:
+                results = reader.readtext(file_path)
+                for (_bbox, text, prob) in results:
+                    if text.strip():
+                        lines.append(text.strip())
+                        scores.append(round(prob, 3))
+                processed_with_easyocr = True
+                print("EasyOCR completed.")
+            except Exception as e:
+                print(f"EasyOCR failed: {e}")
+
+        # Fallback to Tesseract ONLY if EasyOCR failed or returned no text
+        if not processed_with_easyocr or not lines:
+            if PYTESSERACT_AVAILABLE:
+                try:
+                    print(f"Attempting Tesseract fallback...")
+                    img = Image.open(file_path)
+                    tess_text = pytesseract.image_to_string(img)
+                    if tess_text.strip():
+                        lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
+                        scores = [0.9] * len(lines)
+                        print("Tesseract fallback successful.")
+                except Exception as e:
+                    print(f"Tesseract fallback failed: {e}")
     
     full_text = '\n'.join(lines)
     avg_conf = round(sum(scores) / len(scores), 3) if scores else 0
     
     # Detect & Extract
     detected_type = detect_document_type(full_text)
-    extraction_type = detected_type if detected_type != 'unknown' else expected_type
+    extraction_type = detected_type
+    if extraction_type == 'unknown' or not extraction_type:
+        extraction_type = expected_type if (expected_type and expected_type != 'unknown') else 'birth'
+    
     extracted_fields = extract_fields(extraction_type, full_text, lines)
     
     type_mismatch = False
@@ -330,7 +372,9 @@ if __name__ == '__main__':
     import uvicorn
     # Dynamic hardware scaling: Use max cores available, minus 1 for OS stability
     cores = os.cpu_count() or 2
-    workers = 1 # Temporary for stability check
+    # Default to 1 worker for stability on low-end systems (i3/4GB RAM)
+    # Tesseract is so fast that parallelism isn't strictly required for a single user
+    workers = 1 
     print(f"Starting OCR Server with DYNAMIC HARDWARE SCALING")
     print(f"Detected CPU Cores: {cores}")
     print(f"Launching {workers} concurrent AI threads for massive parallel throughput...")
