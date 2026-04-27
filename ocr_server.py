@@ -3,11 +3,12 @@ import json
 import os
 import re
 import argparse
+import time
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 # import easyocr (Moved to get_reader for memory efficiency)
 from PIL import Image
 import fitz  # PyMuPDF
@@ -245,6 +246,13 @@ class OCRRequest(BaseModel):
 
 class SplitRequest(BaseModel):
     file_path: str
+    ocr_confidence: Optional[float] = None
+    base_zoom: float = 1.35
+    boosted_zoom: float = 1.8
+    low_confidence_threshold: float = 0.75
+    max_dimension: Optional[int] = 2000
+    image_format: Literal["jpeg", "webp"] = "jpeg"
+    image_quality: int = 75
 
 @app.get('/status')
 def status():
@@ -263,16 +271,56 @@ def split_pdf(data: SplitRequest):
         base_dir = os.path.dirname(file_path)
         base_name = os.path.splitext(os.path.basename(file_path))[0]
         
+        base_zoom = max(1.0, min(data.base_zoom, 3.0))
+        boosted_zoom = max(base_zoom, min(data.boosted_zoom, 3.0))
+        use_boosted_zoom = (
+            data.ocr_confidence is not None
+            and data.ocr_confidence < data.low_confidence_threshold
+        )
+        zoom = boosted_zoom if use_boosted_zoom else base_zoom
+        max_dimension = data.max_dimension if (data.max_dimension and data.max_dimension > 0) else None
+        image_format = data.image_format.lower()
+        image_quality = max(1, min(data.image_quality, 100))
+        output_ext = "jpg" if image_format == "jpeg" else "webp"
+        output_format = "JPEG" if image_format == "jpeg" else "WEBP"
+
+        print(
+            "split_pdf settings: "
+            f"zoom={zoom:.2f} (boosted={use_boosted_zoom}), "
+            f"format={output_format}, quality={image_quality}, "
+            f"max_dimension={max_dimension}"
+        )
+
         for i in range(len(doc)):
             page = doc.load_page(i)
-            # Render page to an image (zoom for better OCR quality)
-            zoom = 2.0
+            page_start = time.perf_counter()
+            # Render page to an image with adaptive zoom for OCR speed/quality balance
             mat = fitz.Matrix(zoom, zoom)
             pix = page.get_pixmap(matrix=mat)
-            
-            img_path = os.path.join(base_dir, f"{base_name}_page_{i+1}.png")
-            pix.save(img_path)
+
+            pil_mode = "RGBA" if pix.alpha else "RGB"
+            pil_image = Image.frombytes(pil_mode, (pix.width, pix.height), pix.samples)
+            grayscale_image = pil_image.convert("L")
+
+            if max_dimension:
+                resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                grayscale_image.thumbnail((max_dimension, max_dimension), resample_filter)
+
+            img_path = os.path.join(base_dir, f"{base_name}_page_{i+1}.{output_ext}")
+            save_kwargs = {"format": output_format, "quality": image_quality}
+            if output_format == "JPEG":
+                save_kwargs["optimize"] = True
+            elif output_format == "WEBP":
+                save_kwargs["method"] = 6
+
+            grayscale_image.save(img_path, **save_kwargs)
             image_paths.append(img_path)
+
+            page_elapsed = time.perf_counter() - page_start
+            print(
+                f"Rendered page {i + 1}/{len(doc)} in {page_elapsed:.3f}s "
+                f"at {grayscale_image.width}x{grayscale_image.height}"
+            )
             
         return {"success": True, "pages": image_paths, "total": len(image_paths)}
     except Exception as e:
