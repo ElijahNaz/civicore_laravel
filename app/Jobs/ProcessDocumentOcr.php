@@ -18,6 +18,7 @@ class ProcessDocumentOcr implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public $queue = 'high';
     public $timeout = 600;
 
     protected $documentId;
