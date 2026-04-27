@@ -410,45 +410,24 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     };
 
     const processFinalWarp = () => {
-        if (!capturedFile || !window.cv) return;
-        
+        if (!capturedFile) return;
+
         setScannerStatus('ocr_processing');
         setIsCapturing(true);
-        const cv = window.cv;
-        
-        const img = new Image();
-        img.src = URL.createObjectURL(capturedFile);
-        img.onload = () => {
-            const src = cv.imread(img);
-            
-            // Source points from manual adjustment
-            const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                (corners.tl.x / 100) * src.cols, (corners.tl.y / 100) * src.rows,
-                (corners.tr.x / 100) * src.cols, (corners.tr.y / 100) * src.rows,
-                (corners.br.x / 100) * src.cols, (corners.br.y / 100) * src.rows,
-                (corners.bl.x / 100) * src.cols, (corners.bl.y / 100) * src.rows
-            ]);
 
-            const dstWidth = 900;
-            const dstHeight = 1200;
-            const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, dstWidth, 0, dstWidth, dstHeight, 0, dstHeight]);
-
-            const M = cv.getPerspectiveTransform(srcPts, dstPts);
-            const dst = new cv.Mat();
-            cv.warpPerspective(src, dst, M, new cv.Size(dstWidth, dstHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-            const outputCanvas = document.createElement('canvas');
-            cv.imshow(outputCanvas, dst);
-            
-            outputCanvas.toBlob((blob) => {
-                const file = new File([blob], capturedFile.name, { type: 'image/jpeg' });
-                onCapture(file);
-                onClose();
-                setIsCapturing(false);
-            }, 'image/jpeg', 0.9);
-
-            src.delete(); srcPts.delete(); dstPts.delete(); M.delete(); dst.delete();
-        };
+        onCapture({
+            file: capturedFile,
+            corners: {
+                tl: { x: corners.tl.x / 100, y: corners.tl.y / 100 },
+                tr: { x: corners.tr.x / 100, y: corners.tr.y / 100 },
+                br: { x: corners.br.x / 100, y: corners.br.y / 100 },
+                bl: { x: corners.bl.x / 100, y: corners.bl.y / 100 }
+            },
+            edgeStability: stabilityScore / 100,
+            deviceType: captureEngine.environment
+        });
+        onClose();
+        setIsCapturing(false);
     };
 
     const handleConfirm = () => {
