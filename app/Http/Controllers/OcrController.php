@@ -62,8 +62,8 @@ class OcrController extends Controller
         // Ensure the status is set to processing
         DB::update("UPDATE documents SET status = 'processing' WHERE id = ?", [$documentId]);
 
-        // Dispatch the background job
-        \App\Jobs\ProcessDocumentOcr::dispatch($documentId, $docType, $languages);
+        // Dispatch the coordinator to the high-priority queue so OCR starts immediately
+        \App\Jobs\ProcessDocumentOcr::dispatch($documentId, $docType, $languages)->onQueue('high');
 
         return response()->json([
             'success' => true,
