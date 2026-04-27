@@ -44,7 +44,8 @@ class ProcessImageOcrJob implements ShouldQueue
             $response = Http::timeout(120)->post('http://127.0.0.1:5000/ocr', [
                 'file_path' => $this->imagePath,
                 'doc_type' => $this->docType,
-                'languages' => $this->languages
+                'languages' => $this->languages,
+                'ocr_mode' => 'fast',
             ]);
 
             if ($response->failed() || !($response->json()['success'] ?? false)) {
