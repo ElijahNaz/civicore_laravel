@@ -185,6 +185,9 @@ The following features, fixes, and architectural refinements have been successfu
 
 ## ⚠️ Known Issues / Technical Debt
 - **OCR Stability**: On machines with low RAM (e.g., 4GB), running multiple EasyOCR workers may cause system instability. Recommendation: Use Tesseract for high-speed CPU processing or limit to 1 worker.
+- **Auto-Fill Sync**: In some cases, OCR results may not automatically populate the template preview textboxes on the first load. (Workaround: Manually edit any field to trigger a re-sync).
+- **Template Alignment**: The current field coordinates for Form 102/103 are approximate and may require manual calibration via the "Template Designer" for perfect printer alignment.
+- **Marriage Certificates**: Official support for Municipal Form No. 101 (Marriage) is pending and has not yet been implemented in the overlay system.
 - **Document Type Detection**: Occasional classification challenges on low-quality scans. **Improved Logic**: The system now returns "Unknown" instead of an incorrect guess, allowing the user to select the correct template manually in the OCR panel.
 - **Database Race Conditions**: In very high-concurrency environments, multiple OCR pages may compete to update the same record. (Patch: Implemented Row-Level Locking in April 2026).
 
