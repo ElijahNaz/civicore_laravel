@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,6 +7,7 @@ import {
     ArrowPathIcon, CpuChipIcon, SwatchIcon,
     AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
+import { createCaptureEngine } from './captureEngine';
 
 const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const videoRef = useRef(null);
@@ -83,15 +84,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         return () => stopCamera();
     }, [isOpen, facingMode]);
 
-    // Helper to sort points in TL, TR, BR, BL order
-    const sortPoints = (pts) => {
-        // pts is array of {x, y}
-        const sorted = [...pts].sort((a, b) => a.y - b.y);
-        const top = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
-        const bottom = sorted.slice(2, 4).sort((a, b) => a.x - b.x);
-        return { tl: top[0], tr: top[1], br: bottom[1], bl: bottom[0] };
-    };
-
     // Live Tracing & Rendering Logic
     useEffect(() => {
         if (!isOpen) return;
@@ -122,68 +114,15 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             if (!previewImage && video && video.readyState >= 2) {
                 if (window.cv && time - lastProcessTime > processFreq) {
                     try {
-                        const cv = window.cv;
-                        const src = cv.imread(video);
-                        const dst = new cv.Mat();
-                        
-                        // Downscale for performance
-                        const dsize = new cv.Size(400, (400 / video.videoWidth) * video.videoHeight);
-                        cv.resize(src, dst, dsize, 0, 0, cv.INTER_AREA);
-                        
-                        const gray = new cv.Mat();
-                        cv.cvtColor(dst, gray, cv.COLOR_RGBA2GRAY);
-                        const blurred = new cv.Mat();
-                        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-                        const edged = new cv.Mat();
-                        cv.Canny(blurred, edged, 50, 150); // More sensitive thresholds
-
-                        const contours = new cv.MatVector();
-                        const hierarchy = new cv.Mat();
-                        cv.findContours(edged, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-                        let maxArea = 0;
-                        let bestQuad = null;
-
-                        for (let i = 0; i < contours.size(); ++i) {
-                            const cnt = contours.get(i);
-                            const area = cv.contourArea(cnt);
-                            if (area > 1000) { // Lower area threshold for sensitivity
-                                const peri = cv.arcLength(cnt, true);
-                                const approx = new cv.Mat();
-                                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-                                
-                                // Favor quads, but also find "quad-like" shapes
-                                if (approx.rows === 4 && area > maxArea) {
-                                    maxArea = area;
-                                    if (bestQuad) bestQuad.delete();
-                                    bestQuad = approx;
-                                } else {
-                                    approx.delete();
-                                }
-                            }
-                        }
-
-                        if (bestQuad) {
-                            const pts = [];
-                            for (let i = 0; i < 4; i++) {
-                                pts.push({
-                                    x: (bestQuad.data32S[i * 2] / dsize.width) * 100,
-                                    y: (bestQuad.data32S[i * 2 + 1] / dsize.height) * 100
-                                });
-                            }
-                            const sorted = sortPoints(pts);
-                            autoCornersRef.current = sorted;
-                            lastDetectedRef.current = sorted;
-                            setAutoCorners(sorted); // Still update state for UI reactivity elsewhere if needed
-                            bestQuad.delete();
+                        const detected = captureEngine.detectEdges({ videoElement: video });
+                        if (detected) {
+                            autoCornersRef.current = detected;
+                            lastDetectedRef.current = detected;
+                            setAutoCorners(detected);
                         } else {
                             autoCornersRef.current = null;
                             setAutoCorners(null);
                         }
-
-                        // Cleanup mats
-                        src.delete(); dst.delete(); gray.delete(); blurred.delete(); edged.delete(); 
-                        contours.delete(); hierarchy.delete();
                         lastProcessTime = time;
                     } catch (e) {
                         // Silent fail for rendering loop stability
@@ -306,20 +245,17 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         draggingCorner.current = null;
     };
 
+    const captureEngine = useMemo(() => createCaptureEngine(), []);
+
     const startCamera = async () => {
         stopCamera();
         try {
-            const constraints = {
-                video: { 
-                    facingMode, 
-                    width: { ideal: 1080 }, 
-                    height: { ideal: 1920 },
-                    aspectRatio: { ideal: 9/16 }
-                }
-            };
-            const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            // Critical Race Condition Check: 
+            const newStream = await captureEngine.startPreview({
+                videoElement: videoRef.current,
+                facingMode
+            });
+
+            // Critical Race Condition Check:
             // If the modal was closed while we were waiting for the camera, stop it immediately.
             if (!modalOpenRef.current) {
                 newStream.getTracks().forEach(track => track.stop());
@@ -328,7 +264,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
             activeStreamRef.current = newStream;
             setStream(newStream);
-            if (videoRef.current) videoRef.current.srcObject = newStream;
             setHasPermission(true);
         } catch (err) {
             setHasPermission(false);
@@ -336,17 +271,9 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     };
 
     const stopCamera = () => {
-        if (activeStreamRef.current) {
-            activeStreamRef.current.getTracks().forEach(track => {
-                track.stop();
-                activeStreamRef.current.removeTrack(track);
-            });
-            activeStreamRef.current = null;
-        }
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            setStream(null);
-        }
+        captureEngine.stop();
+        activeStreamRef.current = null;
+        setStream(null);
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
@@ -354,33 +281,31 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
     const toggleCamera = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
-    const capturePhoto = () => {
+    const capturePhoto = async () => {
         if (!videoRef.current) return;
 
         setIsCapturing(true);
-        const video = videoRef.current;
 
-        // 1. Capture the current frame as a static image
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth;
-        tempCanvas.height = video.videoHeight;
-        const ctx = tempCanvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        
-        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-        setPreviewImage(dataUrl);
+        const captured = await captureEngine.capture({
+            videoElement: videoRef.current,
+            quality: 0.9
+        });
+
+        if (!captured) {
+            setIsCapturing(false);
+            return;
+        }
+
+        setPreviewImage(captured.dataUrl);
 
         // 2. Snap manual handles to the last auto-detected position (or default)
         if (lastDetectedRef.current) {
             setCorners(lastDetectedRef.current);
         }
 
-        tempCanvas.toBlob((blob) => {
-            const file = new File([blob], `captured-${Date.now()}.jpg`, { type: 'image/jpeg' });
-            setCapturedFile(file);
-            setIsCapturing(false);
-            stopCamera(); // Stop camera once captured for adjustment
-        }, 'image/jpeg', 0.9);
+        setCapturedFile(captured.file);
+        setIsCapturing(false);
+        stopCamera(); // Stop camera once captured for adjustment
     };
 
     const processFinalWarp = () => {
@@ -435,7 +360,11 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         setCapturedFile(null);
         setRotation(0);
         setIsGrayscale(false);
-        startCamera(); // Restart camera on retake
+        captureEngine.retake({ videoElement: videoRef.current, facingMode }).then((newStream) => {
+            activeStreamRef.current = newStream;
+            setStream(newStream);
+            setHasPermission(true);
+        }).catch(() => setHasPermission(false)); // Restart camera on retake
     };
 
     const handleRotate = () => setRotation(prev => (prev + 90) % 360);
@@ -465,7 +394,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                         <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full backdrop-blur-md">
                             <SparklesIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
                             <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">
-                                Interactive Precision Engine
+                                {captureEngine.environment} Capture Engine
                             </span>
                         </div>
 
