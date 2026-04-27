@@ -71,9 +71,15 @@ class ProcessDocumentOcr implements ShouldQueue
                 $pages = $response->json()['pages'];
                 Log::info("PDF split into " . count($pages) . " pages.");
 
-                foreach ($pages as $pageImage) {
+                foreach ($pages as $index => $pageImage) {
                     // low priority queue for batch pages
-                    $jobs[] = (new ProcessImageOcrJob($this->documentId, $pageImage, $this->docType, $this->languages))->onQueue('low');
+                    $jobs[] = (new ProcessImageOcrJob(
+                        $this->documentId,
+                        $pageImage,
+                        $index + 1,
+                        $this->docType,
+                        $this->languages
+                    ))->onQueue('low');
                 }
                 
                 // Cleanup original PDF since we have images
@@ -81,10 +87,17 @@ class ProcessDocumentOcr implements ShouldQueue
             } else {
                 // Single image or native document (docx/txt bypass)
                 // high priority
-                $jobs[] = (new ProcessImageOcrJob($this->documentId, $tempFile, $this->docType, $this->languages))->onQueue('high');
+                $jobs[] = (new ProcessImageOcrJob(
+                    $this->documentId,
+                    $tempFile,
+                    1,
+                    $this->docType,
+                    $this->languages
+                ))->onQueue('high');
             }
 
             $docId = $this->documentId;
+            DB::table('document_ocr_pages')->where('document_id', $docId)->delete();
 
             // Dispatch batch
             $batch = Bus::batch($jobs)
@@ -92,7 +105,45 @@ class ProcessDocumentOcr implements ShouldQueue
                 ->then(function (Batch $batch) use ($docId) {
                     // All jobs completed successfully
                     Log::info("Batch {$batch->id} completed for doc {$docId}");
-                    DB::update("UPDATE documents SET status = 'extracted' WHERE id = ?", [$docId]);
+
+                    $pageRows = DB::table('document_ocr_pages')
+                        ->where('document_id', $docId)
+                        ->orderBy('page_no')
+                        ->get();
+
+                    $ocrText = $pageRows
+                        ->pluck('text')
+                        ->filter(fn ($value) => filled($value))
+                        ->implode("\n");
+
+                    $detectedType = '';
+                    $aggregatedFields = [];
+
+                    foreach ($pageRows as $pageRow) {
+                        $pageDetectedType = (string) ($pageRow->detected_type ?? '');
+                        if ($detectedType === '' && $pageDetectedType !== '') {
+                            $detectedType = $pageDetectedType;
+                        }
+
+                        $pageFields = json_decode($pageRow->extracted_fields ?? '[]', true) ?: [];
+                        foreach ($pageFields as $key => $value) {
+                            if (!empty($value) || empty($aggregatedFields[$key])) {
+                                $aggregatedFields[$key] = $value;
+                            }
+                        }
+                    }
+
+                    DB::update(
+                        "UPDATE documents
+                         SET ocr_text = ?, detected_type = ?, extracted_fields = ?, status = 'extracted'
+                         WHERE id = ?",
+                        [
+                            $ocrText,
+                            $detectedType,
+                            json_encode($aggregatedFields, JSON_UNESCAPED_UNICODE),
+                            $docId,
+                        ]
+                    );
                 })
                 ->catch(function (Batch $batch, Throwable $e) use ($docId) {
                     // First batch job failure detected
