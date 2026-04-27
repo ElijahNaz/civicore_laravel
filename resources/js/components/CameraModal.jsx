@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -44,6 +44,19 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const [autoCorners, setAutoCorners] = useState(null);
     const autoCornersRef = useRef(null); 
     const lastDetectedRef = useRef(null);
+    const detectionProfileRef = useRef({
+        environment: 'desktop',
+        baseInterval: 80,
+        minInterval: 67,
+        maxInterval: 170,
+        adaptiveInterval: 80,
+        lowPerfHits: 0,
+        highPerfHits: 0
+    });
+    const detectionHistoryRef = useRef([]);
+    const stabilitySamplesRef = useRef([]);
+    const [stabilityScore, setStabilityScore] = useState(0);
+    const captureEngine = useMemo(() => createCaptureEngine(), []);
 
     // OpenCV.js Loader
     useEffect(() => {
@@ -75,6 +88,9 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             setCapturedFile(null);
             setRotation(0);
             setIsGrayscale(false);
+            setStabilityScore(0);
+            detectionHistoryRef.current = [];
+            stabilitySamplesRef.current = [];
             startCamera();
         } else {
             stopCamera();
@@ -87,7 +103,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         if (!isOpen) return;
 
         let lastProcessTime = 0;
-        const processFreq = 60; // Slightly faster processing (~15fps)
         let animationHandle;
 
         const render = (time) => {
@@ -110,16 +125,44 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
             // PHASE 1: LIVE (Auto Tracing)
             if (!previewImage && video && video.readyState >= 2) {
-                if (window.cv && time - lastProcessTime > processFreq) {
+                const profile = detectionProfileRef.current;
+                if (window.cv && time - lastProcessTime > profile.adaptiveInterval) {
                     try {
+                        const detectStartedAt = performance.now();
                         const detected = captureEngine.detectEdges({ videoElement: video });
+                        const detectDuration = performance.now() - detectStartedAt;
+                        detectionHistoryRef.current.push(detectDuration);
+                        if (detectionHistoryRef.current.length > 8) detectionHistoryRef.current.shift();
+
+                        const avgDuration = detectionHistoryRef.current.reduce((sum, ms) => sum + ms, 0) / detectionHistoryRef.current.length;
+                        if (avgDuration > profile.adaptiveInterval * 0.65 || detectDuration > profile.adaptiveInterval * 0.9) {
+                            profile.lowPerfHits += 1;
+                            profile.highPerfHits = 0;
+                        } else if (avgDuration < profile.baseInterval * 0.45) {
+                            profile.highPerfHits += 1;
+                            profile.lowPerfHits = 0;
+                        } else {
+                            profile.lowPerfHits = Math.max(0, profile.lowPerfHits - 1);
+                            profile.highPerfHits = Math.max(0, profile.highPerfHits - 1);
+                        }
+
+                        if (profile.lowPerfHits >= 2) {
+                            profile.adaptiveInterval = Math.min(profile.maxInterval, profile.adaptiveInterval + (profile.environment === 'mobile' ? 22 : 16));
+                            profile.lowPerfHits = 0;
+                        } else if (profile.highPerfHits >= 4) {
+                            profile.adaptiveInterval = Math.max(profile.minInterval, profile.adaptiveInterval - (profile.environment === 'mobile' ? 10 : 8));
+                            profile.highPerfHits = 0;
+                        }
+
                         if (detected) {
                             autoCornersRef.current = detected;
                             lastDetectedRef.current = detected;
                             setAutoCorners(detected);
+                            calculateStability(detected);
                         } else {
                             autoCornersRef.current = null;
                             setAutoCorners(null);
+                            setStabilityScore(0);
                         }
                         lastProcessTime = time;
                     } catch (e) {
@@ -194,7 +237,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
         animationHandle = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationHandle);
-    }, [isOpen, previewImage]); // Reduced dependencies! corners removed to stop constant loop restarts
+    }, [captureEngine, isOpen, previewImage]); // Reduced dependencies! corners removed to stop constant loop restarts
 
     // Dragging Handlers (ONLY IN PREVIEW/ADJUST MODE)
     const handleDragStart = (e) => {
@@ -243,7 +286,57 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         draggingCorner.current = null;
     };
 
-    const captureEngine = useMemo(() => createCaptureEngine(), []);
+    useEffect(() => {
+        const isMobile = captureEngine.environment === 'mobile';
+        detectionProfileRef.current = {
+            environment: captureEngine.environment,
+            // Desktop default: ~10-15fps, Mobile default: ~5-8fps
+            baseInterval: isMobile ? 143 : 80,
+            minInterval: isMobile ? 125 : 67,
+            maxInterval: isMobile ? 300 : 240,
+            adaptiveInterval: isMobile ? 143 : 80,
+            lowPerfHits: 0,
+            highPerfHits: 0
+        };
+        detectionHistoryRef.current = [];
+        stabilitySamplesRef.current = [];
+        setStabilityScore(0);
+    }, [captureEngine.environment]);
+
+    const calculateStability = useCallback((detectedCorners) => {
+        if (!detectedCorners) {
+            setStabilityScore(0);
+            return 0;
+        }
+
+        const points = [detectedCorners.tl, detectedCorners.tr, detectedCorners.br, detectedCorners.bl];
+        stabilitySamplesRef.current.push(points);
+        if (stabilitySamplesRef.current.length > 6) stabilitySamplesRef.current.shift();
+
+        const xs = points.map((p) => p.x);
+        const ys = points.map((p) => p.y);
+        const widthPct = Math.max(...xs) - Math.min(...xs);
+        const heightPct = Math.max(...ys) - Math.min(...ys);
+        const areaScore = Math.min(1, (widthPct * heightPct) / 6000);
+
+        if (stabilitySamplesRef.current.length < 3) {
+            const bootstrapScore = Number((areaScore * 0.6).toFixed(2));
+            setStabilityScore(bootstrapScore);
+            return bootstrapScore;
+        }
+
+        const latest = stabilitySamplesRef.current[stabilitySamplesRef.current.length - 1];
+        const previous = stabilitySamplesRef.current[stabilitySamplesRef.current.length - 2];
+        const jitter = latest.reduce((sum, pt, idx) => {
+            const prev = previous[idx];
+            return sum + Math.hypot(pt.x - prev.x, pt.y - prev.y);
+        }, 0) / latest.length;
+
+        const jitterScore = Math.max(0, 1 - (jitter / 4));
+        const score = Number(Math.max(0, Math.min(1, (jitterScore * 0.7) + (areaScore * 0.3))).toFixed(2));
+        setStabilityScore(score);
+        return score;
+    }, []);
     const sharedSteps = useMemo(() => ([
         { key: 'preview', label: 'Preview', message: 'Align the document inside the frame.' },
         { key: 'edge_lock', label: 'Edge lock', message: 'Keep steady while we lock document edges.' },
@@ -391,9 +484,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             stream: stream ? 'Active' : 'Paused',
             edgeLock: autoCorners ? 'Locked' : 'Scanning',
             frameCoverage: `${Math.round(widthPct * heightPct)}%`,
+            detectRate: `${Math.max(1, Math.round(1000 / detectionProfileRef.current.adaptiveInterval))} FPS`,
+            stability: `${Math.round(stabilityScore * 100)}%`,
+            autoCapture: stabilityScore >= 82 / 100 ? 'Ready' : 'Waiting',
             quality: cvLoaded ? 'Enhanced' : 'Standard'
         };
-    }, [autoCorners, cvLoaded, facingMode, stream]);
+    }, [autoCorners, cvLoaded, facingMode, stabilityScore, stream]);
 
     useEffect(() => {
         if (!isOpen || previewImage || isCapturing) return;
