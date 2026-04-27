@@ -14,6 +14,7 @@ import { useModal } from './ModalContext.jsx';
 import { useData } from './DataContext.jsx';
 import CameraModal from './CameraModal.jsx';
 import ActionConfirmModal from './ActionConfirmModal.jsx';
+import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
 
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
@@ -153,16 +154,34 @@ const Documents = () => {
         
         setUploadStatus('uploading');
         const isBulk = acceptedFiles.length > 1;
-        const taskName = isBulk ? `Uploading ${acceptedFiles.length} files` : `Uploading ${acceptedFiles[0].name}`;
+        const firstFile = acceptedFiles[0]?.file || acceptedFiles[0];
+        const taskName = isBulk ? `Uploading ${acceptedFiles.length} files` : `Uploading ${firstFile?.name || 'file'}`;
 
         runBackgroundTask(taskName, async () => {
             let successCount = 0;
             let lastId = null;
 
-            for (const file of acceptedFiles) {
+            for (const uploadItem of acceptedFiles) {
+                const sourceFile = uploadItem?.file || uploadItem;
+                let file = sourceFile;
+                let qualityMetadata = null;
+
+                try {
+                    const preprocessed = await preprocessUploadFile(sourceFile, {
+                        corners: uploadItem?.corners || null,
+                        edgeStability: uploadItem?.edgeStability,
+                        deviceType: uploadItem?.deviceType
+                    });
+                    file = preprocessed.file;
+                    qualityMetadata = preprocessed.qualityMetadata;
+                } catch (preprocessError) {
+                    console.warn(`Preprocessing failed for ${sourceFile?.name || 'file'}`, preprocessError);
+                }
+
                 const fd = new FormData();
                 fd.append('file', file);
                 fd.append('docType', selectedDocType);
+                if (qualityMetadata) fd.append('quality_metadata', JSON.stringify(qualityMetadata));
                 
                 try {
                     const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
@@ -172,7 +191,7 @@ const Documents = () => {
                         lastId = data.id;
                     }
                 } catch (err) {
-                    console.error(`Failed to upload ${file.name}`, err);
+                    console.error(`Failed to upload ${sourceFile?.name || 'file'}`, err);
                 }
             }
 
@@ -641,7 +660,7 @@ const Documents = () => {
                                 <CameraModal
                                     isOpen={isCameraOpen}
                                     onClose={() => setIsCameraOpen(false)}
-                                    onCapture={(file) => onDrop([file])}
+                                    onCapture={(capturePayload) => onDrop([capturePayload])}
                                 />
                             </div>
                         </div>

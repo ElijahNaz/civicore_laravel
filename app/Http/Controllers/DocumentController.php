@@ -123,6 +123,14 @@ class DocumentController extends Controller
         $previewData = $request->input('previewData');
         $personName = $request->input('personName', '');
         $barangay = $request->input('barangay', '');
+        $qualityMetadataRaw = $request->input('quality_metadata');
+        $qualityMetadata = null;
+        if (is_string($qualityMetadataRaw) && $qualityMetadataRaw !== '') {
+            $decoded = json_decode($qualityMetadataRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $qualityMetadata = $decoded;
+            }
+        }
         $metadata = $request->input('metadata');
 
         DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
@@ -151,6 +159,14 @@ class DocumentController extends Controller
         $docType = $request->input('docType', 'Uncategorized');
         $personName = $request->input('personName', '');
         $barangay = $request->input('barangay', '');
+        $qualityMetadataRaw = $request->input('quality_metadata');
+        $qualityMetadata = null;
+        if (is_string($qualityMetadataRaw) && $qualityMetadataRaw !== '') {
+            $decoded = json_decode($qualityMetadataRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $qualityMetadata = $decoded;
+            }
+        }
 
         // Resolve uploader name from session
         $userId = $request->session()->get('user_id');
@@ -174,7 +190,8 @@ class DocumentController extends Controller
             'filename' => $filename,
             'size' => $file->getSize(),
             'mimetype' => $file->getMimeType(),
-            'storedIn' => 'database'
+            'storedIn' => 'database',
+            'quality' => $qualityMetadata
         ]);
 
         // Save to database using Query Builder (Safer for large BLOBs/binary data)
