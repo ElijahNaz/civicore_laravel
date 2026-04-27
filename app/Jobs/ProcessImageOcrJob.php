@@ -21,13 +21,15 @@ class ProcessImageOcrJob implements ShouldQueue
 
     protected $documentId;
     protected $imagePath;
+    protected $pageNo;
     protected $docType;
     protected $languages;
 
-    public function __construct($documentId, $imagePath, $docType = '', $languages = 'en,tl')
+    public function __construct($documentId, $imagePath, $pageNo = 1, $docType = '', $languages = 'en,tl')
     {
         $this->documentId = $documentId;
         $this->imagePath = $imagePath;
+        $this->pageNo = $pageNo;
         $this->docType = $docType;
         $this->languages = $languages;
     }
@@ -57,32 +59,19 @@ class ProcessImageOcrJob implements ShouldQueue
             $detectedType = $result['detected_type'] ?? '';
             $newFields = $result['extracted_fields'] ?? [];
 
-            DB::transaction(function() use ($newText, $detectedType, $newFields) {
-                // Get existing data with a row lock to prevent race conditions from multiple pages
-                $currentDoc = DB::selectOne("SELECT ocr_text, detected_type, extracted_fields FROM documents WHERE id = ? FOR UPDATE", [$this->documentId]);
-                $existingFields = json_decode($currentDoc->extracted_fields ?? '[]', true) ?: [];
-                
-                // Merge fields (prefer non-empty values from the new extraction)
-                foreach ($newFields as $key => $value) {
-                    if (!empty($value) || empty($existingFields[$key])) {
-                        $existingFields[$key] = $value;
-                    }
-                }
-
-                DB::update(
-                    "UPDATE documents SET 
-                     ocr_text = CONCAT(IFNULL(ocr_text, ''), '\n', ?), 
-                     detected_type = IF(detected_type = '' OR detected_type IS NULL, ?, detected_type),
-                     extracted_fields = ?
-                     WHERE id = ?",
-                    [
-                        $newText, 
-                        $detectedType, 
-                        json_encode($existingFields, JSON_UNESCAPED_UNICODE),
-                        $this->documentId
-                    ]
-                );
-            });
+            DB::table('document_ocr_pages')->updateOrInsert(
+                [
+                    'document_id' => $this->documentId,
+                    'page_no' => $this->pageNo,
+                ],
+                [
+                    'text' => $newText,
+                    'detected_type' => $detectedType,
+                    'extracted_fields' => json_encode($newFields, JSON_UNESCAPED_UNICODE),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
 
             Log::info("ProcessImageOcrJob finished for image: {$this->imagePath}");
 
