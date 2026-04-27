@@ -161,6 +161,9 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const [showConsent, setShowConsent] = useState(false);
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
+    const fieldConfidence = ocrResult?.field_confidence || {};
+    const quickFillUsed = !!ocrResult?.quick_fill_used;
+    const templateOverlay = ocrResult?.template_overlay || null;
 
     // Sync form data if background extraction finishes while modal is open
     useEffect(() => {
@@ -204,6 +207,12 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const isMinor = age !== null && age < 18;
 
     const [errors, setErrors] = useState({});
+    const fieldLabelMap = {};
+    (FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth).forEach(section => {
+        section.fields.forEach(f => {
+            fieldLabelMap[f.key] = f.label;
+        });
+    });
 
     const handleSubmit = (e, minimize = false) => {
         if (e) e.preventDefault();
@@ -366,6 +375,12 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                             >
                                 Structured Fields
                             </button>
+                            <button
+                                onClick={() => setViewMode('template')}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'template' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Template Preview
+                            </button>
                         </div>
 
                         {viewMode === 'text' && (
@@ -450,6 +465,89 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                     ))}
                                 </div>
                             </>
+                        )}
+
+                        {viewMode === 'template' && (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs font-black uppercase tracking-wider text-slate-600">
+                                            Template Overlay Preview
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 mt-1">
+                                            Background scan + positioned field layers for real-time validation/editing.
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`text-[11px] font-bold ${quickFillUsed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            {quickFillUsed ? 'Quick-fill Active' : 'Fallback OCR Active'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500">
+                                            Template: {templateOverlay?.family || ocrResult?.template_family_detected || 'not detected'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!file.name?.toLowerCase().endsWith('.pdf') && templateOverlay?.enabled ? (
+                                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                                        <div className="relative w-full">
+                                            <img
+                                                src={`/api/documents/download/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
+                                                className="w-full h-auto block"
+                                                alt="Template Background"
+                                            />
+
+                                            {templateOverlay.fields.map((item) => {
+                                                const roi = item.roi || [];
+                                                const [x1, y1, x2, y2] = roi;
+                                                const conf = Number(item.confidence || 0);
+                                                const isValid = !!item.validation_passed;
+                                                const value = formData[item.key] || item.value || '';
+                                                const label = fieldLabelMap[item.key] || item.key;
+                                                return (
+                                                    <div
+                                                        key={item.key}
+                                                        className={`absolute border-2 rounded-lg text-[10px] p-1 backdrop-blur-[1px] ${
+                                                            isValid ? 'border-emerald-400 bg-emerald-100/50' : 'border-rose-400 bg-rose-100/60'
+                                                        }`}
+                                                        style={{
+                                                            left: `${(x1 || 0) * 100}%`,
+                                                            top: `${(y1 || 0) * 100}%`,
+                                                            width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
+                                                            minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
+                                                        }}
+                                                        title={`${label} (${Math.round(conf * 100)}%)`}
+                                                    >
+                                                        <div className="font-bold uppercase tracking-wide text-[9px]">{label}</div>
+                                                        <div className="font-semibold truncate">{value || '—'}</div>
+                                                        <div className="text-[9px] opacity-80">{Math.round(conf * 100)}%</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                                        {file.name?.toLowerCase().endsWith('.pdf')
+                                            ? 'Template overlay for PDF preview is not enabled in this first version. Use image scan files for overlay, or continue with Structured Fields.'
+                                            : 'No ROI overlay data available yet. Run OCR on a recognized template family to generate positioned field boxes.'}
+                                    </div>
+                                )}
+
+                                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                    <p className="text-xs font-bold text-slate-700 mb-2">Field Confidence</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {Object.entries(fieldConfidence).map(([key, meta]) => (
+                                            <div key={key} className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex items-center justify-between gap-2">
+                                                <span className="font-semibold text-slate-700">{fieldLabelMap[key] || key}</span>
+                                                <span className={`font-bold ${meta?.validation_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {Math.round(Number(meta?.confidence || 0) * 100)}%
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         )}
 
                         <div className="pt-6 border-t border-slate-100">
