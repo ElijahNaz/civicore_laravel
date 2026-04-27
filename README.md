@@ -102,10 +102,39 @@ For convenience, a **One-Click Launcher** has been provided.
    - **Laravel Server** (Port 8000)
    - **Vite Dev Server** (Frontend)
    - **Persistent OCR Server** (Port 5000)
-   - **Queue Worker** (For background processing)
+   - **Dedicated queue workers**:
+     - `high` queue worker (single-page and urgent OCR jobs)
+     - `low` queue worker(s) (multi-page PDF OCR fan-out)
+     - `default` queue worker (non-OCR jobs)
 
 **Wait for all windows to say "Ready"**, then visit:
 👉 **[http://localhost:8000](http://localhost:8000)**
+
+### ⚙️ Queue Worker Tuning Profiles (Deployment)
+
+`start-civicore.bat` now supports queue-specific tuning for worker count, sleep, and timeout values.
+
+#### Profile A: 4GB RAM (Conservative)
+- **Set in BAT file**: `RAM_PROFILE=4GB`
+- **Recommended for**: entry-level laptops and shared office desktops.
+- **Worker layout**:
+  - `high`: 1 worker (`--sleep=1 --timeout=120`)
+  - `low`: 1 worker (`--sleep=2 --timeout=900`)
+  - `default`: 1 worker (`--sleep=3 --timeout=90`)
+- **Why**: reduces memory pressure and prevents EasyOCR overload while keeping urgent OCR responsive.
+
+#### Profile B: 8GB+ RAM (Balanced/Production-like)
+- **Set in BAT file**: `RAM_PROFILE=8GB_PLUS` (default)
+- **Recommended for**: workstations with 8GB+ RAM and SSD storage.
+- **Worker layout**:
+  - `high`: 1 worker (`--sleep=1 --timeout=120`)
+  - `low`: 2 workers (`--sleep=1 --timeout=1200`)
+  - `default`: 1 worker (`--sleep=2 --timeout=90`)
+- **Why**: increases throughput for PDF page fan-out on `low` without delaying urgent `high` OCR jobs.
+
+#### CPU Core Safeguard
+- If the machine has **4 CPU cores or fewer**, the launcher automatically caps `low` queue workers to **1**, even in `8GB_PLUS` mode.
+- This avoids thread contention when OCR, Laravel, and Vite are running together.
 
 ---
 
