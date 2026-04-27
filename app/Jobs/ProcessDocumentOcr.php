@@ -18,7 +18,6 @@ class ProcessDocumentOcr implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $queue = 'high';
     public $timeout = 600;
 
     protected $documentId;
@@ -30,6 +29,7 @@ class ProcessDocumentOcr implements ShouldQueue
         $this->documentId = $documentId;
         $this->docType = $docType;
         $this->languages = $languages;
+        $this->onQueue('high');
     }
 
     public function handle(): void
