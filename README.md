@@ -159,6 +159,9 @@ For convenience, a **One-Click Launcher** has been provided.
 The following features, fixes, and architectural refinements have been successfully implemented and verified:
 
 ### ⚡ OCR & Document Processing (Latest Updates)
+- **Intelligent Edge Detection**: Integrated **OpenCV.js** with adaptive throttling and stability telemetry to ensure smooth live tracing on low-power devices.
+- **Client-Side Preprocessing**: Implemented quality-aware image enhancement and metadata generation (DPI, exposure, and focus scoring) before server transmission.
+- **Resilient Capture Layer**: Added a multi-stage hardware fallback system to handle legacy camera drivers and permission edge cases.
 - **Multi-Engine Support**: Integrated **Tesseract** as a high-speed fallback for **EasyOCR**.
 - **Binary Safety**: Converted `issuances` table to use `LONGBLOB` for PDF storage, resolving 500 errors during approval.
 - **Reactive Extraction**: OCR results now populate the form fields in real-time as background jobs complete.
