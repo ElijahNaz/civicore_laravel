@@ -183,7 +183,7 @@ The following features, fixes, and architectural refinements have been successfu
 
 ---
 
-## ⚠️ Known Issues / Technical Debt
+## ⚠️ Known Issues / Technical Debt (As of April 27, 2026)
 - **OCR Stability**: On machines with low RAM (e.g., 4GB), running multiple EasyOCR workers may cause system instability. Recommendation: Use Tesseract for high-speed CPU processing or limit to 1 worker.
 - **Auto-Fill Sync**: In some cases, OCR results may not automatically populate the template preview textboxes on the first load. (Workaround: Manually edit any field to trigger a re-sync).
 - **Template Alignment**: The current field coordinates for Form 102/103 are approximate and may require manual calibration via the "Template Designer" for perfect printer alignment.
@@ -193,7 +193,7 @@ The following features, fixes, and architectural refinements have been successfu
 
 ---
 
-## 🔄 Recent Updates & Database Changes (April 2026 - Phase 2)
+## 🔄 Recent Updates & Database Changes (April 27, 2026)
 
 The system has been upgraded with a professional Document Registry and Overlay system for high-fidelity certificate generation.
 
