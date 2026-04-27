@@ -185,8 +185,33 @@ The following features, fixes, and architectural refinements have been successfu
 
 ## ⚠️ Known Issues / Technical Debt
 - **OCR Stability**: On machines with low RAM (e.g., 4GB), running multiple EasyOCR workers may cause system instability. Recommendation: Use Tesseract for high-speed CPU processing or limit to 1 worker.
-- **Document Type Detection**: Occasional "UNKNOWN" classification when scan quality is poor. **Fallback Logic**: The system now defaults these to "Birth Certificate" automatically.
+- **Document Type Detection**: Occasional classification challenges on low-quality scans. **Improved Logic**: The system now returns "Unknown" instead of an incorrect guess, allowing the user to select the correct template manually in the OCR panel.
 - **Database Race Conditions**: In very high-concurrency environments, multiple OCR pages may compete to update the same record. (Patch: Implemented Row-Level Locking in April 2026).
+
+---
+
+## 🔄 Recent Updates & Database Changes (April 2026 - Phase 2)
+
+The system has been upgraded with a professional Document Registry and Overlay system for high-fidelity certificate generation.
+
+### 📜 Premium Template Overlay System
+- **Clean PDF Integration**: Implemented support for high-resolution PDF templates. Scanned document data is now overlaid on clean backgrounds for a professional look.
+- **Official Field Mapping**: Expanded field configurations to match **Philippine LCR Form 102 (Birth)** and **Form 103 (Death)**, supporting 20+ precise data points (e.g., Weight at Birth, Parents' Marriage Date, Causes of Death).
+- **Interactive Designer**: Built a drag-and-drop `TemplateDesigner` allowing administrators to calibrate field positions visually in real-time.
+
+### ⚡ Architectural Refinements
+- **Global Data Context**: Migrated to a centralized `DataContext` to ensure document and template lists are always synchronized across all tabs (Dashboard, Documents, Issuances).
+- **Smart Stream Previews**: Switched all document previews to `/api/documents/view` streaming, eliminating unwanted browser downloads and improving UI responsiveness.
+- **Heuristic Type Matching**: Enhanced the OCR engine to automatically pair scanned documents with the correct official template based on deep-text analysis.
+
+### 🌐 Localization & Audit
+- **Timezone Synchronization**: Fixed submission and activity logs to follow **Philippine Standard Time (Asia/Manila, UTC+8)**.
+- **Expanded Audit Trail**: Added detailed logging for every View, Download, Edit, and Print action performed by staff.
+
+### 🗄️ Database Updates
+- **New Table: `template_profiles`**: Stores JSON-based Region of Interest (ROI) coordinates, field keys, and template metadata.
+- **Seeded ROIs**: Pre-populated the database with calibrated field positions for official 102 and 103 form layouts.
+- **Logging Persistence**: Updated `activity_logs` schema support for local time offsets.
 
 ---
 

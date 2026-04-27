@@ -135,8 +135,8 @@ def detect_document_type(text: str) -> str:
     marriage_hits = sum(1 for kw in MARRIAGE_KEYWORDS if kw in lower)
     scores = {'birth': birth_hits, 'death': death_hits, 'marriage': marriage_hits}
     best = max(scores, key=scores.get)
-    # Default to 'birth' instead of 'unknown' if no clear indicators are found
-    return best if scores[best] > 0 else 'birth'
+    # Default to 'unknown' if no clear indicators are found
+    return best if scores[best] > 0 else 'unknown'
 
 def _normalize_roi_text(value: str) -> str:
     return re.sub(r'\s+', ' ', (value or '').strip())

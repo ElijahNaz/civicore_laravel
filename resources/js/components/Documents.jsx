@@ -18,7 +18,7 @@ import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
 
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
-    const downloadUrl = `/api/documents/download/${file.id}`;
+    const viewUrl = `/api/documents/view/${file.id}`;
     const isPdf = file.name?.toLowerCase().endsWith('.pdf');
 
     return createPortal(
@@ -76,14 +76,14 @@ const DocumentPreviewModal = ({ file, onClose }) => {
                     </div>
                 ) : isPdf ? (
                     <iframe
-                        src={downloadUrl}
+                        src={viewUrl}
                         title={file.name}
                         className="w-full h-full rounded-xl border border-slate-700 bg-white"
                         style={{ minHeight: '70vh' }}
                     />
                 ) : (
                     <img
-                        src={downloadUrl}
+                        src={viewUrl}
                         alt={file.name}
                         className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-slate-700"
                         onError={e => { e.target.style.display = 'none'; }}

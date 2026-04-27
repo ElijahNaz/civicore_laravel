@@ -96,8 +96,10 @@ Route::middleware('web')->group(function () {
     Route::get('/barangays', [BarangayController::class, 'index']);
 
     // ── Templates ──────────────────────────────────────────────────────────
-    Route::get('/templates',         [TemplateController::class, 'index']);
-    Route::put('/templates/{type}',  [TemplateController::class, 'update']);
+    Route::get('/templates',              [TemplateController::class, 'index']);
+    Route::post('/templates/upload',      [TemplateController::class, 'upload']);
+    Route::post('/templates/config',      [TemplateController::class, 'updateConfig']);
+    Route::get('/templates/preview',      [TemplateController::class, 'getPreview']);
 
     // ── Activity Logs ──────────────────────────────────────────────────────
     Route::get('/activity-logs',     [ActivityLogController::class, 'index']);

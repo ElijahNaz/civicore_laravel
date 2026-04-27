@@ -6,6 +6,7 @@ import {
     ExclamationTriangleIcon, ShieldExclamationIcon,
     CloudArrowUpIcon
 } from '@heroicons/react/24/outline';
+import { useData } from './DataContext.jsx';
 
 // ── Helper: compute age from a date string ───────────────────────────────────
 export function computeAge(dobString) {
@@ -96,24 +97,58 @@ const NAME_FIELDS = (prefix = '') => [
 
 const FIELD_CONFIG = {
     birth: [
-        { section: 'Child Identity', fields: NAME_FIELDS('') },
-        { fields: [
-            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
-            { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: true },
-            { key: 'place_of_birth', label: 'Place of Birth', type: 'text', required: false },
-            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
+        { section: 'Child Information', fields: [
+            ...NAME_FIELDS(''),
+            { key: 'sex', label: '2. Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
+            { key: 'date_of_birth', label: '3. Date of Birth', type: 'date', required: true, width: 'sm:col-span-1' },
+            { key: 'place_of_birth', label: '4. Place of Birth', type: 'text', required: true },
+            { key: 'type_of_birth', label: '5a. Type of Birth', type: 'select', options: ['Single', 'Twin', 'Triplet'], required: false, width: 'sm:col-span-1' },
+            { key: 'birth_order', label: '5c. Birth Order', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'weight_at_birth', label: '6. Weight at Birth', type: 'text', required: false, width: 'sm:col-span-1' },
         ]},
-        { section: "Father's Lineage", fields: NAME_FIELDS('father_') },
-        { section: "Mother's Lineage", fields: NAME_FIELDS('mother_') },
+        { section: '7-12. Mother\'s Information', fields: [
+            ...NAME_FIELDS('mother_'),
+            { key: 'mother_citizenship', label: '8. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'mother_religion', label: '9. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'mother_occupation', label: '10. Occupation', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'mother_residence', label: '11. Residence', type: 'text', required: false },
+            { key: 'mother_age', label: '12. Age at birth', type: 'text', required: false, width: 'sm:col-span-1' },
+        ]},
+        { section: '13-18. Father\'s Information', fields: [
+            ...NAME_FIELDS('father_'),
+            { key: 'father_citizenship', label: '14. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'father_religion', label: '15. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'father_occupation', label: '16. Occupation', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'father_age', label: '17. Age at birth', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'father_residence', label: '18. Residence', type: 'text', required: false },
+        ]},
+        { section: 'Registry Details', fields: [
+            { key: 'marriage_parents_date', label: '19a. Marriage Date', type: 'text', required: false },
+            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
+            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
+        ]}
     ],
     death: [
-        { section: 'Deceased Person', fields: NAME_FIELDS('') },
-        { fields: [
-            { key: 'date_of_death', label: 'Date of Death', type: 'date', required: true },
-            { key: 'age', label: 'Age', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
-            { key: 'place_of_death', label: 'Place of Death', type: 'text', required: false },
-            { key: 'cause_of_death', label: 'Cause of Death', type: 'text', required: false },
+        { section: 'Deceased Information', fields: [
+            ...NAME_FIELDS(''),
+            { key: 'sex', label: '2. Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
+            { key: 'date_of_death', label: '3. Date of Death', type: 'date', required: true, width: 'sm:col-span-1' },
+            { key: 'date_of_birth', label: '4. Date of Birth', type: 'date', required: false, width: 'sm:col-span-1' },
+            { key: 'age', label: '5. Age', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'place_of_death', label: '6. Place of Death', type: 'text', required: false },
+            { key: 'civil_status', label: '7. Civil Status', type: 'select', options: ['Single', 'Married', 'Widowed', 'Divorced'], required: false, width: 'sm:col-span-1' },
+            { key: 'religion', label: '8. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'citizenship', label: '9. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'residence', label: '10. Residence', type: 'text', required: false },
+            { key: 'occupation', label: '11. Occupation', type: 'text', required: false },
+        ]},
+        { section: 'Parents Information', fields: [
+            ...NAME_FIELDS('father_'),
+            ...NAME_FIELDS('mother_maiden_'),
+        ]},
+        { section: 'Medical Certificate', fields: [
+            { key: 'cause_of_death', label: '19b. Cause of Death', type: 'text', required: false },
+            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
             { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
         ]}
     ],
@@ -123,6 +158,7 @@ const FIELD_CONFIG = {
         { section: 'Registry Details', fields: [
             { key: 'date_of_marriage', label: 'Date of Marriage', type: 'date', required: false },
             { key: 'place_of_marriage', label: 'Place of Marriage', type: 'text', required: false },
+            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
             { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
         ]}
     ],
@@ -131,7 +167,7 @@ const FIELD_CONFIG = {
 const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const [isSaving, setIsSaving] = useState(false);
     
-    const effectiveType = ocrResult?.detected_type !== 'unknown' ? ocrResult.detected_type : (docType || file.type || 'birth');
+    const effectiveType = ocrResult?.detected_type !== 'unknown' ? ocrResult.detected_type : (docType || file.type || 'unknown');
     const fields = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
     
     // Normalize extracted fields
@@ -164,6 +200,15 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const fieldConfidence = ocrResult?.field_confidence || {};
     const quickFillUsed = !!ocrResult?.quick_fill_used;
     const templateOverlay = ocrResult?.template_overlay || null;
+
+    const { templates } = useData();
+    
+    // Find a matching professional template for this document type
+    const matchedTemplate = templates.find(t => 
+        t.type === effectiveType && t.config
+    ) || templates.find(t => 
+        t.type === effectiveType
+    );
 
     // Sync form data if background extraction finishes while modal is open
     useEffect(() => {
@@ -346,17 +391,17 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         </div>
                         <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative">
                             {file.name?.toLowerCase().endsWith('.pdf') ? (
-                                <iframe
-                                    src={`/api/documents/download/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
-                                    className="w-full h-full border-0"
-                                    title="Original PDF"
-                                />
+                                    <iframe
+                                        src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
+                                        className="w-full h-full border-0"
+                                        title="Original PDF"
+                                    />
                             ) : (
-                                <img
-                                    src={`/api/documents/download/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
-                                    className="w-full h-full object-contain"
-                                    alt="Original Scan"
-                                />
+                                    <img
+                                        src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
+                                        className="w-full h-full object-contain"
+                                        alt="Original Scan"
+                                    />
                             )}
                         </div>
                     </div>
@@ -475,7 +520,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                             Template Overlay Preview
                                         </p>
                                         <p className="text-[11px] text-slate-500 mt-1">
-                                            Background scan + positioned field layers for real-time validation/editing.
+                                            Professional layout using calibrated clean templates.
                                         </p>
                                     </div>
                                     <div className="text-right">
@@ -483,70 +528,101 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                             {quickFillUsed ? 'Quick-fill Active' : 'Fallback OCR Active'}
                                         </p>
                                         <p className="text-[10px] text-slate-500">
-                                            Template: {templateOverlay?.family || ocrResult?.template_family_detected || 'not detected'}
+                                            Family: {ocrResult?.template_family_detected || 'Not Detected'}
                                         </p>
                                     </div>
                                 </div>
 
-                                {!file.name?.toLowerCase().endsWith('.pdf') && templateOverlay?.enabled ? (
+                                {matchedTemplate ? (
+                                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-inner">
+                                        <div className="relative w-full overflow-hidden" style={{ minHeight: '600px' }}>
+                                            <img
+                                                src={`/api/templates/preview?file=${matchedTemplate.file_path}`}
+                                                className="w-full h-auto block"
+                                                alt="Professional Template Background"
+                                            />
+
+                                            {matchedTemplate?.config?.fields?.map((item) => {
+                                                const value = formData[item.key] || '';
+                                                const label = item.label || item.key;
+                                                return (
+                                                    <div
+                                                        key={item.key}
+                                                        className="absolute flex flex-col justify-center px-1"
+                                                        style={{
+                                                            left: `${(item.x || 0) * 100}%`,
+                                                            top: `${(item.y || 0) * 100}%`,
+                                                            width: `${(item.w || 0) * 100}%`,
+                                                            height: `${(item.h || 0) * 100}%`,
+                                                        }}
+                                                        title={`${label}`}
+                                                    >
+                                                        <div className="text-[9px] font-black text-indigo-600/40 uppercase tracking-tighter absolute -top-3 left-0 whitespace-nowrap">{label}</div>
+                                                        <div className="font-bold text-slate-900 text-sm md:text-base tracking-tight bg-white/40 backdrop-blur-[1px] rounded px-1 truncate">
+                                                            {value || '—'}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : !file.name?.toLowerCase().endsWith('.pdf') && templateOverlay?.enabled ? (
                                     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
                                         <div className="relative w-full">
                                             <img
-                                                src={`/api/documents/download/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
+                                                src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
                                                 className="w-full h-auto block"
-                                                alt="Template Background"
+                                                alt="Scan Overlay"
                                             />
 
                                             {templateOverlay.fields.map((item) => {
                                                 const roi = item.roi || [];
                                                 const [x1, y1, x2, y2] = roi;
-                                                const conf = Number(item.confidence || 0);
-                                                const isValid = !!item.validation_passed;
                                                 const value = formData[item.key] || item.value || '';
                                                 const label = fieldLabelMap[item.key] || item.key;
                                                 return (
                                                     <div
                                                         key={item.key}
-                                                        className={`absolute border-2 rounded-lg text-[10px] p-1 backdrop-blur-[1px] ${
-                                                            isValid ? 'border-emerald-400 bg-emerald-100/50' : 'border-rose-400 bg-rose-100/60'
-                                                        }`}
+                                                        className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
                                                         style={{
                                                             left: `${(x1 || 0) * 100}%`,
                                                             top: `${(y1 || 0) * 100}%`,
                                                             width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
                                                             minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
                                                         }}
-                                                        title={`${label} (${Math.round(conf * 100)}%)`}
                                                     >
                                                         <div className="font-bold uppercase tracking-wide text-[9px]">{label}</div>
                                                         <div className="font-semibold truncate">{value || '—'}</div>
-                                                        <div className="text-[9px] opacity-80">{Math.round(conf * 100)}%</div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                                        {file.name?.toLowerCase().endsWith('.pdf')
-                                            ? 'Template overlay for PDF preview is not enabled in this first version. Use image scan files for overlay, or continue with Structured Fields.'
-                                            : 'No ROI overlay data available yet. Run OCR on a recognized template family to generate positioned field boxes.'}
+                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                                        <div className="text-4xl mb-4 grayscale opacity-40">📄</div>
+                                        <p className="text-sm font-bold text-slate-700">No Overlay Configured</p>
+                                        <p className="text-xs text-slate-500 mt-2 max-w-xs mx-auto">
+                                            To see a professional preview, please configure the <b>{effectiveType}</b> template in the Template Registry.
+                                        </p>
                                     </div>
                                 )}
 
-                                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                    <p className="text-xs font-bold text-slate-700 mb-2">Field Confidence</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {Object.entries(fieldConfidence).map(([key, meta]) => (
-                                            <div key={key} className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex items-center justify-between gap-2">
-                                                <span className="font-semibold text-slate-700">{fieldLabelMap[key] || key}</span>
-                                                <span className={`font-bold ${meta?.validation_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                    {Math.round(Number(meta?.confidence || 0) * 100)}%
-                                                </span>
-                                            </div>
-                                        ))}
+                                {ocrResult?.field_confidence && (
+                                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                        <p className="text-xs font-bold text-slate-700 mb-2">Extraction Confidence</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {Object.entries(ocrResult.field_confidence).map(([key, meta]) => (
+                                                <div key={key} className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex items-center justify-between gap-2">
+                                                    <span className="font-semibold text-slate-700">{fieldLabelMap[key] || key}</span>
+                                                    <span className={`font-bold ${meta?.validation_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        {Math.round(Number(meta?.confidence || 0) * 100)}%
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
 

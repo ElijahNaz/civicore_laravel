@@ -53,18 +53,26 @@ export const DataProvider = ({ children }) => {
         return cached ? JSON.parse(cached) : [];
     });
 
+    // ── State for Templates ──────────────────────────────────────────────────
+    const [templates, setTemplates] = useState(() => {
+        const cached = sessionStorage.getItem('civicore_templates');
+        return cached ? JSON.parse(cached) : [];
+    });
+
     const [loading, setLoading] = useState({
         stats: !sessionStorage.getItem('civicore_stats'),
         documents: !sessionStorage.getItem('civicore_documents'),
         issuances: !sessionStorage.getItem('civicore_issuances'),
-        history: !sessionStorage.getItem('civicore_history')
+        history: !sessionStorage.getItem('civicore_history'),
+        templates: !sessionStorage.getItem('civicore_templates')
     });
 
     const lastFetch = useRef({
         stats: 0,
         documents: 0,
         issuances: 0,
-        history: 0
+        history: 0,
+        templates: 0
     });
 
     // ── Background Task Management ──────────────────────────────────────────
@@ -253,6 +261,27 @@ export const DataProvider = ({ children }) => {
         }
     }, []);
 
+    const refreshTemplates = useCallback(async (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastFetch.current.templates < 5000) return;
+
+        try {
+            const response = await fetch('/api/templates', { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to fetch templates');
+            const data = await response.json();
+            
+            if (data) {
+                setTemplates(data);
+                sessionStorage.setItem('civicore_templates', JSON.stringify(data));
+            }
+            lastFetch.current.templates = now;
+        } catch (err) {
+            console.error('Error refreshing templates:', err);
+        } finally {
+            setLoading(prev => ({ ...prev, templates: false }));
+        }
+    }, []);
+
     // ── Global Polling ────────────────────────────────────────────────────────
     useEffect(() => {
         // Refresh everything on mount
@@ -260,6 +289,7 @@ export const DataProvider = ({ children }) => {
         refreshDocuments(true);
         refreshIssuances(true);
         refreshHistory(true);
+        refreshTemplates(true);
 
         // Set up polling (every 15 seconds)
         const interval = setInterval(() => {
@@ -267,6 +297,7 @@ export const DataProvider = ({ children }) => {
             refreshDocuments();
             refreshIssuances();
             refreshHistory();
+            refreshTemplates();
         }, 15000);
 
         return () => clearInterval(interval);
@@ -277,6 +308,7 @@ export const DataProvider = ({ children }) => {
         documents,
         issuances,
         history,
+        templates,
         loading,
         backgroundTasks,
         undoableTasks,
@@ -286,12 +318,14 @@ export const DataProvider = ({ children }) => {
         refreshDocuments,
         refreshIssuances,
         refreshHistory,
+        refreshTemplates,
         // Helper to refresh everything at once (e.g. after a mutation)
         refreshAll: () => {
             refreshStats(true);
             refreshDocuments(true);
             refreshIssuances(true);
             refreshHistory(true);
+            refreshTemplates(true);
         }
     };
 
