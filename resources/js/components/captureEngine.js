@@ -49,17 +49,25 @@ export const createCaptureEngine = () => {
         stop();
         lastFacingMode = facingMode || lastFacingMode || profile.facingMode;
 
+        const baseVideoConstraints = {
+            width: profile.width,
+            height: profile.height,
+            frameRate: profile.frameRate,
+            aspectRatio: profile.aspectRatio
+        };
         const constraints = {
             video: {
-                width: profile.width,
-                height: profile.height,
-                frameRate: profile.frameRate,
-                aspectRatio: profile.aspectRatio,
+                ...baseVideoConstraints,
                 facingMode: lastFacingMode
             }
         };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+            const fallbackConstraints = { video: baseVideoConstraints };
+            stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        }
         activeStream = stream;
 
         if (videoElement) {

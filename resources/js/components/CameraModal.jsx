@@ -11,6 +11,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const overlayCanvasRef = useRef(null);
+    const fileInputRef = useRef(null);
     const activeStreamRef = useRef(null);
     const modalOpenRef = useRef(isOpen);
     
@@ -42,6 +43,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
     // Auto-detected corners for Live Tracing
     const [autoCorners, setAutoCorners] = useState(null);
+    const [edgeDetectionFailed, setEdgeDetectionFailed] = useState(false);
     const autoCornersRef = useRef(null); 
     const lastDetectedRef = useRef(null);
     const detectionProfileRef = useRef({
@@ -89,6 +91,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             setRotation(0);
             setIsGrayscale(false);
             setStabilityScore(0);
+            setEdgeDetectionFailed(false);
             detectionHistoryRef.current = [];
             stabilitySamplesRef.current = [];
             startCamera();
@@ -158,10 +161,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                             autoCornersRef.current = detected;
                             lastDetectedRef.current = detected;
                             setAutoCorners(detected);
+                            setEdgeDetectionFailed(false);
                             calculateStability(detected);
                         } else {
                             autoCornersRef.current = null;
                             setAutoCorners(null);
+                            setEdgeDetectionFailed(true);
                             setStabilityScore(0);
                         }
                         lastProcessTime = time;
@@ -398,9 +403,18 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
         setPreviewImage(captured.dataUrl);
 
-        // 2. Snap manual handles to the last auto-detected position (or default)
+        // 2. Snap manual handles to the last auto-detected position (or safe manual defaults)
         if (lastDetectedRef.current) {
             setCorners(lastDetectedRef.current);
+            setEdgeDetectionFailed(false);
+        } else {
+            setCorners({
+                tl: { x: 10, y: 10 },
+                tr: { x: 90, y: 10 },
+                bl: { x: 10, y: 90 },
+                br: { x: 90, y: 90 }
+            });
+            setEdgeDetectionFailed(true);
         }
 
         setCapturedFile(captured.file);
@@ -440,6 +454,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         setCapturedFile(null);
         setRotation(0);
         setIsGrayscale(false);
+        setEdgeDetectionFailed(false);
         setScannerStatus('preview');
         captureEngine.retake({ videoElement: videoRef.current, facingMode }).then((newStream) => {
             activeStreamRef.current = newStream;
@@ -450,6 +465,23 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
     const handleRotate = () => setRotation(prev => (prev + 90) % 360);
     const toggleGrayscale = () => setIsGrayscale(prev => !prev);
+    const openFilePicker = () => fileInputRef.current?.click();
+    const handleFileUpload = async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setScannerStatus('ocr_processing');
+        setIsCapturing(true);
+        onCapture({
+            file,
+            corners: null,
+            edgeStability: null,
+            deviceType: 'upload'
+        });
+        onClose();
+        setIsCapturing(false);
+    };
     const activeStepIndex = sharedSteps.findIndex((step) => step.key === scannerStatus);
     const currentStep = sharedSteps[Math.max(activeStepIndex, 0)];
     const liveMetrics = useMemo(() => {
@@ -538,6 +570,11 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                     <span className="text-indigo-200 font-semibold">{currentStep.label}</span>
                                 </div>
                                 <p className="text-xs text-white/70 mt-1">{currentStep.message}</p>
+                                {previewImage && edgeDetectionFailed && (
+                                    <p className="text-[11px] text-amber-200 mt-2">
+                                        Auto edge lock unavailable. Drag each corner manually, then confirm crop.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -562,6 +599,14 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                 </>
                             )}
                         </div>
+                        {!previewImage && hasPermission === false && (
+                            <button
+                                onClick={openFilePicker}
+                                className="w-full mt-3 h-12 rounded-2xl bg-white/10 text-white font-semibold text-sm"
+                            >
+                                Upload instead
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -584,11 +629,18 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                         <button onClick={toggleGrayscale} className={`w-full h-12 rounded-xl font-semibold ${isGrayscale ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white'}`}>B&W filter</button>
                                     </motion.div>
                                 ) : (
-                                    <motion.button key="desktop-capture-action" onClick={capturePhoto} disabled={!stream || isCapturing} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full h-14 rounded-2xl bg-white text-slate-900 font-black disabled:opacity-50">
-                                        {isInitializing ? (
-                                            <span className="inline-flex items-center gap-2"><CpuChipIcon className="w-5 h-5 animate-spin" />Preparing...</span>
-                                        ) : 'Capture'}
-                                    </motion.button>
+                                    <div className="space-y-3">
+                                        <motion.button key="desktop-capture-action" onClick={capturePhoto} disabled={!stream || isCapturing} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full h-14 rounded-2xl bg-white text-slate-900 font-black disabled:opacity-50">
+                                            {isInitializing ? (
+                                                <span className="inline-flex items-center gap-2"><CpuChipIcon className="w-5 h-5 animate-spin" />Preparing...</span>
+                                            ) : 'Capture'}
+                                        </motion.button>
+                                        {hasPermission === false && (
+                                            <button onClick={openFilePicker} className="w-full h-12 rounded-xl bg-white/10 text-white font-semibold">
+                                                Upload from device
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </AnimatePresence>
                         </div>
@@ -597,6 +649,13 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
                 {/* Hidden Processing Canvas */}
                 <canvas ref={canvasRef} className="hidden" />
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                />
             </motion.div>
         </AnimatePresence>,
         document.body
