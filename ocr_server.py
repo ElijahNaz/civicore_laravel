@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Literal
 # import easyocr (Moved to get_reader for memory efficiency)
 from PIL import Image
 import fitz  # PyMuPDF
@@ -240,6 +241,7 @@ class OCRRequest(BaseModel):
     file_path: str
     doc_type: str = "birth"
     languages: str = "en,tl"
+    ocr_mode: Literal["fast", "balanced", "accurate"] = "accurate"
 
 class SplitRequest(BaseModel):
     file_path: str
@@ -281,6 +283,7 @@ def process_ocr(data: OCRRequest):
     file_path = data.file_path
     expected_type = data.doc_type
     languages = data.languages.split(',')
+    ocr_mode = data.ocr_mode
 
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=400, detail=f"File not found: {file_path}")
@@ -309,36 +312,76 @@ def process_ocr(data: OCRRequest):
             raise HTTPException(status_code=500, detail=f"TXT read failed: {str(e)}")
     else:
         # Image processing
-        processed_with_easyocr = False
-        
-        # Try EasyOCR first as requested by user
-        print("Running EasyOCR...")
-        reader = get_reader()
-        if reader:
+        ocr_engine_used = "none"
+        fast_mode_min_chars = 80
+        fast_mode_min_conf = 0.75
+
+        def run_easyocr():
+            reader = get_reader()
+            if not reader:
+                return [], []
             try:
+                print("Running EasyOCR...")
                 results = reader.readtext(file_path)
+                easy_lines, easy_scores = [], []
                 for (_bbox, text, prob) in results:
                     if text.strip():
-                        lines.append(text.strip())
-                        scores.append(round(prob, 3))
-                processed_with_easyocr = True
+                        easy_lines.append(text.strip())
+                        easy_scores.append(round(prob, 3))
                 print("EasyOCR completed.")
+                return easy_lines, easy_scores
             except Exception as e:
                 print(f"EasyOCR failed: {e}")
+                return [], []
 
-        # Fallback to Tesseract ONLY if EasyOCR failed or returned no text
-        if not processed_with_easyocr or not lines:
-            if PYTESSERACT_AVAILABLE:
-                try:
-                    print(f"Attempting Tesseract fallback...")
-                    img = Image.open(file_path)
-                    tess_text = pytesseract.image_to_string(img)
-                    if tess_text.strip():
-                        lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
-                        scores = [0.9] * len(lines)
-                        print("Tesseract fallback successful.")
-                except Exception as e:
-                    print(f"Tesseract fallback failed: {e}")
+        def run_tesseract():
+            if not PYTESSERACT_AVAILABLE:
+                return [], []
+            try:
+                print("Running PyTesseract...")
+                img = Image.open(file_path)
+                tess_text = pytesseract.image_to_string(img)
+                tess_lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
+                tess_scores = [0.9] * len(tess_lines) if tess_lines else []
+                if tess_lines:
+                    print("PyTesseract completed.")
+                return tess_lines, tess_scores
+            except Exception as e:
+                print(f"PyTesseract failed: {e}")
+                return [], []
+
+        if ocr_mode in ("fast", "balanced"):
+            lines, scores = run_tesseract()
+            ocr_engine_used = "pytesseract" if lines else "none"
+
+            fast_text_len = len('\n'.join(lines))
+            fast_avg_conf = (sum(scores) / len(scores)) if scores else 0
+            should_fallback = (
+                not lines
+                or fast_text_len < fast_mode_min_chars
+                or fast_avg_conf < fast_mode_min_conf
+            )
+
+            if should_fallback:
+                print(
+                    f"Fast mode fallback triggered (chars={fast_text_len}, conf={round(fast_avg_conf, 3)})."
+                )
+                easy_lines, easy_scores = run_easyocr()
+                if easy_lines:
+                    lines, scores = easy_lines, easy_scores
+                    ocr_engine_used = "easyocr_fallback"
+        else:
+            lines, scores = run_easyocr()
+            if lines:
+                ocr_engine_used = "easyocr"
+            elif PYTESSERACT_AVAILABLE:
+                print("Attempting Tesseract fallback...")
+                lines, scores = run_tesseract()
+                if lines:
+                    ocr_engine_used = "pytesseract_fallback"
+
+    if ext in ['.docx', '.txt', '.rtf']:
+        ocr_engine_used = "native_text"
     
     full_text = '\n'.join(lines)
     avg_conf = round(sum(scores) / len(scores), 3) if scores else 0
@@ -362,6 +405,8 @@ def process_ocr(data: OCRRequest):
         'success': True,
         'text': full_text,
         'confidence': avg_conf,
+        'ocr_mode': ocr_mode,
+        'engine_used': ocr_engine_used,
         'detected_type': detected_type,
         'type_mismatch': type_mismatch,
         'mismatch_message': mismatch_msg,
