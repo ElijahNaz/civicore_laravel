@@ -140,7 +140,14 @@ class DocumentController extends Controller
     }
 
     /**
-     * Upload file - stores file content directly in database
+     * Upload file - saves to disk and processes OCR
+     * 
+     * Workflow:
+     * 1. Save file to storage/app/public/documents with unique name
+     * 2. Send file to OCR server at http://localhost:8000/process
+     * 3. Store raw OCR text and extracted fields in database
+     * 4. Dynamically rename file based on OCR results
+     * 5. Queue async job for post-processing
      */
     public function upload(Request $request)
     {
@@ -173,13 +180,10 @@ class DocumentController extends Controller
         $user = $userId ? \App\Models\User::find($userId) : null;
         $encodedBy = $user ? $user->name : 'System';
 
-        // Generate unique filename
+        // Generate unique filename for initial storage
         $originalName = $file->getClientOriginalName();
         $extension = $file->getClientOriginalExtension();
-        $filename = 'file-' . time() . '-' . rand(100000000, 999999999) . '.' . $extension;
-
-        // Get file content to store in database
-        $fileContent = file_get_contents($file->getRealPath());
+        $tempFilename = 'doc-' . time() . '-' . rand(100000000, 999999999) . '.' . $extension;
 
         // Get file size
         $size = number_format($file->getSize() / (1024 * 1024), 2) . ' MB';
@@ -187,44 +191,261 @@ class DocumentController extends Controller
         // Save file info metadata
         $fileInfo = json_encode([
             'originalName' => $originalName,
-            'filename' => $filename,
+            'filename' => $tempFilename,
             'size' => $file->getSize(),
             'mimetype' => $file->getMimeType(),
-            'storedIn' => 'database',
+            'storedIn' => 'filesystem',
             'quality' => $qualityMetadata
         ]);
 
-        // Save to database using Query Builder (Safer for large BLOBs/binary data)
-        $newId = DB::table('documents')->insertGetId([
-            'name' => $originalName,
-            'type' => $docType,
-            'date' => date('m/d/Y'),
-            'size' => $size,
-            'status' => 'Pending',
-            'previewData' => null,
-            'personName' => $personName,
-            'barangay' => $barangay,
-            'metadata' => $fileInfo,
-            'file_data' => $fileContent,
-            'encoded_by' => $encodedBy,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            // STEP 1: Save file to disk
+            $filePath = $this->saveDocumentFile($file, $tempFilename);
+            \Log::info("File saved to disk: {$filePath}");
 
-        // Log history
-        $this->logHistory($newId, 'Uploaded');
+            // STEP 2: Send to OCR server and get raw text + extracted fields
+            $ocrResult = $this->processDocumentOcr($filePath);
+            \Log::info("OCR processing complete for: {$filePath}");
 
-        // AUTO-DISPATCH OCR PROCESSING
-        ProcessDocumentOcr::dispatch($newId, $docType)->onQueue('high');
+            $rawText = $ocrResult['raw_text'] ?? '';
+            $extractedData = $ocrResult['extracted_fields'] ?? [];
+            $detectedType = $ocrResult['detected_type'] ?? $docType;
 
-        return response()->json([
-            'success' => true,
-            'id' => $newId,
-            'filename' => $filename,
-            'originalName' => $originalName,
-            'size' => $size,
-            'encoded_by' => $encodedBy,
-        ]);
+            // STEP 3: Save initial record to database
+            $newId = DB::table('documents')->insertGetId([
+                'name' => $originalName,
+                'type' => $docType,
+                'date' => date('m/d/Y'),
+                'size' => $size,
+                'status' => 'Extracted', // Mark as extracted since we have OCR data
+                'previewData' => null,
+                'personName' => $personName,
+                'barangay' => $barangay,
+                'metadata' => $fileInfo,
+                'file_path' => $filePath, // Store disk path
+                'raw_text' => $rawText, // Store raw OCR text for searchability
+                'extracted_data' => json_encode($extractedData, JSON_UNESCAPED_UNICODE),
+                'extracted_fields' => json_encode($extractedData, JSON_UNESCAPED_UNICODE), // Keep for compatibility
+                'detected_type' => $detectedType,
+                'encoded_by' => $encodedBy,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // STEP 4: Dynamically rename file based on OCR results
+            $renamedFilePath = $this->renameDocumentFile($newId, $filePath, $extractedData, $detectedType);
+            if ($renamedFilePath !== $filePath) {
+                DB::table('documents')->where('id', $newId)->update([
+                    'file_path' => $renamedFilePath,
+                ]);
+                $filePath = $renamedFilePath;
+                \Log::info("File renamed to: {$renamedFilePath}");
+            }
+
+            // STEP 5: Log history
+            $this->logHistory($newId, 'Uploaded');
+
+            // STEP 6: Queue async post-processing job (optional - for additional processing)
+            ProcessDocumentOcr::dispatch($newId, $detectedType)->onQueue('high');
+
+            return response()->json([
+                'success' => true,
+                'id' => $newId,
+                'filename' => basename($filePath),
+                'originalName' => $originalName,
+                'size' => $size,
+                'file_path' => $filePath,
+                'raw_text_length' => strlen($rawText),
+                'extracted_fields' => $extractedData,
+                'detected_type' => $detectedType,
+                'encoded_by' => $encodedBy,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error("Document upload failed: " . $e->getMessage());
+            
+            // Clean up file if it was saved
+            if (isset($filePath) && \Storage::disk('public')->exists($filePath)) {
+                \Storage::disk('public')->delete($filePath);
+            }
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Upload failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Save uploaded file to storage/app/public/documents
+     * 
+     * @param \Illuminate\Http\UploadedFile $file
+     * @param string $filename
+     * @return string Path to saved file
+     */
+    private function saveDocumentFile($file, $filename)
+    {
+        $path = $file->storeAs(
+            'documents',
+            $filename,
+            'public'
+        );
+
+        if (!$path) {
+            throw new \Exception("Failed to save file to disk");
+        }
+
+        return $path;
+    }
+
+    /**
+     * Send file to local OCR server and extract text + fields
+     * 
+     * Sends POST request to http://localhost:8000/process with file attachment
+     * Uses multipart/form-data for file transfer
+     * 
+     * Expected OCR server response format:
+     * {
+     *     "raw_text": "Full extracted OCR text",
+     *     "extracted_fields": {
+     *         "first_name": "...",
+     *         "last_name": "...",
+     *         "date_of_birth": "..."
+     *     },
+     *     "detected_type": "birth|death|marriage"
+     * }
+     * 
+     * @param string $filePath Path to file in storage
+     * @return array OCR result containing raw_text, extracted_fields, detected_type
+     */
+    private function processDocumentOcr($filePath)
+    {
+        try {
+            $fullPath = \Storage::disk('public')->path($filePath);
+            
+            if (!file_exists($fullPath)) {
+                throw new \Exception("File not found at: {$fullPath}");
+            }
+
+            \Log::info("Sending file to OCR server: {$fullPath}");
+
+            // Create multipart request with actual file
+            $fileHandle = fopen($fullPath, 'r');
+            
+            // Send file to OCR server using Http::attach() for multipart form data
+            $response = \Illuminate\Support\Facades\Http::timeout(300)
+                ->attach(
+                    'file',
+                    $fileHandle,
+                    basename($fullPath)
+                )
+                ->post('http://localhost:8000/process');
+
+            fclose($fileHandle);
+
+            if ($response->failed()) {
+                \Log::error("OCR server returned error: " . $response->status() . " - " . $response->body());
+                throw new \Exception("OCR server error: " . $response->status());
+            }
+
+            $ocrData = $response->json();
+
+            if (!isset($ocrData['raw_text'])) {
+                \Log::warning("OCR response missing raw_text: " . json_encode($ocrData));
+                // Return graceful fallback
+                return [
+                    'raw_text' => '',
+                    'extracted_fields' => $ocrData['extracted_fields'] ?? [],
+                    'detected_type' => $ocrData['detected_type'] ?? 'unknown',
+                ];
+            }
+
+            \Log::info("OCR processing successful, extracted " . strlen($ocrData['raw_text']) . " characters");
+
+            return [
+                'raw_text' => $ocrData['raw_text'] ?? '',
+                'extracted_fields' => $ocrData['extracted_fields'] ?? [],
+                'detected_type' => $ocrData['detected_type'] ?? 'unknown',
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error("OCR processing error: " . $e->getMessage());
+            
+            // Return graceful fallback - don't fail the upload
+            return [
+                'raw_text' => '',
+                'extracted_fields' => [],
+                'detected_type' => 'unknown',
+            ];
+        }
+    }
+
+    /**
+     * Dynamically rename file based on OCR extracted data
+     * 
+     * Pattern: [DOC_TYPE]_[LAST_NAME]_[FIRST_NAME]_[TIMESTAMP].ext
+     * Example: BIRTH_SANTOS_JUAN_20260409120000.pdf
+     * 
+     * @param int $documentId
+     * @param string $currentPath Current file path
+     * @param array $extractedData Extracted OCR data
+     * @param string $detectedType Document type
+     * @return string New file path
+     */
+    private function renameDocumentFile($documentId, $currentPath, $extractedData, $detectedType)
+    {
+        try {
+            if (!$extractedData || count($extractedData) === 0) {
+                \Log::info("No extracted data to rename file: {$documentId}");
+                return $currentPath;
+            }
+
+            // Extract relevant name fields based on document type
+            $lastName = '';
+            $firstName = '';
+
+            if ($detectedType === 'marriage' || $detectedType === 'marriage_license') {
+                $lastName = $extractedData['husband_last_name'] ?? $extractedData['wife_last_name'] ?? '';
+                $firstName = $extractedData['husband_first_name'] ?? $extractedData['wife_first_name'] ?? '';
+            } else {
+                // Birth, Death, or other
+                $lastName = $extractedData['last_name'] ?? '';
+                $firstName = $extractedData['first_name'] ?? '';
+            }
+
+            // Sanitize names (remove special characters, spaces)
+            $lastName = preg_replace('/[^a-zA-Z0-9]/', '', $lastName);
+            $firstName = preg_replace('/[^a-zA-Z0-9]/', '', $firstName);
+
+            // If we don't have names, use the document ID instead
+            if (empty($lastName) && empty($firstName)) {
+                \Log::info("No names extracted, keeping original filename");
+                return $currentPath;
+            }
+
+            // Build new filename: [TYPE]_[LASTNAME]_[FIRSTNAME]_[DOCID].[ext]
+            $extension = pathinfo($currentPath, PATHINFO_EXTENSION);
+            $typePrefix = strtoupper($detectedType);
+            $timestamp = date('YmdHis');
+            
+            $newFilename = "{$typePrefix}_{$lastName}_{$firstName}_{$documentId}.{$extension}";
+            $newPath = 'documents/' . $newFilename;
+
+            // Rename in storage
+            if (\Storage::disk('public')->exists($currentPath)) {
+                \Storage::disk('public')->move($currentPath, $newPath);
+                \Log::info("File renamed: {$currentPath} -> {$newPath}");
+                return $newPath;
+            } else {
+                \Log::warning("Cannot rename: source file not found at {$currentPath}");
+                return $currentPath;
+            }
+
+        } catch (\Exception $e) {
+            \Log::error("File rename failed: " . $e->getMessage());
+            // Don't fail the whole upload if rename fails
+            return $currentPath;
+        }
     }
 
     /**

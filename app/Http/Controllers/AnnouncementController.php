@@ -24,9 +24,12 @@ class AnnouncementController extends Controller
 
     public function index()
     {
-        // Even public can view if needed, but we typically use PublicController for that.
-        // We will secure this for Admin dashboard list.
-        return response()->json(Announcement::orderBy('created_at', 'desc')->get());
+        try {
+            return response()->json(Announcement::orderBy('created_at', 'desc')->get());
+        } catch (\Exception $e) {
+            \Log::error('Announcements load failure: ' . $e->getMessage());
+            return response()->json([], 200);
+        }
     }
 
     public function store(Request $request)

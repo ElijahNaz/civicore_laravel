@@ -267,7 +267,10 @@ export const DataProvider = ({ children }) => {
 
         try {
             const response = await fetch('/api/templates', { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch templates');
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Failed to fetch templates: ${response.status} ${text}`);
+            }
             const data = await response.json();
             
             if (data) {

@@ -33,7 +33,7 @@ def get_reader(lang):
     global _reader
     if _reader is None:
         print(f"Initializing EasyOCR ({lang})…", file=sys.stderr)
-        _reader = easyocr.Reader(lang, gpu=False, verbose=False)
+        _reader = easyocr.Reader(lang, gpu=True, verbose=False)
     return _reader
 
 
@@ -208,13 +208,20 @@ def extract_fields(doc_type: str, text: str, lines: list) -> dict:
 # ── OCR runners ──────────────────────────────────────────────────────────────
 def run_ocr_on_image(image_path: str, lang: list) -> dict:
     reader = get_reader(lang)
+    with Image.open(image_path) as img:
+        # If image is wider than 1500px, scale it down
+        if img.width > 1500:
+            ratio = 1500 / float(img.width)
+            new_height = int(float(img.height) * float(ratio))
+            img = img.resize((1500, new_height), Image.Resampling.LANCZOS)
     print(f"Running OCR on image: {image_path}", file=sys.stderr)
-    results = reader.readtext(image_path)
+    results = reader.readtext(image_path, detail=0)
     lines, scores = [], []
     for (_bbox, text, prob) in results:
         if text.strip():
             lines.append(text.strip())
             scores.append(round(prob, 3))
+    lines = [text for text in results if text.strip()]
     full_text = '\n'.join(lines)
     avg_conf  = round(sum(scores) / len(scores), 3) if scores else 0
     return {'success': True, 'text': full_text, 'lines': lines, 'confidence': avg_conf}
@@ -227,7 +234,7 @@ def run_ocr_on_pdf(pdf_path: str, lang: list) -> dict:
         return {'success': False, 'error': 'pdf2image not installed. Run: pip install pdf2image'}
 
     print(f"Converting PDF: {pdf_path}", file=sys.stderr)
-    images = convert_from_path(pdf_path, dpi=200)
+    images = convert_from_path(pdf_path, dpi=150)
     if not images:
         return {'success': False, 'error': 'Could not convert PDF to images'}
 
