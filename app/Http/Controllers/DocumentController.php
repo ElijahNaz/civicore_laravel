@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Bus;
+use App\Models\Document;
 use App\Jobs\ProcessDocumentOcr;
 
 class DocumentController extends Controller
@@ -85,6 +86,46 @@ class DocumentController extends Controller
         ]);
     }
 
+    public function bulkProcess(Request $request) 
+    {
+        // 1. Make sure we actually received an array of IDs
+        $request->validate([
+            'document_ids' => 'required|array',
+            'document_ids.*' => 'integer|exists:documents,id' // Make sure they exist in the DB!
+        ]);
+
+        $queuedCount = 0;
+
+        // 2. Loop through each ID and dispatch the background job if it is not already queued
+        foreach ($request->document_ids as $id) {
+            DB::transaction(function () use ($id, &$queuedCount) {
+                $doc = DB::table('documents')->where('id', $id)->lockForUpdate()->first();
+                if (!$doc) {
+                    return;
+                }
+
+                $status = strtolower($doc->status ?? '');
+                if (in_array($status, ['pending', 'processing'], true)) {
+                    return;
+                }
+
+                DB::table('documents')->where('id', $id)->update([
+                    'status' => 'Pending',
+                    'updated_at' => now(),
+                ]);
+
+                ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('high');
+                $queuedCount++;
+            });
+        }
+
+        // 3. Return success instantly
+        return response()->json([
+            'success' => true, 
+            'queued_count' => $queuedCount
+        ]);
+    }
+
     /**
      * Get persistent submission history from logs
      */
@@ -104,39 +145,35 @@ class DocumentController extends Controller
     /**
      * Create new document
      */
-    public function store(Request $request)
+    public function store(Request $request) 
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'type' => 'required|string|max:255',
+        // 1. Validate the file exists
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,png,jpg,jpeg|max:10240', // max 10MB
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()->first()], 400);
-        }
+        $this->validateUploadedFile($request->file('document'));
+        // 2. Permanently save the file to storage/app/public/documents (public disk)
+        $path = $request->file('document')->store('documents', 'public');
 
-        $name = $request->input('name');
-        $type = $request->input('type');
-        $date = $request->input('date', date('m/d/Y'));
-        $size = $request->input('size', '0 MB');
-        $status = $request->input('status', 'Uploaded');
-        $previewData = $request->input('previewData');
-        $personName = $request->input('personName', '');
-        $barangay = $request->input('barangay', '');
-        $qualityMetadataRaw = $request->input('quality_metadata');
-        $qualityMetadata = null;
-        if (is_string($qualityMetadataRaw) && $qualityMetadataRaw !== '') {
-            $decoded = json_decode($qualityMetadataRaw, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $qualityMetadata = $decoded;
-            }
-        }
-        $metadata = $request->input('metadata');
+        // 3. Create the database record immediately
+        $document = Document::create([
+            'file_name' => $request->file('document')->getClientOriginalName(),
+            'file_path' => $path,
+            'status' => 'pending',
+            'raw_text' => null,
+            'extracted_data' => null
+        ]);
 
-        DB::insert("INSERT INTO documents (name, type, date, size, status, previewData, personName, barangay, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            [$name, $type, $date, $size, $status, $previewData, $personName, $barangay, $metadata]);
+        // 4. Pass the database record to the background worker
+        ProcessDocumentOcr::dispatch($document->id, 'Uncategorized')->onQueue('high');
 
-        return response()->json(['success' => true, 'id' => DB::getPdo()->lastInsertId()]);
+        // 5. Return success instantly to the React frontend
+        return response()->json([
+            'success' => true, 
+            'message' => 'Upload successful. Processing in background...',
+            'document_id' => $document->id
+        ]);
     }
 
     /**
@@ -163,108 +200,63 @@ class DocumentController extends Controller
         }
 
         $file = $request->file('file');
+        $this->validateUploadedFile($file);
+
         $docType = $request->input('docType', 'Uncategorized');
         $personName = $request->input('personName', '');
         $barangay = $request->input('barangay', '');
-        $qualityMetadataRaw = $request->input('quality_metadata');
-        $qualityMetadata = null;
-        if (is_string($qualityMetadataRaw) && $qualityMetadataRaw !== '') {
-            $decoded = json_decode($qualityMetadataRaw, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $qualityMetadata = $decoded;
-            }
-        }
-
+        
         // Resolve uploader name from session
         $userId = $request->session()->get('user_id');
         $user = $userId ? \App\Models\User::find($userId) : null;
         $encodedBy = $user ? $user->name : 'System';
 
-        // Generate unique filename for initial storage
+        // Generate unique filename and size
         $originalName = $file->getClientOriginalName();
         $extension = $file->getClientOriginalExtension();
         $tempFilename = 'doc-' . time() . '-' . rand(100000000, 999999999) . '.' . $extension;
-
-        // Get file size
         $size = number_format($file->getSize() / (1024 * 1024), 2) . ' MB';
 
-        // Save file info metadata
-        $fileInfo = json_encode([
-            'originalName' => $originalName,
-            'filename' => $tempFilename,
-            'size' => $file->getSize(),
-            'mimetype' => $file->getMimeType(),
-            'storedIn' => 'filesystem',
-            'quality' => $qualityMetadata
-        ]);
-
         try {
-            // STEP 1: Save file to disk
+            // STEP 1: Save file to a non-public disk instantly
             $filePath = $this->saveDocumentFile($file, $tempFilename);
-            \Log::info("File saved to disk: {$filePath}");
+            \Log::info("File saved to disk instantly: {$filePath}");
 
-            // STEP 2: Send to OCR server and get raw text + extracted fields
-            $ocrResult = $this->processDocumentOcr($filePath);
-            \Log::info("OCR processing complete for: {$filePath}");
-
-            $rawText = $ocrResult['raw_text'] ?? '';
-            $extractedData = $ocrResult['extracted_fields'] ?? [];
-            $detectedType = $ocrResult['detected_type'] ?? $docType;
-
-            // STEP 3: Save initial record to database
+            // STEP 2: Save initial record to database as PENDING (No OCR wait!)
             $newId = DB::table('documents')->insertGetId([
                 'name' => $originalName,
                 'type' => $docType,
                 'date' => date('m/d/Y'),
                 'size' => $size,
-                'status' => 'Extracted', // Mark as extracted since we have OCR data
-                'previewData' => null,
+                'status' => 'Pending', // <--- IMPORTANT: Starts as pending
                 'personName' => $personName,
                 'barangay' => $barangay,
-                'metadata' => $fileInfo,
-                'file_path' => $filePath, // Store disk path
-                'raw_text' => $rawText, // Store raw OCR text for searchability
-                'extracted_data' => json_encode($extractedData, JSON_UNESCAPED_UNICODE),
-                'extracted_fields' => json_encode($extractedData, JSON_UNESCAPED_UNICODE), // Keep for compatibility
-                'detected_type' => $detectedType,
+                'file_path' => $filePath, 
                 'encoded_by' => $encodedBy,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            // STEP 4: Dynamically rename file based on OCR results
-            $renamedFilePath = $this->renameDocumentFile($newId, $filePath, $extractedData, $detectedType);
-            if ($renamedFilePath !== $filePath) {
-                DB::table('documents')->where('id', $newId)->update([
-                    'file_path' => $renamedFilePath,
-                ]);
-                $filePath = $renamedFilePath;
-                \Log::info("File renamed to: {$renamedFilePath}");
-            }
-
-            // STEP 5: Log history
+            // STEP 3: Log history
             $this->logHistory($newId, 'Uploaded');
 
-            // STEP 6: Queue async post-processing job (optional - for additional processing)
-            ProcessDocumentOcr::dispatch($newId, $detectedType)->onQueue('high');
+            // STEP 4: Hand off to the Background Queue to do the OCR later!
+            ProcessDocumentOcr::dispatch($newId, $docType)->onQueue('high');
 
+            // STEP 5: Return to React INSTANTLY (< 500ms)
             return response()->json([
                 'success' => true,
+                'message' => 'Upload successful. Processing in background...',
                 'id' => $newId,
                 'filename' => basename($filePath),
                 'originalName' => $originalName,
                 'size' => $size,
-                'file_path' => $filePath,
-                'raw_text_length' => strlen($rawText),
-                'extracted_fields' => $extractedData,
-                'detected_type' => $detectedType,
-                'encoded_by' => $encodedBy,
+                'status' => 'Pending'
             ]);
 
         } catch (\Exception $e) {
             \Log::error("Document upload failed: " . $e->getMessage());
             
-            // Clean up file if it was saved
             if (isset($filePath) && \Storage::disk('public')->exists($filePath)) {
                 \Storage::disk('public')->delete($filePath);
             }
@@ -276,8 +268,43 @@ class DocumentController extends Controller
         }
     }
 
+    private function validateUploadedFile($file)
+    {
+        $allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'docx', 'doc', 'txt', 'webp', 'rtf'];
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if (!in_array($extension, $allowedExtensions, true)) {
+            abort(400, 'Unsupported file type.');
+        }
+
+        $path = $file->getRealPath();
+        if (!$path || !file_exists($path) || filesize($path) === 0) {
+            abort(400, 'Uploaded file is empty or invalid.');
+        }
+
+        $magic = file_get_contents($path, false, null, 0, 16);
+        $isValid = match ($extension) {
+            'pdf' => str_starts_with($magic, '%PDF-'),
+            'png' => str_starts_with($magic, "\x89PNG\r\n\x1a\n"),
+            'jpg', 'jpeg' => substr($magic, 0, 2) === "\xFF\xD8",
+            'webp' => substr($magic, 0, 4) === 'RIFF' && substr($magic, 8, 4) === 'WEBP',
+            'tiff' => in_array(substr($magic, 0, 4), ["II*\x00", "MM\x00*"], true),
+            'bmp' => substr($magic, 0, 2) === 'BM',
+            'docx' => substr($magic, 0, 4) === 'PK\x03\x04',
+            'doc' => substr($magic, 0, 8) === "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1",
+            'txt', 'rtf' => true,
+            default => false,
+        };
+
+        if (!$isValid) {
+            abort(400, 'File content does not match the allowed type.');
+        }
+
+        return true;
+    }
+
     /**
-     * Save uploaded file to storage/app/public/documents
+     * Save uploaded file to storage/app/public/documents on the public disk
      * 
      * @param \Illuminate\Http\UploadedFile $file
      * @param string $filename
@@ -333,7 +360,8 @@ class DocumentController extends Controller
             $fileHandle = fopen($fullPath, 'r');
             
             // Send file to OCR server using Http::attach() for multipart form data
-            $response = \Illuminate\Support\Facades\Http::timeout(300)
+            $response = \Illuminate\Support\Facades\Http::retry(3, 1000)
+                ->timeout(300)
                 ->attach(
                     'file',
                     $fileHandle,
@@ -704,16 +732,31 @@ class DocumentController extends Controller
         }
 
         // Return the raw upload with binary safety
+        $mimetype = $metadata['mimetype'] ?? null;
+        if (!$mimetype) {
+            $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);
+            $mimetype = match(strtolower($ext)) {
+                'png' => 'image/png', 'jpg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp',
+                'gif' => 'image/gif', 'pdf' => 'application/pdf', default => 'application/octet-stream'
+            };
+        }
+
         $fileContent = $doc->file_data;
         if (empty($fileContent)) {
+            if (!empty($doc->file_path) && \Storage::disk('public')->exists($doc->file_path)) {
+                $fullPath = \Storage::disk('public')->path($doc->file_path);
+                return response()->file($fullPath, [
+                    'Content-Type' => $mimetype,
+                    'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? 'document') . '"'
+                ]);
+            }
+
             \Log::error("File data missing for document ID: " . $id);
             return response()->json(['error' => 'File content not found'], 404);
         }
 
         // Clean output buffers to ensure binary safety
         if (ob_get_length()) ob_end_clean();
-
-        $mimetype = $metadata['mimetype'] ?? null;
         if (!$mimetype) {
             $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);
             $mimetype = match(strtolower($ext)) {

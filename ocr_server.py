@@ -178,6 +178,41 @@ def _validate_field_value(field_name: str, value: str) -> bool:
         return len(text) >= 3 and len(re.findall(r'[A-Za-z]', text)) >= 2
     return len(text) >= 2
 
+def _validate_input_file(file_path: str, expected_extensions=None):
+    if not file_path or not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise HTTPException(status_code=400, detail='File not found or inaccessible.')
+
+    if os.path.getsize(file_path) == 0:
+        raise HTTPException(status_code=400, detail='Uploaded file is empty.')
+
+    if expected_extensions is None:
+        expected_extensions = ['.pdf', '.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp', '.docx', '.txt', '.rtf']
+
+    ext = Path(file_path).suffix.lower()
+    if ext not in expected_extensions:
+        raise HTTPException(status_code=400, detail=f'Unsupported file type: {ext}')
+
+    with open(file_path, 'rb') as fp:
+        magic = fp.read(16)
+
+    if ext == '.pdf' and not magic.startswith(b'%PDF-'):
+        raise HTTPException(status_code=400, detail='Corrupt or invalid PDF file.')
+    if ext in ['.jpg', '.jpeg'] and magic[:2] != b'\xFF\xD8':
+        raise HTTPException(status_code=400, detail='Corrupt or invalid JPEG file.')
+    if ext == '.png' and magic[:8] != b'\x89PNG\r\n\x1a\n':
+        raise HTTPException(status_code=400, detail='Corrupt or invalid PNG file.')
+    if ext == '.webp' and not (magic[:4] == b'RIFF' and magic[8:12] == b'WEBP'):
+        raise HTTPException(status_code=400, detail='Corrupt or invalid WEBP file.')
+    if ext == '.bmp' and magic[:2] != b'BM':
+        raise HTTPException(status_code=400, detail='Corrupt or invalid BMP file.')
+    if ext == '.tiff' and magic[:4] not in [b'II*\x00', b'MM\x00*']:
+        raise HTTPException(status_code=400, detail='Corrupt or invalid TIFF file.')
+    if ext == '.docx' and magic[:4] != b'PK\x03\x04':
+        raise HTTPException(status_code=400, detail='Corrupt or invalid DOCX file.')
+
+    return ext
+
+
 def _roi_to_pixels(roi, width: int, height: int):
     x1, y1, x2, y2 = roi
     left = max(0, int(width * x1))
@@ -504,11 +539,71 @@ def status():
 @app.post('/split')
 def split_pdf(data: SplitRequest):
     file_path = data.file_path
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail="File not found")
-    
+    ext = _validate_input_file(file_path, expected_extensions=['.pdf'])
+
     try:
-        doc = fitz.open(file_path)
+        with fitz.open(file_path) as doc:
+            if len(doc) == 0:
+                raise HTTPException(status_code=400, detail='PDF contains no pages.')
+            image_paths = []
+            base_dir = os.path.dirname(file_path)
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+
+            base_zoom = max(1.0, min(data.base_zoom, 3.0))
+            boosted_zoom = max(base_zoom, min(data.boosted_zoom, 3.0))
+            use_boosted_zoom = (
+                data.ocr_confidence is not None
+                and data.ocr_confidence < data.low_confidence_threshold
+            )
+            zoom = boosted_zoom if use_boosted_zoom else base_zoom
+            max_dimension = data.max_dimension if (data.max_dimension and data.max_dimension > 0) else None
+            image_format = data.image_format.lower()
+            image_quality = max(1, min(data.image_quality, 100))
+            output_ext = "jpg" if image_format == "jpeg" else "webp"
+            output_format = "JPEG" if image_format == "jpeg" else "WEBP"
+
+            print(
+                "split_pdf settings: "
+                f"zoom={zoom:.2f} (boosted={use_boosted_zoom}), "
+                f"format={output_format}, quality={image_quality}, "
+                f"max_dimension={max_dimension}"
+            )
+
+            for i in range(len(doc)):
+                page = doc.load_page(i)
+                page_start = time.perf_counter()
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat)
+
+                pil_mode = "RGBA" if pix.alpha else "RGB"
+                pil_image = Image.frombytes(pil_mode, (pix.width, pix.height), pix.samples)
+                grayscale_image = pil_image.convert("L")
+
+                if max_dimension:
+                    resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                    grayscale_image.thumbnail((max_dimension, max_dimension), resample_filter)
+
+                img_path = os.path.join(base_dir, f"{base_name}_page_{i+1}.{output_ext}")
+                save_kwargs = {"format": output_format, "quality": image_quality}
+                if output_format == "JPEG":
+                    save_kwargs["optimize"] = True
+                elif output_format == "WEBP":
+                    save_kwargs["method"] = 6
+
+                grayscale_image.save(img_path, **save_kwargs)
+                image_paths.append(img_path)
+
+                page_elapsed = time.perf_counter() - page_start
+                print(
+                    f"Rendered page {i + 1}/{len(doc)} in {page_elapsed:.3f}s "
+                    f"at {grayscale_image.width}x{grayscale_image.height}"
+                )
+
+            return {"success": True, "pages": image_paths, "total": len(image_paths)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
         image_paths = []
         base_dir = os.path.dirname(file_path)
         base_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -571,6 +666,7 @@ def split_pdf(data: SplitRequest):
 @app.post('/ocr')
 def process_ocr(data: OCRRequest):
     file_path = data.file_path
+    ext = _validate_input_file(file_path)
     expected_type = data.doc_type
     languages = data.languages.split(',')
     ocr_mode = data.ocr_mode
@@ -815,9 +911,17 @@ if __name__ == '__main__':
     cores = os.cpu_count() or 2
     # Default to 1 worker for stability on low-end systems (i3/4GB RAM)
     # Tesseract is so fast that parallelism isn't strictly required for a single user
-    workers = 1 
+    workers = min(max(2, cores - 1), 4)
+    limit_concurrency = max(5, min(cores * 2, 10))
     print(f"Starting OCR Server with DYNAMIC HARDWARE SCALING")
     print(f"Detected CPU Cores: {cores}")
-    print(f"Launching {workers} concurrent AI threads for massive parallel throughput...")
+    print(f"Launching {workers} workers with limit_concurrency={limit_concurrency}")
     
-    uvicorn.run("ocr_server:app", host='0.0.0.0', port=5000, workers=workers, log_level="info")
+    uvicorn.run(
+        "ocr_server:app",
+        host='0.0.0.0',
+        port=5000,
+        workers=workers,
+        log_level="info",
+        limit_concurrency=limit_concurrency,
+    )

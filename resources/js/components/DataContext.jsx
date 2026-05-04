@@ -285,26 +285,65 @@ export const DataProvider = ({ children }) => {
         }
     }, []);
 
-    // ── Global Polling ────────────────────────────────────────────────────────
-    useEffect(() => {
-        // Refresh everything on mount
+    const pollingRef = useRef(null);
+    const isVisibleRef = useRef(document.visibilityState === 'visible');
+
+    const refreshAll = useCallback(() => {
         refreshStats(true);
         refreshDocuments(true);
         refreshIssuances(true);
         refreshHistory(true);
         refreshTemplates(true);
+    }, [refreshStats, refreshDocuments, refreshIssuances, refreshHistory, refreshTemplates]);
 
-        // Set up polling (every 15 seconds)
-        const interval = setInterval(() => {
+    const stopPolling = useCallback(() => {
+        if (pollingRef.current) {
+            window.clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
+    }, []);
+
+    const startPolling = useCallback(() => {
+        if (pollingRef.current) {
+            return;
+        }
+
+        pollingRef.current = window.setInterval(() => {
+            if (!isVisibleRef.current) {
+                return;
+            }
+
             refreshStats();
             refreshDocuments();
             refreshIssuances();
             refreshHistory();
             refreshTemplates();
         }, 15000);
+    }, [refreshStats, refreshDocuments, refreshIssuances, refreshHistory, refreshTemplates]);
 
-        return () => clearInterval(interval);
-    }, [refreshStats, refreshDocuments, refreshIssuances, refreshHistory]);
+    // ── Global Polling ────────────────────────────────────────────────────────
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            isVisibleRef.current = document.visibilityState === 'visible';
+            if (isVisibleRef.current) {
+                refreshAll();
+                startPolling();
+            } else {
+                stopPolling();
+            }
+        };
+
+        refreshAll();
+        if (isVisibleRef.current) {
+            startPolling();
+        }
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            stopPolling();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [refreshAll, startPolling, stopPolling]);
 
     const value = {
         stats,
@@ -323,13 +362,7 @@ export const DataProvider = ({ children }) => {
         refreshHistory,
         refreshTemplates,
         // Helper to refresh everything at once (e.g. after a mutation)
-        refreshAll: () => {
-            refreshStats(true);
-            refreshDocuments(true);
-            refreshIssuances(true);
-            refreshHistory(true);
-            refreshTemplates(true);
-        }
+        refreshAll,
     };
 
     return (

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -12,13 +13,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Bus;
+use App\Jobs\ProcessImageOcrJob;
 use Throwable;
 
-class ProcessDocumentOcr implements ShouldQueue
+class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 600;
+    public $tries = 3;
+    public $backoff = [60, 120, 300];
+    public $timeout = 900;
+    public $uniqueFor = 3600;
 
     protected $documentId;
     protected $docType;
@@ -32,28 +37,34 @@ class ProcessDocumentOcr implements ShouldQueue
         $this->onQueue('high');
     }
 
+    public function uniqueId()
+    {
+        return (string) $this->documentId;
+    }
+
     public function handle(): void
     {
         Log::info("ProcessDocumentOcr Coordinator starting for Document ID: " . $this->documentId);
 
         $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$this->documentId]);
-        if (!$doc || empty($doc->file_data)) {
-            Log::error("Invalid document or empty file data: " . $this->documentId);
+        
+        // 1. Check if the document exists and has a file path mapped
+        if (!$doc || empty($doc->file_path)) {
+            Log::error("Invalid document or missing file_path on disk for ID: " . $this->documentId);
             return;
         }
 
-        $metadata = json_decode($doc->metadata, true);
-        $mimetype = $metadata['mimetype'] ?? 'image/jpeg';
-        
-        $extension = 'jpg';
-        if (str_contains($mimetype, 'pdf')) $extension = 'pdf';
-        elseif (str_contains($mimetype, 'wordprocessingml') || str_contains($mimetype, 'msword')) $extension = 'docx';
-        elseif (str_contains($mimetype, 'png')) $extension = 'png';
-        elseif (str_contains($mimetype, 'tiff')) $extension = 'tiff';
-        elseif (str_contains($mimetype, 'text')) $extension = 'txt';
+        // 2. Get the actual physical path on your Windows machine in the local disk
+        $sourceFilePath = storage_path('app/public/' . $doc->file_path);
 
-        $tempFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ocr_source_' . $this->documentId . '.' . $extension;
-        file_put_contents($tempFile, $doc->file_data);
+        if (!file_exists($sourceFilePath)) {
+            Log::error("Physical file is missing from storage folder: " . $sourceFilePath);
+            DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
+            return;
+        }
+
+        // 3. Determine extension dynamically from the file path
+        $extension = strtolower(pathinfo($sourceFilePath, PATHINFO_EXTENSION));
 
         try {
             $jobs = [];
@@ -61,8 +72,12 @@ class ProcessDocumentOcr implements ShouldQueue
             // If it's a PDF, we must split it into images first
             if ($extension === 'pdf') {
                 Log::info("PDF detected. Requesting Python to split into pages...");
-                $response = Http::timeout(300)->post('http://127.0.0.1:5000/split', [
-                    'file_path' => $tempFile
+                
+                // Pass the Windows file path directly to the local Python server
+                $response = Http::retry(3, 1000) // Retry 3 times, waiting 1s between each
+                    ->timeout(600)
+                    ->post('http://127.0.0.1:5000/split', [
+                    'file_path' => $sourceFilePath,
                 ]);
 
                 if ($response->failed() || !($response->json()['success'] ?? false)) {
@@ -83,14 +98,14 @@ class ProcessDocumentOcr implements ShouldQueue
                     ))->onQueue('low');
                 }
                 
-                // Cleanup original PDF since we have images
-                @unlink($tempFile);
+                // IMPORTANT: We removed the @unlink() here so the original PDF stays saved in CiviCORE!
+
             } else {
                 // Single image or native document (docx/txt bypass)
                 // high priority
                 $jobs[] = (new ProcessImageOcrJob(
                     $this->documentId,
-                    $tempFile,
+                    $sourceFilePath, // Using the direct disk path
                     1,
                     $this->docType,
                     $this->languages
@@ -162,10 +177,10 @@ class ProcessDocumentOcr implements ShouldQueue
 
             Log::info("Dispatched batch {$batch->id} for Document ID: " . $docId);
 
-        } catch (\Exception $e) {
-            Log::error("ProcessDocumentOcr coordinator failed: " . $e->getMessage());
+        } catch (\Throwable $e) { // Use \Throwable to catch even fatal errors
+            Log::error("CRITICAL FAILURE in ProcessDocumentOcr: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString()); // ADD THIS
             DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
-            if (file_exists($tempFile)) @unlink($tempFile);
         }
     }
 }

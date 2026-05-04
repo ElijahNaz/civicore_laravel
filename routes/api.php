@@ -33,6 +33,7 @@ Route::middleware('api')->group(function () {
     Route::get('/announcements',    [AnnouncementController::class, 'index']);
     Route::get('/templates',        [TemplateController::class, 'index']);
     Route::get('/templates/preview', [TemplateController::class, 'getPreview']);
+    Route::post('/documents/bulk-process', [DocumentController::class, 'bulkProcess']);
 });
 
 Route::middleware('web')->group(function () {
