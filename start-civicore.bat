@@ -61,14 +61,14 @@ for /L %%i in (1,1,%DEFAULT_WORKERS%) do (
 
 :: 3. Start Persistent OCR Server
 echo [3/4] Launching Persistent OCR Server (FastAPI + Dynamic Scaling)...
-start "OCR Server" cmd /k "python ocr_server.py"
+start "OCR Server" cmd /k "C:\laragon\bin\python\python-3.13\python.exe ocr_server.py"
 
 :: 4. Start Vite (Frontend)
 echo [4/4] Launching Vite Frontend (npm run dev)...
 start "Vite Dev" cmd /k "npm run dev"
 
 echo ===================================================
-echo   ALL SYSTEMS GO! 
+echo   ALL SYSTEMS GO! s
 echo   1. Wait for "OCR Reader ready" in the OCR window.
 echo   2. Wait for "VITE ready" in the Vite window.
 echo   3. Then visit: http://localhost:8000

@@ -139,7 +139,12 @@ const Issuances = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const res = await axios.get('/api/users');
+                const token = localStorage.getItem('token');
+                const res = await axios.get('/api/users', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
                 // The API returns paginated data: { data: [...], meta: {...} }
                 setAllUsers(res.data.data || []);
             } catch (e) {

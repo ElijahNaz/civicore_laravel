@@ -8,7 +8,10 @@ export default function ContactDirectory() {
 
     useEffect(() => {
         fetch('/api/public/config')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`Config load failed: ${res.status}`);
+                return res.json();
+            })
             .then(data => {
                 setOpeningHours(data.opening_hours);
                 setIsLoading(false);
@@ -85,9 +88,9 @@ export default function ContactDirectory() {
                         Operating Hours
                         <span className="w-10 h-[1px] bg-white/10"></span>
                     </div>
-                    <p className="font-semibold text-sm">
+                    <div className="font-semibold text-sm">
                         {isLoading ? <div className="w-48 h-4 bg-white/10 rounded animate-pulse inline-block"></div> : openingHours}
-                    </p>
+                    </div>
                     <p className="text-xs opacity-60">Unless specified due to Public Holidays</p>
                 </div>
             </div>

@@ -25,11 +25,18 @@ use App\Http\Controllers\VerificationController;
 |
 */
 
-Route::middleware('web')->group(function () {
+Route::middleware('api')->group(function () {
 
-    // ── Public APIs (No Auth required, despite using web session middleware bounds)
+    // ── Public APIs (no session start required)
     Route::get('/public/config',    [PublicController::class, 'config']);
     Route::get('/public/stats',     [PublicController::class, 'stats']);
+    Route::get('/announcements',    [AnnouncementController::class, 'index']);
+    Route::get('/templates',        [TemplateController::class, 'index']);
+    Route::get('/templates/preview', [TemplateController::class, 'getPreview']);
+    Route::post('/documents/bulk-process', [DocumentController::class, 'bulkProcess']);
+});
+
+Route::middleware('web')->group(function () {
 
     // ── Auth ───────────────────────────────────────────────────────────────
     Route::post('/login',           [AuthController::class, 'login']);
@@ -52,7 +59,6 @@ Route::middleware('web')->group(function () {
 
     // ── Settings & Announcements ───────────────────────────────────────────
     Route::post('/settings',            [SettingController::class, 'update']);
-    Route::get('/announcements',        [AnnouncementController::class, 'index']);
     Route::post('/announcements',       [AnnouncementController::class, 'store']);
     Route::put('/announcements/{id}',   [AnnouncementController::class, 'update']);
     Route::delete('/announcements/{id}',[AnnouncementController::class, 'destroy']);
@@ -96,10 +102,8 @@ Route::middleware('web')->group(function () {
     Route::get('/barangays', [BarangayController::class, 'index']);
 
     // ── Templates ──────────────────────────────────────────────────────────
-    Route::get('/templates',              [TemplateController::class, 'index']);
     Route::post('/templates/upload',      [TemplateController::class, 'upload']);
     Route::post('/templates/config',      [TemplateController::class, 'updateConfig']);
-    Route::get('/templates/preview',      [TemplateController::class, 'getPreview']);
 
     // ── Activity Logs ──────────────────────────────────────────────────────
     Route::get('/activity-logs',     [ActivityLogController::class, 'index']);

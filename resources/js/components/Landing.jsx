@@ -10,12 +10,18 @@ export default function Landing() {
 
     useEffect(() => {
         fetch('/api/public/config')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`Config fetch failed: ${res.status}`);
+                return res.json();
+            })
             .then(data => setConfig(data))
             .catch(err => console.error(err));
 
         fetch('/api/public/stats')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`Stats fetch failed: ${res.status}`);
+                return res.json();
+            })
             .then(data => setStats(data))
             .catch(err => console.error(err));
     }, []);

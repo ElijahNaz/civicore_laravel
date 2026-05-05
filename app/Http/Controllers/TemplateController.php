@@ -25,7 +25,12 @@ class TemplateController extends Controller
         $templates = [];
 
         // Get profiles from DB
-        $profiles = DB::table('template_profiles')->get()->keyBy('file_path');
+        try {
+            $profiles = DB::table('template_profiles')->get()->keyBy('file_path');
+        } catch (\Exception $e) {
+            Log::error('Template profiles load failure: ' . $e->getMessage());
+            $profiles = collect();
+        }
 
         foreach ($files as $file) {
             if (strtolower($file->getExtension()) !== 'pdf') continue;

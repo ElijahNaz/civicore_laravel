@@ -177,6 +177,10 @@ const Documents = () => {
 
             for (const uploadItem of acceptedFiles) {
                 const sourceFile = uploadItem?.file || uploadItem;
+                if (!(sourceFile instanceof File)) {
+                    console.error('Upload item is not a File object', uploadItem);
+                    throw new Error('Invalid upload payload; expected a File object.');
+                }
                 let file = sourceFile;
                 let qualityMetadata = null;
 
@@ -239,44 +243,48 @@ const Documents = () => {
         // Instant local feedback
         setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing' } : f));
         
-        runBackgroundTask(`Extracting Data: ${fileObj?.name || 'Document'}`, async () => {
-            const res = await fetch('/api/ocr/process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ documentId: fileId, docType: fileObj?.type || selectedDocType }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                refreshDocuments(true);
-                return { success: true };
-            }
-            throw new Error(data.error || 'OCR Extraction failed');
-        }, { silent: true });
     };
 
     const bulkProcess = async () => {
-        const pending = files.filter(f => f.status === 'pending' || f.status === 'failed' || f.status === 'uploaded');
+        const pending = globalFiles.filter(f => f.status === 'pending' || f.status === 'failed' || f.status === 'uploaded');
+
         if (!pending.length) {
-            showAlert({ title: 'Nothing to process', message: 'No pending documents.', type: 'info' });
+            showAlert({ title: 'Nothing to process', message: 'No pending or failed documents found.', type: 'info' });
             return;
         }
 
-        // Instant local feedback for ALL pending files
-        const pendingIds = pending.map(p => p.id);
-        setFiles(prev => prev.map(f => pendingIds.includes(f.id) ? { ...f, status: 'processing' } : f));
+        const documentIds = pending.map(f => f.id);
 
-        // Fire all requests simultaneously
-        await Promise.all(pending.map(f => 
-            fetch('/api/ocr/process', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ documentId: f.id, docType: f.type }),
-            })
-        ));
+        const result = await runBackgroundTask('Queueing Documents', async () => {
+            const response = await fetch('/api/documents/bulk-process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ document_ids: documentIds })
+            });
 
-        // Immediate refresh to sync with server-side queue
-        refreshDocuments(true);
+            if (!response.ok) {
+                throw new Error('Failed to send documents to the queue.');
+            }
+
+            const data = await response.json();
+            return { 
+                success: true, 
+                message: `Sent ${data.queued_count} documents to the OCR queue!` 
+            };
+        });
+
+        if (result && result.success) {
+            showAlert({ 
+                title: 'Action Successful', 
+                message: result.message, 
+                type: 'success' 
+            });
+            setFiles(prev => prev.map(f => documentIds.includes(f.id) ? { ...f, status: 'processing' } : f));
+            refreshDocuments(true);
+        }
     };
 
     const approveRecord = async (fileId) => {

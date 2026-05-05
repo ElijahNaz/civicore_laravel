@@ -19,6 +19,7 @@ export default function Announcements() {
     const fetchAnnouncements = async () => {
         try {
             const res = await fetch('/api/announcements');
+            if (!res.ok) throw new Error(`Announcements fetch failed: ${res.status}`);
             const data = await res.json();
             setAnnouncements(data);
         } catch (e) {
@@ -31,6 +32,7 @@ export default function Announcements() {
     const fetchSettings = async () => {
         try {
             const res = await fetch('/api/public/config');
+            if (!res.ok) throw new Error(`Settings fetch failed: ${res.status}`);
             const data = await res.json();
             setSettings({ opening_hours: data.opening_hours });
         } catch (e) {
