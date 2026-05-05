@@ -1,0 +1,64 @@
+# 🏛️ CiviCORE - Feature Specification & Comparison Guide
+
+This document provides a comprehensive list of all features implemented in the CiviCORE Civic Document Management System. This can be used for system comparisons, audits, or project documentation.
+
+---
+
+## 📊 1. Dashboard & Geospatial Analytics
+*   **Live Statistics Dashboard**: Real-time visual counters for total uploads, categorized certificates (Birth, Death, Marriage), and system status.
+*   **Geospatial Mapping (GIS)**: Interactive map (Leaflet-based) visualizing document distribution across Naic barangays with custom pin markers.
+*   **Interactive Heatmap View**: A toggleable visual layer that highlights high-density areas of document activity for resource planning.
+*   **Monthly Trajectory Analysis**: 6-month historical trend charts (Chart.js) showing document processing growth.
+*   **Barangay Activity Tracking**: Automated identification of the "Most Active Barangay" based on total issuance volume.
+*   **Locate-on-Map Interactivity**: Direct link from registry tables to the map to pinpoint a record's origin.
+
+---
+
+## 👁️ 2. Intelligent OCR & Computer Vision
+*   **AI-Powered OCR Engine**: Automated data extraction using **EasyOCR** (Machine Learning) with **Tesseract** as a high-speed fallback.
+*   **Interactive Scanner (Live Edge Tracing)**: Web-based camera interface with real-time **OpenCV.js** edge detection and stability telemetry.
+*   **Automated Document Classification**: Deep-text analysis that automatically pairs scans with the correct official template (e.g., Birth vs. Death).
+*   **Client-Side Preprocessing**: Real-time image enhancement, DPI calculation, and focus scoring before data reaches the server.
+*   **Reactive Extraction UI**: OCR results populate form fields in real-time as background processing jobs complete.
+*   **Quick-Approve Workflow**: A fast-track feature for high-confidence OCR results to bypass manual modal calibration.
+
+---
+
+## 🗄️ 3. Document Registry & Management
+*   **Centralized Master Registry**: A unified database for all civil documents with advanced search (Name, Type, Barangay, Date).
+*   **Binary-Safe Blob Storage**: High-fidelity storage of original scans and PDFs using `LONGBLOB` to ensure no data loss during processing.
+*   **Smart Stream Previews**: Secure, server-side document streaming (`/api/documents/view`) that prevents direct browser downloads and improves privacy.
+*   **Side-by-Side OCR Correction**: Dedicated UI for comparing original scanned images directly against extracted text fields for manual calibration.
+*   **Soft-Delete & Recovery System**: "Undo" functionality for accidentally deleted documents or issuances.
+*   **Multi-Format Export**: Ability to download records as high-resolution PDFs, raw `.txt` OCR output, or bulk `.csv` data.
+
+---
+
+## 📜 4. Official Issuance & Certificate Generation
+*   **Premium Template Overlay System**: Overlays extracted data onto clean, high-resolution official backgrounds (LCR Forms) for professional-grade printing.
+*   **Interactive Template Designer**: A drag-and-drop admin tool for visually calibrating field coordinates (X,Y) on official government forms in real-time.
+*   **Automated Certificate Numbering**: Intelligent sequential numbering system (e.g., `BC-2026-001`) with automatic prefixing based on document type.
+*   **Official Field Mapping**: Support for 20+ precise data points per form (e.g., Weight at Birth, Parents' Marriage Date, Causes of Death).
+*   **Issuance Lifecycle Management**: Tracking of documents from "Pending" to "Processed" and finally "Issued".
+
+---
+
+## 🔐 5. Administration & Security
+*   **Granular User Management**: Role-based access control for staff and administrators with individual profile customization.
+*   **OTP Verification Pipeline**: Integrated email/OTP verification (Mailtrap/Gmail) for secure account registration and activation.
+*   **Comprehensive Audit Trail**: Detailed activity logs capturing every View, Download, Edit, Print, and Delete action performed by staff.
+*   **Internal Announcement System**: A broadcasting platform for administrators to push updates or notices to all staff members.
+*   **Staff Contact Directory**: An internal organizational directory for easy communication between LGU staff.
+*   **Local Time Synchronization**: System-wide adherence to Philippine Standard Time (Asia/Manila, UTC+8).
+
+---
+
+## ⚡ 6. Infrastructure & Performance
+*   **Multi-Queue Background Processing**: Dedicated `high`, `low`, and `default` workers to handle intensive OCR tasks without slowing down the UI.
+*   **RAM-Aware Tuning Profiles**: Configurable hardware profiles (Conservative 4GB vs. Balanced 8GB+) to optimize OCR throughput.
+*   **One-Click Launcher**: Integrated `.bat` script for synchronized management of Laravel, Vite (Frontend), and the Python Vision Server.
+*   **CPU Core Safeguard**: Automated scaling that caps background workers based on available CPU threads.
+
+---
+
+*Generated by CiviCORE System Analysis - May 2026*
