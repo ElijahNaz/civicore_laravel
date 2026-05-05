@@ -1,0 +1,312 @@
+{
+    "families": {
+        "birth": {
+            "markers": [
+                "certificate of live birth",
+                "republic form no. 102",
+                "municipal form no. 102"
+            ],
+            "roi_fields": {
+                "registry_number": [
+                    0.625,
+                    0.095,
+                    0.835,
+                    0.12
+                ],
+                "province": [
+                    0.215,
+                    0.09,
+                    0.565,
+                    0.115
+                ],
+                "city_municipality": [
+                    0.275,
+                    0.105,
+                    0.485,
+                    0.13
+                ],
+                "first_name": [
+                    0.285,
+                    0.135,
+                    0.395,
+                    0.16
+                ],
+                "middle_name": [
+                    0.475,
+                    0.135,
+                    0.585,
+                    0.16
+                ],
+                "last_name": [
+                    0.665,
+                    0.135,
+                    0.775,
+                    0.16
+                ],
+                "sex": [
+                    0.195,
+                    0.155,
+                    0.305,
+                    0.18
+                ],
+                "dob_day": [
+                    0.525,
+                    0.155,
+                    0.595,
+                    0.18
+                ],
+                "dob_month": [
+                    0.625,
+                    0.155,
+                    0.735,
+                    0.18
+                ],
+                "dob_year": [
+                    0.755,
+                    0.155,
+                    0.845,
+                    0.18
+                ],
+                "place_of_birth_hospital": [
+                    0.245,
+                    0.185,
+                    0.405,
+                    0.21
+                ],
+                "place_of_birth_city": [
+                    0.495,
+                    0.185,
+                    0.655,
+                    0.21
+                ],
+                "place_of_birth_province": [
+                    0.685,
+                    0.185,
+                    0.845,
+                    0.21
+                ],
+                "type_of_birth": [
+                    0.195,
+                    0.225,
+                    0.325,
+                    0.25
+                ],
+                "multiple_birth_order": [
+                    0.395,
+                    0.225,
+                    0.525,
+                    0.25
+                ],
+                "birth_order": [
+                    0.575,
+                    0.225,
+                    0.705,
+                    0.25
+                ],
+                "weight_at_birth": [
+                    0.745,
+                    0.225,
+                    0.805,
+                    0.25
+                ],
+                "mother_first_name": [
+                    0.255,
+                    0.255,
+                    0.405,
+                    0.28
+                ],
+                "mother_middle_name": [
+                    0.445,
+                    0.255,
+                    0.595,
+                    0.28
+                ],
+                "mother_last_name": [
+                    0.675,
+                    0.255,
+                    0.825,
+                    0.28
+                ],
+                "mother_citizenship": [
+                    0.185,
+                    0.275,
+                    0.345,
+                    0.3
+                ],
+                "mother_religion": [
+                    0.525,
+                    0.275,
+                    0.735,
+                    0.3
+                ],
+                "mother_children_total": [
+                    0.175,
+                    0.305,
+                    0.275,
+                    0.33
+                ],
+                "mother_children_living": [
+                    0.305,
+                    0.305,
+                    0.405,
+                    0.33
+                ],
+                "mother_children_dead": [
+                    0.425,
+                    0.305,
+                    0.525,
+                    0.33
+                ],
+                "mother_occupation": [
+                    0.545,
+                    0.305,
+                    0.705,
+                    0.33
+                ],
+                "mother_age": [
+                    0.755,
+                    0.305,
+                    0.865,
+                    0.33
+                ],
+                "mother_residence_house": [
+                    0.275,
+                    0.335,
+                    0.415,
+                    0.36
+                ],
+                "mother_residence_city": [
+                    0.445,
+                    0.335,
+                    0.585,
+                    0.36
+                ],
+                "mother_residence_province": [
+                    0.615,
+                    0.335,
+                    0.755,
+                    0.36
+                ],
+                "mother_residence_country": [
+                    0.755,
+                    0.335,
+                    0.865,
+                    0.36
+                ],
+                "father_first_name": [
+                    0.265,
+                    0.365,
+                    0.425,
+                    0.39
+                ],
+                "father_middle_name": [
+                    0.445,
+                    0.365,
+                    0.605,
+                    0.39
+                ],
+                "father_last_name": [
+                    0.675,
+                    0.365,
+                    0.835,
+                    0.39
+                ],
+                "father_citizenship": [
+                    0.175,
+                    0.395,
+                    0.335,
+                    0.42
+                ],
+                "father_religion": [
+                    0.365,
+                    0.395,
+                    0.525,
+                    0.42
+                ],
+                "father_occupation": [
+                    0.565,
+                    0.395,
+                    0.725,
+                    0.42
+                ],
+                "father_age": [
+                    0.765,
+                    0.395,
+                    0.855,
+                    0.42
+                ],
+                "father_residence_house": [
+                    0.275,
+                    0.425,
+                    0.415,
+                    0.45
+                ],
+                "father_residence_city": [
+                    0.445,
+                    0.425,
+                    0.585,
+                    0.45
+                ],
+                "father_residence_province": [
+                    0.615,
+                    0.425,
+                    0.755,
+                    0.45
+                ],
+                "father_residence_country": [
+                    0.755,
+                    0.425,
+                    0.865,
+                    0.45
+                ],
+                "marriage_parents_day": [
+                    0.235,
+                    0.475,
+                    0.305,
+                    0.5
+                ],
+                "marriage_parents_month": [
+                    0.295,
+                    0.475,
+                    0.365,
+                    0.5
+                ],
+                "marriage_parents_year": [
+                    0.355,
+                    0.475,
+                    0.425,
+                    0.5
+                ],
+                "marriage_parents_place_city": [
+                    0.515,
+                    0.475,
+                    0.625,
+                    0.5
+                ],
+                "marriage_parents_place_province": [
+                    0.635,
+                    0.475,
+                    0.745,
+                    0.5
+                ],
+                "marriage_parents_place_country": [
+                    0.745,
+                    0.475,
+                    0.855,
+                    0.5
+                ],
+                "barangay": [
+                    0.065,
+                    0.435,
+                    0.465,
+                    0.535
+                ]
+            }
+        }
+    },
+    "required_fields": {
+        "birth": [
+            "registry_number"
+        ]
+    }
+}

@@ -425,9 +425,102 @@ def smart_split_name(full_name: str) -> dict:
             'suffix': suffix
         }
 
-def extract_birth_fields(text: str, lines: list) -> dict:
+class SpatialExtractor:
+    def __init__(self, raw_results):
+        self.items = []
+        for bbox, text, prob in raw_results:
+            text = text.strip()
+            if not text: continue
+            xs = [pt[0] for pt in bbox]
+            ys = [pt[1] for pt in bbox]
+            left, right = min(xs), max(xs)
+            top, bottom = min(ys), max(ys)
+            self.items.append({
+                'text': text, 'left': left, 'right': right,
+                'top': top, 'bottom': bottom,
+                'cx': (left + right) / 2, 'cy': (top + bottom) / 2,
+                'width': right - left, 'height': bottom - top,
+                'bbox': bbox, 'prob': prob
+            })
+
+    def find_anchor(self, anchor_text):
+        anchor_text = anchor_text.lower()
+        best_match = None
+        for item in self.items:
+            if anchor_text in item['text'].lower():
+                if best_match is None or len(item['text']) < len(best_match['text']):
+                    best_match = item
+        return best_match
+
+    def find_right(self, anchor_item, max_dist_x=800, max_dist_y=40):
+        if not anchor_item: return ""
+        best = None
+        min_dist = float('inf')
+        for item in self.items:
+            if item == anchor_item: continue
+            if item['cx'] <= anchor_item['cx']: continue
+            dist_x = item['left'] - anchor_item['right']
+            dist_y = abs(item['cy'] - anchor_item['cy'])
+            if 0 <= dist_x < max_dist_x and dist_y < max_dist_y:
+                if dist_x < min_dist:
+                    min_dist, best = dist_x, item
+        return best['text'] if best else ""
+
+    def find_below(self, anchor_item, max_dist_y=200, max_dist_x=150):
+        if not anchor_item: return ""
+        best = None
+        min_dist = float('inf')
+        for item in self.items:
+            if item == anchor_item: continue
+            if item['cy'] <= anchor_item['cy']: continue
+            dist_y = item['top'] - anchor_item['bottom']
+            dist_x = abs(item['cx'] - anchor_item['cx'])
+            if 0 <= dist_y < max_dist_y and dist_x < max_dist_x:
+                if dist_y < min_dist:
+                    min_dist, best = dist_y, item
+        return best['text'] if best else ""
+
+def extract_birth_fields(text: str, lines: list, raw_results=None) -> dict:
     fields = {}
-    # Use a more aggressive search for the child's name
+    
+    if raw_results:
+        print("Using SpatialExtractor for flexible anchor-based layout parsing.")
+        extractor = SpatialExtractor(raw_results)
+        
+        anchor_name = extractor.find_anchor('name') or extractor.find_anchor('child')
+        full_child_name = extractor.find_right(anchor_name) or extractor.find_below(anchor_name)
+        fields.update(smart_split_name(full_child_name))
+        fields['full_name'] = full_child_name
+        
+        anchor_sex = extractor.find_anchor('sex') or extractor.find_anchor('gender')
+        fields['sex'] = extractor.find_right(anchor_sex) or extractor.find_below(anchor_sex)
+        
+        anchor_dob = extractor.find_anchor('date of birth') or extractor.find_anchor('born')
+        fields['date_of_birth'] = extractor.find_right(anchor_dob) or extractor.find_below(anchor_dob)
+        
+        anchor_place = extractor.find_anchor('place of birth') or extractor.find_anchor('hospital')
+        fields['place_of_birth'] = extractor.find_right(anchor_place) or extractor.find_below(anchor_place)
+        
+        anchor_father = extractor.find_anchor('father')
+        full_father_name = extractor.find_right(anchor_father) or extractor.find_below(anchor_father)
+        for k, v in smart_split_name(full_father_name).items(): fields[f'father_{k}'] = v
+        
+        anchor_mother = extractor.find_anchor('mother') or extractor.find_anchor('maiden')
+        full_mother_name = extractor.find_right(anchor_mother) or extractor.find_below(anchor_mother)
+        for k, v in smart_split_name(full_mother_name).items(): fields[f'mother_{k}'] = v
+        
+        anchor_reg = extractor.find_anchor('registry no') or extractor.find_anchor('reg no')
+        fields['registry_number'] = extractor.find_right(anchor_reg) or extractor.find_below(anchor_reg)
+        
+        anchor_brgy = extractor.find_anchor('barangay') or extractor.find_anchor('brgy')
+        fields['barangay'] = extractor.find_right(anchor_brgy) or extractor.find_below(anchor_brgy)
+        
+        # Fallback to RegEx for missing key fields
+        if not fields['date_of_birth']:
+            fields['date_of_birth'] = _first_match([r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
+        return fields
+
+    # Original RegEx fallback if no raw_results
     name_str = _first_match([
         r'(?:name of child|child\'s name|name)[:\s]*([A-Z][A-Za-z\s,.\-]+)',
         r'1\.\s*NAME\s*\([A-Za-z\s]+\)\s*([A-Z\s,.\-]+)', # Form 102 style
@@ -462,10 +555,46 @@ def extract_birth_fields(text: str, lines: list) -> dict:
     fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]*([A-Za-z\s\d\-]+)'], text) or ''
     return fields
 
-def extract_death_fields(text: str, lines: list) -> dict:
+def extract_death_fields(text: str, lines: list, raw_results=None) -> dict:
     fields = {}
+    
+    if raw_results:
+        extractor = SpatialExtractor(raw_results)
+        
+        anchor_name = extractor.find_anchor('name') or extractor.find_anchor('deceased')
+        full_name = extractor.find_right(anchor_name) or extractor.find_below(anchor_name)
+        fields.update(smart_split_name(full_name))
+        fields['full_name'] = full_name
+        
+        anchor_dod = extractor.find_anchor('date of death') or extractor.find_anchor('died')
+        fields['date_of_death'] = extractor.find_right(anchor_dod) or extractor.find_below(anchor_dod)
+        
+        anchor_age = extractor.find_anchor('age')
+        fields['age'] = extractor.find_right(anchor_age) or extractor.find_below(anchor_age)
+        
+        anchor_sex = extractor.find_anchor('sex') or extractor.find_anchor('gender')
+        fields['sex'] = extractor.find_right(anchor_sex) or extractor.find_below(anchor_sex)
+        
+        anchor_place = extractor.find_anchor('place of death') or extractor.find_anchor('hospital')
+        fields['place_of_death'] = extractor.find_right(anchor_place) or extractor.find_below(anchor_place)
+        
+        anchor_cause = extractor.find_anchor('cause of death') or extractor.find_anchor('cause')
+        fields['cause_of_death'] = extractor.find_right(anchor_cause) or extractor.find_below(anchor_cause)
+        
+        anchor_brgy = extractor.find_anchor('barangay') or extractor.find_anchor('brgy')
+        fields['barangay'] = extractor.find_right(anchor_brgy) or extractor.find_below(anchor_brgy)
+        
+        anchor_reg = extractor.find_anchor('registry no') or extractor.find_anchor('reg no')
+        fields['registry_number'] = extractor.find_right(anchor_reg) or extractor.find_below(anchor_reg)
+        
+        if not fields['date_of_death']:
+            fields['date_of_death'] = _first_match([r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
+        return fields
+
+    # Original RegEx fallback
     name_str = _first_match([r'(?:name of deceased|deceased name|name)[:\s]*([A-Za-z\s,.\-]+)'], text)
     fields.update(smart_split_name(name_str))
+    fields['full_name'] = name_str or ''
     fields['date_of_death'] = _first_match([r'(?:date of death|died)[:\s]*([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
     fields['age'] = _first_match([r'(?:age at death|age)[:\s]*(\d+)', r'\b(\d{1,3})\s*(?:years?|yr)'], text) or ''
     fields['sex'] = _first_match([r'(?:sex|gender)[:\s]*(male|female)', r'\b(male|female)\b'], text) or ''
@@ -475,22 +604,57 @@ def extract_death_fields(text: str, lines: list) -> dict:
     fields['registry_number'] = _first_match([r'(?:registry no\.|reg\.?\s*no\.)[:\s]*([A-Z0-9\s\-]+)'], text) or ''
     return fields
 
-def extract_marriage_fields(text: str, lines: list) -> dict:
+def extract_marriage_fields(text: str, lines: list, raw_results=None) -> dict:
     fields = {}
+    
+    if raw_results:
+        extractor = SpatialExtractor(raw_results)
+        
+        anchor_husband = extractor.find_anchor('husband') or extractor.find_anchor('groom')
+        full_husband = extractor.find_right(anchor_husband) or extractor.find_below(anchor_husband)
+        for k, v in smart_split_name(full_husband).items(): fields[f'husband_{k}'] = v
+        fields['husbands_name'] = full_husband
+        
+        anchor_wife = extractor.find_anchor('wife') or extractor.find_anchor('bride')
+        full_wife = extractor.find_right(anchor_wife) or extractor.find_below(anchor_wife)
+        for k, v in smart_split_name(full_wife).items(): fields[f'wife_{k}'] = v
+        fields['wifes_name'] = full_wife
+        
+        anchor_dom = extractor.find_anchor('date of marriage') or extractor.find_anchor('married on')
+        fields['date_of_marriage'] = extractor.find_right(anchor_dom) or extractor.find_below(anchor_dom)
+        
+        anchor_place = extractor.find_anchor('place of marriage') or extractor.find_anchor('married at')
+        fields['place_of_marriage'] = extractor.find_right(anchor_place) or extractor.find_below(anchor_place)
+        
+        anchor_brgy = extractor.find_anchor('barangay') or extractor.find_anchor('brgy')
+        fields['barangay'] = extractor.find_right(anchor_brgy) or extractor.find_below(anchor_brgy)
+        
+        anchor_reg = extractor.find_anchor('registry no') or extractor.find_anchor('reg no')
+        fields['registry_number'] = extractor.find_right(anchor_reg) or extractor.find_below(anchor_reg)
+        
+        if not fields['date_of_marriage']:
+            fields['date_of_marriage'] = _first_match([r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
+        return fields
+
+    # Original RegEx fallback
     h_name = _first_match([r"(?:husband'?s?\s*name|groom|husband)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(h_name).items(): fields[f'husband_{k}'] = v
+    fields['husbands_name'] = h_name or ''
+    
     w_name = _first_match([r"(?:wife'?s?\s*name|bride|wife)[:\s]*([A-Za-z\s,.\-]+)"], text)
     for k, v in smart_split_name(w_name).items(): fields[f'wife_{k}'] = v
+    fields['wifes_name'] = w_name or ''
+    
     fields['date_of_marriage'] = _first_match([r'(?:date of marriage|married on|wedding date)[:\s]*([A-Za-z0-9\s,/\-]+)', r'(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})'], text) or ''
     fields['place_of_marriage'] = _first_match([r'(?:place of marriage|married at|municipality)[:\s]*([A-Za-z\s,.\-]+)'], text) or ''
     fields['barangay'] = _first_match([r'(?:barangay|brgy\.?)[:\s]*([A-Za-z\s\d\-]+)'], text) or ''
     fields['registry_number'] = _first_match([r'(?:registry no\.|reg\.?\s*no\.)[:\s]*([A-Z0-9\s\-]+)'], text) or ''
     return fields
 
-def extract_fields(doc_type: str, text: str, lines: list) -> dict:
-    if doc_type == 'birth': return extract_birth_fields(text, lines)
-    elif doc_type == 'death': return extract_death_fields(text, lines)
-    elif doc_type == 'marriage': return extract_marriage_fields(text, lines)
+def extract_fields(doc_type: str, text: str, lines: list, raw_results=None) -> dict:
+    if doc_type == 'birth': return extract_birth_fields(text, lines, raw_results)
+    elif doc_type == 'death': return extract_death_fields(text, lines, raw_results)
+    elif doc_type == 'marriage': return extract_marriage_fields(text, lines, raw_results)
     return {}
 
 # -- OCR Reader (Persistent) --------------------------------------------------
@@ -712,7 +876,7 @@ def process_ocr(data: OCRRequest):
         def run_easyocr():
             reader = get_reader()
             if not reader:
-                return [], []
+                return [], [], []
             try:
                 print("Running EasyOCR...")
                 results = reader.readtext(file_path)
@@ -722,26 +886,40 @@ def process_ocr(data: OCRRequest):
                         easy_lines.append(text.strip())
                         easy_scores.append(round(prob, 3))
                 print("EasyOCR completed.")
-                return easy_lines, easy_scores
+                return easy_lines, easy_scores, results
             except Exception as e:
                 print(f"EasyOCR failed: {e}")
-                return [], []
+                return [], [], []
 
         def run_tesseract():
             if not PYTESSERACT_AVAILABLE:
-                return [], []
+                return [], [], []
             try:
                 print("Running PyTesseract...")
                 img = Image.open(file_path)
-                tess_text = pytesseract.image_to_string(img)
-                tess_lines = [line.strip() for line in tess_text.split('\n') if line.strip()]
-                tess_scores = [0.9] * len(tess_lines) if tess_lines else []
-                if tess_lines:
-                    print("PyTesseract completed.")
-                return tess_lines, tess_scores
+                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                tess_lines = []
+                tess_scores = []
+                tess_raw = []
+                
+                n_boxes = len(data['level'])
+                for i in range(n_boxes):
+                    text = data['text'][i].strip()
+                    if text:
+                        conf = int(data['conf'][i])
+                        if conf > 0:
+                            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                            bbox = [[x, y], [x+w, y], [x+w, y+h], [x, y+h]]
+                            prob = conf / 100.0
+                            tess_raw.append((bbox, text, prob))
+                            tess_lines.append(text)
+                            tess_scores.append(prob)
+                            
+                print("PyTesseract completed.")
+                return tess_lines, tess_scores, tess_raw
             except Exception as e:
                 print(f"PyTesseract failed: {e}")
-                return [], []
+                return [], [], []
 
         # Quick-fill pre-check: detect known template families via header anchors,
         # then OCR only pre-defined ROIs for target autofill fields.
@@ -808,7 +986,7 @@ def process_ocr(data: OCRRequest):
 
         if not lines:
             if ocr_mode in ("fast", "balanced"):
-                lines, scores = run_tesseract()
+                lines, scores, raw_results = run_tesseract()
                 ocr_engine_used = "pytesseract" if lines else "none"
 
                 fast_text_len = len('\n'.join(lines))
@@ -823,17 +1001,18 @@ def process_ocr(data: OCRRequest):
                     print(
                         f"Fast mode fallback triggered (chars={fast_text_len}, conf={round(fast_avg_conf, 3)})."
                     )
-                    easy_lines, easy_scores = run_easyocr()
+                    easy_lines, easy_scores, easy_raw = run_easyocr()
                     if easy_lines:
                         lines, scores = easy_lines, easy_scores
+                        raw_results = easy_raw
                         ocr_engine_used = "easyocr_fallback"
             else:
-                lines, scores = run_easyocr()
+                lines, scores, raw_results = run_easyocr()
                 if lines:
                     ocr_engine_used = "easyocr"
                 elif PYTESSERACT_AVAILABLE:
                     print("Attempting Tesseract fallback...")
-                    lines, scores = run_tesseract()
+                    lines, scores, raw_results = run_tesseract()
                     if lines:
                         ocr_engine_used = "pytesseract_fallback"
 
@@ -849,17 +1028,27 @@ def process_ocr(data: OCRRequest):
     if extraction_type == 'unknown' or not extraction_type:
         extraction_type = expected_type if (expected_type and expected_type != 'unknown') else 'birth'
     
-    extracted_fields = extract_fields(extraction_type, full_text, lines)
-    if field_confidence:
+    # Only run the regex extractor if we didn't successfully use Zonal OCR
+    if not quick_fill_used:
+        # Pass raw_results (bounding boxes) to extract_fields for Spatial Extraction
+        extracted_fields = extract_fields(extraction_type, full_text, lines, raw_results if 'raw_results' in locals() else None)
+    else:
+        # If we used Zonal OCR, extracted_fields is already populated, 
+        # but let's make sure 'full_name' is set for consistency if it's missing
+        if 'full_name' not in extracted_fields and 'first_name' in extracted_fields:
+            fn = extracted_fields.get('first_name', '')
+            mn = extracted_fields.get('middle_name', '')
+            ln = extracted_fields.get('last_name', '')
+            extracted_fields['full_name'] = f"{fn} {mn} {ln}".replace("  ", " ").strip()
+            
+    if field_confidence and not quick_fill_used:
         for quick_field, meta in field_confidence.items():
             quick_value = extracted_fields.get(quick_field, '')
             if not quick_value:
                 if meta and not meta.get('validation_passed', True):
                     continue
                 # Persist direct ROI value into extracted fields if parser misses it.
-                roi_line = next((line for line in lines if line.lower().startswith(f"{quick_field.lower()}:")), None)
-                if roi_line and ':' in roi_line:
-                    extracted_fields[quick_field] = roi_line.split(':', 1)[1].strip()
+                pass
     
     type_mismatch = False
     mismatch_msg = ''
