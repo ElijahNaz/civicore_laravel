@@ -666,7 +666,7 @@ def get_reader():
             import easyocr
             REDER_LANGS = ['en', 'tl']
             print(f"Loading EasyOCR models for {REDER_LANGS} (First run)...")
-            _reader = easyocr.Reader(REDER_LANGS, gpu=False, verbose=False)
+            _reader = easyocr.Reader(REDER_LANGS, gpu=True, verbose=False)
         except Exception as e:
             print(f"Failed to load EasyOCR: {e}")
             return None
@@ -1109,7 +1109,7 @@ if __name__ == '__main__':
     uvicorn.run(
         "ocr_server:app",
         host='0.0.0.0',
-        port=5000,
+        port=8080,
         workers=workers,
         log_level="info",
         limit_concurrency=limit_concurrency,

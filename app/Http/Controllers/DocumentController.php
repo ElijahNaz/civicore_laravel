@@ -403,7 +403,7 @@ class DocumentController extends Controller
                     $fileHandle,
                     basename($fullPath)
                 )
-                ->post('http://localhost:8000/process');
+                ->post('http://localhost:8080/process');
 
             fclose($fileHandle);
 

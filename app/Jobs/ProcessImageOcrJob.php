@@ -43,7 +43,7 @@ class ProcessImageOcrJob implements ShouldQueue
         Log::info("ProcessImageOcrJob starting for doc {$this->documentId}, image: {$this->imagePath}");
 
         try {
-            $response = Http::timeout(120)->post('http://127.0.0.1:5000/ocr', [
+            $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr', [
                 'file_path' => $this->imagePath,
                 'doc_type' => $this->docType,
                 'languages' => $this->languages,
@@ -56,8 +56,15 @@ class ProcessImageOcrJob implements ShouldQueue
 
             $result = $response->json();
             $newText = $result['text'] ?? '';
-            $detectedType = $result['detected_type'] ?? '';
-            $newFields = $result['extracted_fields'] ?? [];
+
+            // --- NEW: Intercept and Parse in Laravel ---
+            $parser = new \App\Services\OcrParserService();
+            $parsedData = $parser->parseText($newText);
+
+            // Use our Laravel parsed data instead of the Python fallback
+            $detectedType = $parsedData['detected_type'];
+            $newFields = $parsedData['extracted_fields'];
+            // ------------------------------------------
 
             DB::table('document_ocr_pages')->updateOrInsert(
                 [

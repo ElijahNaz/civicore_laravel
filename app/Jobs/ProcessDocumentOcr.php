@@ -81,7 +81,7 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 // Pass the Windows file path directly to the local Python server
                 $response = Http::retry(3, 1000) // Retry 3 times, waiting 1s between each
                     ->timeout(600)
-                    ->post('http://127.0.0.1:5000/split', [
+                    ->post('http://127.0.0.1:8080/split', [
                     'file_path' => $sourceFilePath,
                 ]);
 
@@ -177,6 +177,7 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 ->dispatch();
 
             // Store batch ID in document metadata so frontend can poll progress
+            $metadata = json_decode($doc->metadata ?? '{}', true) ?: [];
             $metadata['batch_id'] = $batch->id;
             DB::update("UPDATE documents SET metadata = ? WHERE id = ?", [json_encode($metadata), $docId]);
 
