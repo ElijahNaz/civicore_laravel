@@ -6,7 +6,7 @@ import {
     CloudArrowUpIcon, DocumentIcon, TrashIcon, CheckCircleIcon,
     ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon,
     PencilSquareIcon, ShieldExclamationIcon, DocumentCheckIcon,
-    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon
+    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon, StopIcon, PlayIcon
 } from '@heroicons/react/24/outline';
 import OcrFormPanel from './OcrFormPanel.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -239,10 +239,29 @@ const Documents = () => {
         onDragLeave: () => setDragging(false),
     });
 
-    const processFile = async (fileId, fileObj) => {
-        // Instant local feedback
-        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing' } : f));
+    const toggleOcrStatus = async (fileId, currentStatus) => {
+        const isStopping = ['pending', 'processing'].includes(currentStatus?.toLowerCase());
+        const tempStatus = isStopping ? 'stopped' : 'pending';
         
+        // Instant local feedback
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: tempStatus } : f));
+        
+        try {
+            const res = await fetch(`/api/documents/${fileId}/toggle-ocr`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                credentials: 'include' 
+            });
+            const data = await res.json();
+            if (!data.success) {
+                refreshDocuments(true);
+            } else {
+                setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: data.new_status } : f));
+                refreshDocuments(true);
+            }
+        } catch (e) {
+            refreshDocuments(true);
+        }
     };
 
     const bulkProcess = async () => {
@@ -441,6 +460,7 @@ const Documents = () => {
             processing: 'bg-indigo-50 text-indigo-700 border-indigo-100 shadow-[0_0_12px_-4px_rgba(99,102,241,0.3)]',
             uploading: 'bg-slate-50 text-slate-600 border-slate-200',
             failed: 'bg-rose-50 text-rose-700 border-rose-100',
+            stopped: 'bg-slate-100 text-slate-500 border-slate-300',
             pending: 'bg-amber-50 text-amber-700 border-amber-100 shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
         };
         
@@ -456,6 +476,7 @@ const Documents = () => {
         }
         else if (status?.toLowerCase() === 'uploading') labelStr = 'Uploading…';
         else if (status?.toLowerCase() === 'failed') labelStr = 'Failed';
+        else if (status?.toLowerCase() === 'stopped') labelStr = 'Stopped';
         else if (status?.toLowerCase() === 'pending') labelStr = 'Pending OCR';
         const cls = map[status?.toLowerCase()] || map.pending;
 
@@ -771,11 +792,19 @@ const Documents = () => {
                                                                 <td className="px-2 py-2.5 text-center whitespace-nowrap">{statusBadge(file)}</td>
                                                                 <td className="px-3 py-2.5 text-right">
                                                                     <div className="flex items-center justify-end gap-1 px-1">
-                                                                        {['pending', 'failed', 'uploaded'].includes(file.status?.toLowerCase()) && (
-                                                                            <button onClick={() => processFile(file.id, file)}
-                                                                                className="p-2.5 text-slate-600 hover:text-white hover:bg-slate-900 rounded-xl transition-all shadow-sm active:scale-90 group border border-slate-100"
-                                                                                title="Process OCR">
-                                                                                <BoltIcon className="w-4 h-4" />
+                                                                        {['pending', 'processing'].includes(file.status?.toLowerCase()) && (
+                                                                            <button onClick={() => toggleOcrStatus(file.id, file.status)}
+                                                                                className="p-2.5 text-rose-500 hover:text-white hover:bg-rose-500 rounded-xl transition-all shadow-sm active:scale-90 group border border-rose-100"
+                                                                                title="Stop Processing">
+                                                                                <StopIcon className="w-4 h-4" />
+                                                                            </button>
+                                                                        )}
+
+                                                                        {['stopped', 'failed', 'uploaded'].includes(file.status?.toLowerCase()) && (
+                                                                            <button onClick={() => toggleOcrStatus(file.id, file.status)}
+                                                                                className="p-2.5 text-indigo-500 hover:text-white hover:bg-indigo-500 rounded-xl transition-all shadow-sm active:scale-90 group border border-indigo-100"
+                                                                                title="Resume / Retry Processing">
+                                                                                <PlayIcon className="w-4 h-4" />
                                                                             </button>
                                                                         )}
 

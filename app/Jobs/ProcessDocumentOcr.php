@@ -54,6 +54,11 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
             return;
         }
 
+        if (strtolower($doc->status) === 'stopped') {
+            Log::info("ProcessDocumentOcr job skipped because status is stopped for Document ID: " . $this->documentId);
+            return;
+        }
+
         // 2. Get the actual physical path on your Windows machine in the local disk
         $sourceFilePath = storage_path('app/public/' . $doc->file_path);
 

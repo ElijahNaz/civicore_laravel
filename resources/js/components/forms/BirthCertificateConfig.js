@@ -33,70 +33,76 @@ export const BirthTemplateOverlayFields = [
     { key: 'mother_citizenship', label: 'Mother Citizenship', x: 0.19, y: 0.28, w: 0.15, h: 0.015 },
     { key: 'mother_religion', label: 'Mother Religion', x: 0.53, y: 0.28, w: 0.20, h: 0.015 },
 
-    { key: 'mother_children_total', label: 'Total Born Alive', x: 0.18, y: 0.43, w: 0.12, h: 0.015 },
-    { key: 'mother_children_living', label: 'Still Living', x: 0.32, y: 0.43, w: 0.12, h: 0.015 },
-    { key: 'mother_children_dead', label: 'Now Dead', x: 0.46, y: 0.43, w: 0.12, h: 0.015 },
-    { key: 'mother_occupation', label: 'Mother Occupation', x: 0.58, y: 0.43, w: 0.20, h: 0.015 },
-    { key: 'mother_age', label: 'Mother Age', x: 0.82, y: 0.43, w: 0.12, h: 0.015 },
+    { key: 'mother_children_total', label: 'Total Born Alive', x: 0.18, y: 0.31, w: 0.09, h: 0.015 },
+    { key: 'mother_children_living', label: 'Still Living', x: 0.31, y: 0.31, w: 0.09, h: 0.015 },
+    { key: 'mother_children_dead', label: 'Now Dead', x: 0.43, y: 0.31, w: 0.09, h: 0.015 },
+    { key: 'mother_occupation', label: 'Mother Occupation', x: 0.55, y: 0.31, w: 0.15, h: 0.015 },
+    { key: 'mother_age', label: 'Mother Age', x: 0.76, y: 0.31, w: 0.10, h: 0.015 },
 
-    { key: 'mother_residence_house', label: 'House/Street/Brgy', x: 0.18, y: 0.47, w: 0.25, h: 0.015 },
-    { key: 'mother_residence_city', label: 'City/Municipality', x: 0.45, y: 0.47, w: 0.15, h: 0.015 },
-    { key: 'mother_residence_province', label: 'Province', x: 0.62, y: 0.47, w: 0.15, h: 0.015 },
-    { key: 'mother_residence_country', label: 'Country', x: 0.80, y: 0.47, w: 0.15, h: 0.015 },
+    { key: 'mother_residence_house', label: 'House/Street/Brgy', x: 0.28, y: 0.34, w: 0.13, h: 0.015 },
+    { key: 'mother_residence_city', label: 'City/Municipality', x: 0.45, y: 0.34, w: 0.13, h: 0.015 },
+    { key: 'mother_residence_province', label: 'Province', x: 0.62, y: 0.34, w: 0.13, h: 0.015 },
+    { key: 'mother_residence_country', label: 'Country', x: 0.76, y: 0.34, w: 0.10, h: 0.015 },
 
     // FATHER
-    { key: 'father_first_name', label: 'Father First Name', x: 0.18, y: 0.53, w: 0.25, h: 0.015 },
-    { key: 'father_middle_name', label: 'Father Middle Name', x: 0.45, y: 0.53, w: 0.25, h: 0.015 },
-    { key: 'father_last_name', label: 'Father Last Name', x: 0.72, y: 0.53, w: 0.25, h: 0.015 },
+    { key: 'father_first_name', label: 'Father First Name', x: 0.27, y: 0.37, w: 0.15, h: 0.015 },
+    { key: 'father_middle_name', label: 'Father Middle Name', x: 0.45, y: 0.37, w: 0.15, h: 0.015 },
+    { key: 'father_last_name', label: 'Father Last Name', x: 0.68, y: 0.37, w: 0.15, h: 0.015 },
 
-    { key: 'father_citizenship', label: 'Father Citizenship', x: 0.18, y: 0.57, w: 0.30, h: 0.015 },
-    { key: 'father_religion', label: 'Father Religion', x: 0.52, y: 0.57, w: 0.20, h: 0.015 },
-    { key: 'father_occupation', label: 'Father Occupation', x: 0.74, y: 0.57, w: 0.12, h: 0.015 },
-    { key: 'father_age', label: 'Father Age', x: 0.88, y: 0.57, w: 0.08, h: 0.015 },
+    { key: 'father_citizenship', label: 'Father Citizenship', x: 0.18, y: 0.40, w: 0.15, h: 0.015 },
+    { key: 'father_religion', label: 'Father Religion', x: 0.37, y: 0.40, w: 0.15, h: 0.015 },
+    { key: 'father_occupation', label: 'Father Occupation', x: 0.57, y: 0.40, w: 0.15, h: 0.015 },
+    { key: 'father_age', label: 'Father Age', x: 0.77, y: 0.40, w: 0.08, h: 0.015 },
 
-    { key: 'father_residence_house', label: 'House/Street/Brgy', x: 0.18, y: 0.61, w: 0.25, h: 0.015 },
-    { key: 'father_residence_city', label: 'City/Municipality', x: 0.45, y: 0.61, w: 0.15, h: 0.015 },
-    { key: 'father_residence_province', label: 'Province', x: 0.62, y: 0.61, w: 0.15, h: 0.015 },
-    { key: 'father_residence_country', label: 'Country', x: 0.80, y: 0.61, w: 0.15, h: 0.015 },
+    { key: 'father_residence_house', label: 'House/Street/Brgy', x: 0.28, y: 0.43, w: 0.13, h: 0.015 },
+    { key: 'father_residence_city', label: 'City/Municipality', x: 0.45, y: 0.43, w: 0.13, h: 0.015 },
+    { key: 'father_residence_province', label: 'Province', x: 0.62, y: 0.43, w: 0.13, h: 0.015 },
+    { key: 'father_residence_country', label: 'Country', x: 0.76, y: 0.43, w: 0.10, h: 0.015 },
 
     // MARRIAGE
-    { key: 'marriage_parents_date', label: 'Date of Marriage', x: 0.15, y: 0.67, w: 0.30, h: 0.015 },
-    { key: 'marriage_parents_place_city', label: 'Place of Marriage', x: 0.48, y: 0.67, w: 0.45, h: 0.015 },
+    { key: 'marriage_parents_day', label: 'Day', x: 0.24, y: 0.48, w: 0.06, h: 0.015 },
+    { key: 'marriage_parents_month', label: 'Month', x: 0.30, y: 0.48, w: 0.06, h: 0.015 },
+    { key: 'marriage_parents_year', label: 'Year', x: 0.36, y: 0.48, w: 0.06, h: 0.015 },
+    { key: 'marriage_parents_place_city', label: 'City/Municipality', x: 0.52, y: 0.48, w: 0.10, h: 0.015 },
+    { key: 'marriage_parents_place_province', label: 'Province', x: 0.64, y: 0.48, w: 0.10, h: 0.015 },
+    { key: 'marriage_parents_place_country', label: 'Country', x: 0.75, y: 0.48, w: 0.10, h: 0.015 },
 
     // ATTENDANT
-    { key: 'attendant_type', label: 'Attendant Type', x: 0.15, y: 0.71, w: 0.20, h: 0.015 },
-    { key: 'attendant_time', label: 'Time of Birth', x: 0.65, y: 0.71, w: 0.15, h: 0.015 },
-    { key: 'attendant_signature', label: 'Attendant Signature', x: 0.15, y: 0.74, w: 0.25, h: 0.015 },
-    { key: 'attendant_name', label: 'Attendant Name', x: 0.15, y: 0.765, w: 0.25, h: 0.015 },
-    { key: 'attendant_address', label: 'Attendant Address', x: 0.45, y: 0.74, w: 0.45, h: 0.015 },
-    { key: 'attendant_date', label: 'Attendant Date', x: 0.45, y: 0.765, w: 0.20, h: 0.015 },
+    { key: 'attendant_type', label: 'Attendant Type', x: 0.17, y: 0.51, w: 0.15, h: 0.015 },
+    { key: 'attendant_time', label: 'Time of Birth', x: 0.65, y: 0.51, w: 0.15, h: 0.015 },
+    { key: 'attendant_signature', label: 'Attendant Signature', x: 0.22, y: 0.55, w: 0.25, h: 0.015 },
+    { key: 'attendant_name', label: 'Attendant Name', x: 0.25, y: 0.57, w: 0.25, h: 0.015 },
+    { key: 'attendant_title', label: 'Title or Position', x: 0.25, y: 0.585, w: 0.25, h: 0.015 },
+    { key: 'attendant_address', label: 'Attendant Address', x: 0.57, y: 0.56, w: 0.20, h: 0.015 },
+    { key: 'attendant_date', label: 'Attendant Date', x: 0.55, y: 0.585, w: 0.20, h: 0.015 },
 
     // INFORMANT
-    { key: 'informant_signature', label: 'Informant Signature', x: 0.15, y: 0.80, w: 0.25, h: 0.015 },
-    { key: 'informant_name', label: 'Informant Name', x: 0.15, y: 0.825, w: 0.25, h: 0.015 },
-    { key: 'informant_relationship', label: 'Relationship', x: 0.15, y: 0.85, w: 0.25, h: 0.015 },
-    { key: 'informant_address', label: 'Informant Address', x: 0.45, y: 0.80, w: 0.45, h: 0.015 },
-    { key: 'informant_date', label: 'Informant Date', x: 0.45, y: 0.825, w: 0.20, h: 0.015 },
+    { key: 'informant_signature', label: 'Informant Signature', x: 0.23, y: 0.634, w: 0.25, h: 0.015 },
+    { key: 'informant_name', label: 'Informant Name', x: 0.25, y: 0.65, w: 0.25, h: 0.015 },
+    { key: 'informant_relationship', label: 'Relationship', x: 0.29, y: 0.667, w: 0.21, h: 0.015 },
+    { key: 'informant_address', label: 'Informant Address', x: 0.22, y: 0.684, w: 0.28, h: 0.015 },
+    { key: 'informant_date', label: 'Informant Date', x: 0.21, y: 0.70, w: 0.20, h: 0.015 },
 
     // PREPARED BY
-    { key: 'prepared_by_signature', label: 'Prepared By Signature', x: 0.65, y: 0.80, w: 0.25, h: 0.015 },
-    { key: 'prepared_by_name', label: 'Prepared By Name', x: 0.65, y: 0.825, w: 0.25, h: 0.015 },
-    { key: 'prepared_by_title', label: 'Prepared By Title', x: 0.65, y: 0.85, w: 0.25, h: 0.015 },
+    { key: 'prepared_by_signature', label: 'Prepared By Signature', x: 0.58, y: 0.637, w: 0.25, h: 0.015 },
+    { key: 'prepared_by_name', label: 'Prepared By Name', x: 0.60, y: 0.656, w: 0.25, h: 0.015 },
+    { key: 'prepared_by_title', label: 'Prepared By Title', x: 0.61, y: 0.675, w: 0.25, h: 0.015 },
+    { key: 'prepared_by_date', label: 'Prepared Date', x: 0.56, y: 0.69, w: 0.25, h: 0.015 },
 
     // RECEIVED BY
-    { key: 'received_by_signature', label: 'Received By Signature', x: 0.15, y: 0.88, w: 0.25, h: 0.015 },
-    { key: 'received_by_name', label: 'Received By Name', x: 0.15, y: 0.905, w: 0.25, h: 0.015 },
-    { key: 'received_by_title', label: 'Received By Title', x: 0.15, y: 0.93, w: 0.25, h: 0.015 },
-    { key: 'received_by_date', label: 'Received Date', x: 0.15, y: 0.955, w: 0.25, h: 0.015 },
+    { key: 'received_by_signature', label: 'Received By Signature', x: 0.23, y: 0.728, w: 0.25, h: 0.015 },
+    { key: 'received_by_name', label: 'Received By Name', x: 0.24, y: 0.743, w: 0.25, h: 0.015 },
+    { key: 'received_by_title', label: 'Received By Title', x: 0.25, y: 0.758, w: 0.25, h: 0.015 },
+    { key: 'received_by_date', label: 'Received Date', x: 0.23, y: 0.773, w: 0.25, h: 0.015 },
 
     // REGISTERED BY
-    { key: 'registered_by_signature', label: 'Registered By Signature', x: 0.65, y: 0.88, w: 0.25, h: 0.015 },
-    { key: 'registered_by_name', label: 'Registered By Name', x: 0.65, y: 0.905, w: 0.25, h: 0.015 },
-    { key: 'registered_by_title', label: 'Registered By Title', x: 0.65, y: 0.93, w: 0.25, h: 0.015 },
-    { key: 'registered_by_date', label: 'Registered Date', x: 0.65, y: 0.955, w: 0.25, h: 0.015 },
+    { key: 'registered_by_signature', label: 'Registered By Signature', x: 0.58, y: 0.728, w: 0.25, h: 0.015 },
+    { key: 'registered_by_name', label: 'Registered By Name', x: 0.60, y: 0.743, w: 0.25, h: 0.015 },
+    { key: 'registered_by_title', label: 'Registered By Title', x: 0.61, y: 0.758, w: 0.25, h: 0.015 },
+    { key: 'registered_by_date', label: 'Registered Date', x: 0.56, y: 0.773, w: 0.25, h: 0.015 },
 
     // REMARKS & OFFICE GRID
-    { key: 'remarks', label: 'Remarks / Annotations', x: 0.10, y: 0.98, w: 0.85, h: 0.035 },
+    { key: 'remarks', label: 'Remarks / Annotations', x: 0.17, y: 0.80, w: 0.70, h: 0.070 },
     { key: 'office_registry_code', label: 'Office Grid Code', x: 0.10, y: 1.03, w: 0.85, h: 0.015 },
 ];
 
@@ -167,7 +173,9 @@ export const BirthConfig = [
     {
         section: 'Marriage of Parents',
         fields: [
-            { key: 'marriage_parents_date', label: '20a. Date', type: 'date', required: false, width: 'sm:col-span-1' },
+            { key: 'marriage_parents_day', label: '20a. Date (Day)', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'marriage_parents_month', label: '20a. Date (Month)', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'marriage_parents_year', label: '20a. Date (Year)', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'marriage_parents_place_city', label: '20b. Place (City/Municipality)', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'marriage_parents_place_province', label: '20b. Place (Province)', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'marriage_parents_place_country', label: '20b. Place (Country)', type: 'text', required: false, width: 'sm:col-span-1' },

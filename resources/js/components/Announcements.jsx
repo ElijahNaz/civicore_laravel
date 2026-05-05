@@ -10,6 +10,7 @@ export default function Announcements() {
     const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [togglingId, setTogglingId] = useState(null);
 
     // Settings state
     const [settings, setSettings] = useState({ opening_hours: '' });
@@ -67,16 +68,21 @@ export default function Announcements() {
     };
 
     const toggleStatus = async (id, currentStatus) => {
+        setTogglingId(id);
         try {
-            await fetch(`/api/announcements/${id}`, {
+            const res = await fetch(`/api/announcements/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ is_active: !currentStatus })
             });
-            fetchAnnouncements();
+            if (res.ok) {
+                await fetchAnnouncements();
+            }
         } catch (e) {
             console.error(e);
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -220,8 +226,19 @@ export default function Announcements() {
                                                 <p className={`text-lg font-medium tracking-tight ${ann.is_active ? 'text-indigo-950' : 'text-slate-600'}`}>{ann.message}</p>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <button onClick={() => toggleStatus(ann.id, ann.is_active)} className={`px-4 py-2 font-bold text-sm rounded-lg transition-colors ${ann.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                                                    {ann.is_active ? 'Hide' : 'Set Live'}
+                                                <button 
+                                                    disabled={togglingId === ann.id}
+                                                    onClick={() => toggleStatus(ann.id, ann.is_active)} 
+                                                    className={`px-4 py-2 font-bold text-sm rounded-lg transition-all flex items-center justify-center gap-2 min-w-[100px] ${ann.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} disabled:opacity-70 disabled:cursor-not-allowed`}
+                                                >
+                                                    {togglingId === ann.id ? (
+                                                        <>
+                                                            <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                            <span>Updating...</span>
+                                                        </>
+                                                    ) : (
+                                                        ann.is_active ? 'Hide' : 'Set Live'
+                                                    )}
                                                 </button>
                                                 <button onClick={() => deleteAnnouncement(ann.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
                                                     <TrashIcon className="w-5 h-5" />

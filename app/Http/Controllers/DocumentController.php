@@ -126,6 +126,42 @@ class DocumentController extends Controller
         ]);
     }
 
+    public function toggleOcr(Request $request, $id)
+    {
+        $doc = DB::table('documents')->where('id', $id)->first();
+        if (!$doc) {
+            return response()->json(['success' => false, 'error' => 'Document not found'], 404);
+        }
+
+        $status = strtolower($doc->status ?? '');
+
+        if (in_array($status, ['pending', 'processing'])) {
+            // Stop it
+            DB::table('documents')->where('id', $id)->update([
+                'status' => 'Stopped',
+                'updated_at' => now(),
+            ]);
+            
+            // Cancel batch if it exists
+            $metadata = json_decode($doc->metadata, true);
+            if (isset($metadata['batch_id'])) {
+                $batch = Bus::findBatch($metadata['batch_id']);
+                if ($batch) {
+                    $batch->cancel();
+                }
+            }
+            return response()->json(['success' => true, 'new_status' => 'Stopped']);
+        } else {
+            // Retry / Resume
+            DB::table('documents')->where('id', $id)->update([
+                'status' => 'Pending',
+                'updated_at' => now(),
+            ]);
+            ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('high');
+            return response()->json(['success' => true, 'new_status' => 'Pending']);
+        }
+    }
+
     /**
      * Get persistent submission history from logs
      */

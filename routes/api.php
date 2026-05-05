@@ -76,6 +76,7 @@ Route::middleware('web')->group(function () {
     Route::post('/documents/{id}/undo',         [DocumentController::class, 'undo']);
     Route::post('/documents/upload',            [DocumentController::class, 'upload']);
     Route::post('/documents/{id}/quick-approve', [DocumentController::class, 'quickApprove']);
+    Route::post('/documents/{id}/toggle-ocr',   [DocumentController::class, 'toggleOcr']);
     Route::get('/documents/download/{id}',      [DocumentController::class, 'download']);
     Route::get('/documents/view/{id}',          [DocumentController::class, 'view']);
     Route::get('/documents/download-txt/{id}',  [DocumentController::class, 'downloadTxt']);
