@@ -225,16 +225,16 @@ Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
 
 ## 🔮 Future OCR Roadmap & Performance Options
 
-To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), I am evolving the system with these strategies:
+To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), the system is being evolved with the following strategies:
 
 ### 🛠️ Phase 1: Flexible Spatial Extraction (Current Implementation)
-I have moved away from rigid pixel-based Zonal OCR to **Flexible Spatial Extraction**. 
-- **How it works**: My system identifies "Anchor Labels" (e.g., "Name of Child", "Date of Birth") and uses bounding box geometry to find the nearest text to the right or below the anchor.
+We have moved away from rigid pixel-based Zonal OCR to **Flexible Spatial Extraction**. 
+- **How it works**: The system identifies "Anchor Labels" (e.g., "Name of Child", "Date of Birth") and uses bounding box geometry to find the nearest text to the right or below the anchor.
 - **Benefit**: This method is immune to image tilting, zooming, or weird aspect ratios from smartphone cameras.
 
 ### 📈 Phase 2: Accuracy Enhancement Options
 
-If you are looking to further improve the raw text accuracy, I recommend following these two paths:
+To further improve the raw text accuracy, we have the following two paths:
 
 #### Option A: Local OpenCV Pre-processing (Recommended)
 I plan to add an image cleaning pipeline before the OCR engine:
