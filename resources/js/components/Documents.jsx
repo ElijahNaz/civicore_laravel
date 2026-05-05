@@ -122,7 +122,6 @@ const Documents = () => {
     const [selectedDocType, setSelectedDocType] = useState('birth');
     const [dragging, setDragging] = useState(false);
     const [activeOcr, setActiveOcr] = useState(null); // { file, ocrResult }
-    const [uploadStatus, setUploadStatus] = useState(null); // 'success' | 'error'
     const [activeTab, setActiveTab] = useState('queue');
     const [queueSearch, setQueueSearch] = useState('');
     const [historySearch, setHistorySearch] = useState('');
@@ -152,7 +151,22 @@ const Documents = () => {
         setDragging(false);
         if (!acceptedFiles.length) return;
         
-        setUploadStatus('uploading');
+        // Optimistically add files to queue
+        const optimisticFiles = acceptedFiles.map((item, index) => {
+            const f = item.file || item;
+            return {
+                id: `uploading-${Date.now()}-${index}`,
+                name: f.name || 'Document',
+                size: (f.size ? (f.size / (1024 * 1024)).toFixed(2) + ' MB' : '...'),
+                type: selectedDocType,
+                status: 'uploading',
+                encoded_by: 'Uploading...',
+                created_at: new Date().toISOString()
+            };
+        });
+        
+        setFiles(prev => [...optimisticFiles, ...prev]);
+
         const isBulk = acceptedFiles.length > 1;
         const firstFile = acceptedFiles[0]?.file || acceptedFiles[0];
         const taskName = isBulk ? `Uploading ${acceptedFiles.length} files` : `Uploading ${firstFile?.name || 'file'}`;
@@ -196,17 +210,16 @@ const Documents = () => {
             }
 
             if (successCount > 0) {
-                setUploadStatus('success');
                 refreshAll();
                 const message = isBulk 
                     ? `Successfully uploaded ${successCount} of ${acceptedFiles.length} files` 
                     : 'Document uploaded successfully';
                 return { success: true, message, id: lastId };
             }
-            setUploadStatus('error');
+            refreshDocuments(true);
             throw new Error('Upload failed');
-        });
-    }, [selectedDocType, refreshAll, runBackgroundTask]);
+        }, { silent: true });
+    }, [selectedDocType, refreshAll, runBackgroundTask, refreshDocuments]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -610,45 +623,7 @@ const Documents = () => {
                                 <p className="text-xs text-slate-400">PDF, JPG, PNG, TIFF, DOCX — max 10 MB</p>
                             </div>
 
-                            {uploadStatus && (
-                                <motion.div 
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className={`p-3 rounded-xl flex items-center gap-3 border ${
-                                        uploadStatus === 'success' 
-                                        ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
-                                        : uploadStatus === 'uploading'
-                                        ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
-                                        : 'bg-rose-50 border-rose-100 text-rose-700'
-                                    }`}
-                                >
-                                    {uploadStatus === 'success' ? (
-                                        <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
-                                    ) : uploadStatus === 'uploading' ? (
-                                        <ArrowPathIcon className="w-5 h-5 flex-shrink-0 animate-spin" />
-                                    ) : (
-                                        <XMarkIcon className="w-5 h-5 flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1">
-                                        <p className="text-xs font-bold leading-tight">
-                                            {uploadStatus === 'success' ? 'Upload Successful' : uploadStatus === 'uploading' ? 'Uploading...' : 'Upload Failed'}
-                                        </p>
-                                        <p className="text-[10px] opacity-70">
-                                            {uploadStatus === 'success' ? 'Document added to queue' : uploadStatus === 'uploading' ? 'Transferring to server' : 'Please check file type/size'}
-                                        </p>
-                                    </div>
-                                    {uploadStatus !== 'uploading' && (
-                                        <button 
-                                            onClick={() => setUploadStatus(null)}
-                                            className="p-1 hover:bg-black/5 rounded-lg transition-colors"
-                                        >
-                                            <XMarkIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </motion.div>
-                            )}
-
-                            <div className="relative">
+                            <div className="relative mt-5">
                                 <button
                                     onClick={() => setIsCameraOpen(true)}
                                     className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors shadow-sm active:scale-95 transition-all"

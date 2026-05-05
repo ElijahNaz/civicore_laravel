@@ -77,91 +77,14 @@ export const ParentalConsentModal = ({ onConfirm, onCancel }) => (
     </div>
 );
 
-const NAIC_BARANGAYS = [
-    'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
-    'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
-    'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
-    'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
-    'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
-    'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
-].sort();
-
-const SUFFIX_OPTIONS = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'M.D.', 'Esq.', 'Ph.D.'];
-
-const NAME_FIELDS = (prefix = '') => [
-    { key: `${prefix}last_name`, label: 'Surname', type: 'text', required: true, width: 'sm:col-span-1' },
-    { key: `${prefix}first_name`, label: 'First Name', type: 'text', required: true, width: 'sm:col-span-1' },
-    { key: `${prefix}middle_name`, label: 'Middle Name', type: 'text', required: false, width: 'sm:col-span-1' },
-    { key: `${prefix}suffix`, label: 'Suffix', type: 'select', options: SUFFIX_OPTIONS, required: false, width: 'sm:col-span-1' },
-];
+import { BirthConfig, BirthTemplateOverlayFields } from './forms/BirthCertificateConfig.js';
+import { DeathConfig } from './forms/DeathCertificateConfig.js';
+import { MarriageConfig } from './forms/MarriageCertificateConfig.js';
 
 const FIELD_CONFIG = {
-    birth: [
-        { section: 'Child Information', fields: [
-            ...NAME_FIELDS(''),
-            { key: 'sex', label: '2. Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
-            { key: 'date_of_birth', label: '3. Date of Birth', type: 'date', required: true, width: 'sm:col-span-1' },
-            { key: 'place_of_birth', label: '4. Place of Birth', type: 'text', required: true },
-            { key: 'type_of_birth', label: '5a. Type of Birth', type: 'select', options: ['Single', 'Twin', 'Triplet'], required: false, width: 'sm:col-span-1' },
-            { key: 'birth_order', label: '5c. Birth Order', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'weight_at_birth', label: '6. Weight at Birth', type: 'text', required: false, width: 'sm:col-span-1' },
-        ]},
-        { section: '7-12. Mother\'s Information', fields: [
-            ...NAME_FIELDS('mother_'),
-            { key: 'mother_citizenship', label: '8. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'mother_religion', label: '9. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'mother_occupation', label: '10. Occupation', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'mother_residence', label: '11. Residence', type: 'text', required: false },
-            { key: 'mother_age', label: '12. Age at birth', type: 'text', required: false, width: 'sm:col-span-1' },
-        ]},
-        { section: '13-18. Father\'s Information', fields: [
-            ...NAME_FIELDS('father_'),
-            { key: 'father_citizenship', label: '14. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'father_religion', label: '15. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'father_occupation', label: '16. Occupation', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'father_age', label: '17. Age at birth', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'father_residence', label: '18. Residence', type: 'text', required: false },
-        ]},
-        { section: 'Registry Details', fields: [
-            { key: 'marriage_parents_date', label: '19a. Marriage Date', type: 'text', required: false },
-            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
-            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
-        ]}
-    ],
-    death: [
-        { section: 'Deceased Information', fields: [
-            ...NAME_FIELDS(''),
-            { key: 'sex', label: '2. Sex', type: 'select', options: ['Male', 'Female'], required: true, width: 'sm:col-span-1' },
-            { key: 'date_of_death', label: '3. Date of Death', type: 'date', required: true, width: 'sm:col-span-1' },
-            { key: 'date_of_birth', label: '4. Date of Birth', type: 'date', required: false, width: 'sm:col-span-1' },
-            { key: 'age', label: '5. Age', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'place_of_death', label: '6. Place of Death', type: 'text', required: false },
-            { key: 'civil_status', label: '7. Civil Status', type: 'select', options: ['Single', 'Married', 'Widowed', 'Divorced'], required: false, width: 'sm:col-span-1' },
-            { key: 'religion', label: '8. Religion', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'citizenship', label: '9. Citizenship', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'residence', label: '10. Residence', type: 'text', required: false },
-            { key: 'occupation', label: '11. Occupation', type: 'text', required: false },
-        ]},
-        { section: 'Parents Information', fields: [
-            ...NAME_FIELDS('father_'),
-            ...NAME_FIELDS('mother_maiden_'),
-        ]},
-        { section: 'Medical Certificate', fields: [
-            { key: 'cause_of_death', label: '19b. Cause of Death', type: 'text', required: false },
-            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
-            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
-        ]}
-    ],
-    marriage: [
-        { section: "Husband's Profile", fields: NAME_FIELDS('husband_') },
-        { section: "Wife's Profile", fields: NAME_FIELDS('wife_') },
-        { section: 'Registry Details', fields: [
-            { key: 'date_of_marriage', label: 'Date of Marriage', type: 'date', required: false },
-            { key: 'place_of_marriage', label: 'Place of Marriage', type: 'text', required: false },
-            { key: 'registry_number', label: 'Registry No.', type: 'text', required: true },
-            { key: 'barangay', label: 'Barangay', type: 'select', options: NAIC_BARANGAYS, required: true },
-        ]}
-    ],
+    birth: BirthConfig,
+    death: DeathConfig,
+    marriage: MarriageConfig
 };
 
 const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
@@ -542,23 +465,23 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                 alt="Professional Template Background"
                                             />
 
-                                            {matchedTemplate?.config?.fields?.map((item) => {
+                                            {(effectiveType === 'birth' ? BirthTemplateOverlayFields : matchedTemplate?.config?.fields)?.map((item) => {
                                                 const value = formData[item.key] || '';
                                                 const label = item.label || item.key;
                                                 return (
                                                     <div
                                                         key={item.key}
-                                                        className="absolute flex flex-col justify-center px-1"
+                                                        className="absolute flex flex-col justify-center px-0.5 border border-emerald-400/50 bg-emerald-50/30 rounded-px shadow-sm backdrop-blur-[0.5px]"
                                                         style={{
                                                             left: `${(item.x || 0) * 100}%`,
                                                             top: `${(item.y || 0) * 100}%`,
                                                             width: `${(item.w || 0) * 100}%`,
-                                                            height: `${(item.h || 0) * 100}%`,
+                                                            height: `${(item.h || 0) * 80}%`, // Scaling down height slightly
                                                         }}
                                                         title={`${label}`}
                                                     >
-                                                        <div className="text-[9px] font-black text-indigo-600/40 uppercase tracking-tighter absolute -top-3 left-0 whitespace-nowrap">{label}</div>
-                                                        <div className="font-bold text-slate-900 text-sm md:text-base tracking-tight bg-white/40 backdrop-blur-[1px] rounded px-1 truncate">
+                                                        <div className="text-[4px] font-black text-emerald-800/80 uppercase tracking-tighter absolute -top-1 left-0 whitespace-nowrap bg-white/90 px-0.5 rounded-px shadow-xs z-10 leading-none py-0.2">{label}</div>
+                                                        <div className="font-semibold text-slate-900 text-[6px] md:text-[7px] tracking-tight truncate px-0.5 leading-none">
                                                             {value || '—'}
                                                         </div>
                                                     </div>
@@ -574,28 +497,71 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                 className="w-full h-auto block"
                                                 alt="Scan Overlay"
                                             />
+                                            {effectiveType === 'birth' ? (
+                                                BirthTemplateOverlayFields.map((item) => {
+                                                    const value = formData[item.key] || '';
+                                                    return (
+                                                        <div
+                                                            key={item.key}
+                                                            className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
+                                                            style={{
+                                                                left: `${item.x * 100}%`,
+                                                                top: `${item.y * 100}%`,
+                                                                width: `${item.w * 100}%`,
+                                                                minHeight: `${item.h * 100}%`,
+                                                            }}
+                                                            title={item.label}
+                                                        >
+                                                            <div className="font-bold uppercase tracking-wide text-[9px] truncate">{item.label}</div>
+                                                            <div className="font-semibold truncate text-slate-800">{value || '—'}</div>
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                templateOverlay.fields.map((item) => {
+                                                    const roi = item.roi || [];
+                                                    const [x1, y1, x2, y2] = roi;
+                                                    
+                                                    // Map backend overlay keys to our structured form data so the preview updates live
+                                                    let derivedValue = '';
+                                                    const k = item.key?.toLowerCase() || '';
+                                                    
+                                                    if (k.includes('child name')) {
+                                                        derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('mother name')) {
+                                                        derivedValue = [formData.mother_first_name, formData.mother_middle_name, formData.mother_last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('father name')) {
+                                                        derivedValue = [formData.father_first_name, formData.father_middle_name, formData.father_last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('place of birth')) {
+                                                        derivedValue = [formData.place_of_birth_hospital, formData.place_of_birth_city, formData.place_of_birth_province].filter(Boolean).join(', ');
+                                                    } else if (k.includes('type of birth')) {
+                                                        derivedValue = formData.type_of_birth || '';
+                                                    } else if (k.includes('sex')) {
+                                                        derivedValue = formData.sex || '';
+                                                    } else {
+                                                        derivedValue = formData[item.key] || item.value || '';
+                                                    }
 
-                                            {templateOverlay.fields.map((item) => {
-                                                const roi = item.roi || [];
-                                                const [x1, y1, x2, y2] = roi;
-                                                const value = formData[item.key] || item.value || '';
-                                                const label = fieldLabelMap[item.key] || item.key;
-                                                return (
-                                                    <div
-                                                        key={item.key}
-                                                        className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
-                                                        style={{
-                                                            left: `${(x1 || 0) * 100}%`,
-                                                            top: `${(y1 || 0) * 100}%`,
-                                                            width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
-                                                            minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
-                                                        }}
-                                                    >
-                                                        <div className="font-bold uppercase tracking-wide text-[9px]">{label}</div>
-                                                        <div className="font-semibold truncate">{value || '—'}</div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    const value = derivedValue || item.value || '';
+                                                    const label = fieldLabelMap[item.key] || item.key;
+                                                    return (
+                                                        <div
+                                                            key={item.key}
+                                                            className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
+                                                            style={{
+                                                                left: `${(x1 || 0) * 100}%`,
+                                                                top: `${(y1 || 0) * 100}%`,
+                                                                width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
+                                                                minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
+                                                            }}
+                                                            title={`${label}`}
+                                                        >
+                                                            <div className="font-bold uppercase tracking-wide text-[9px]">{label}</div>
+                                                            <div className="font-semibold truncate">{value || '—'}</div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
                                         </div>
                                     </div>
                                 ) : (
