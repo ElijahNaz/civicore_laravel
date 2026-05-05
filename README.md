@@ -225,26 +225,26 @@ Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
 
 ## 🔮 Future OCR Roadmap & Performance Options
 
-To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), the system is being evolved with the following strategies:
+To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), I am evolving the system with these strategies:
 
 ### 🛠️ Phase 1: Flexible Spatial Extraction (Current Implementation)
-We have moved away from rigid pixel-based Zonal OCR to **Flexible Spatial Extraction**. 
-- **How it works**: The system identifies "Anchor Labels" (e.g., "Name of Child", "Date of Birth") and uses bounding box geometry to find the nearest text to the right or below the anchor.
+I have moved away from rigid pixel-based Zonal OCR to **Flexible Spatial Extraction**. 
+- **How it works**: My system identifies "Anchor Labels" (e.g., "Name of Child", "Date of Birth") and uses bounding box geometry to find the nearest text to the right or below the anchor.
 - **Benefit**: This method is immune to image tilting, zooming, or weird aspect ratios from smartphone cameras.
 
 ### 📈 Phase 2: Accuracy Enhancement Options
 
-For developers looking to further improve the raw text accuracy, we recommend the following two paths:
+If you are looking to further improve the raw text accuracy, I recommend following these two paths:
 
 #### Option A: Local OpenCV Pre-processing (Recommended)
-Add an image cleaning pipeline before the OCR engine:
+I plan to add an image cleaning pipeline before the OCR engine:
 1. **Adaptive Thresholding**: Converts images to pure black-and-white to remove shadows/lighting noise.
 2. **Deskewing**: Automatically straightens tilted images.
 3. **Dilation**: Thickens thin text for better engine recognition.
 *This keeps the system 100% private, local, and free of cost.*
 
 #### Option B: Enterprise Cloud Vision (For Mission Critical Accuracy)
-For 99%+ accuracy on messy handwritten or extremely low-quality photos, consider integrating:
+For 99%+ accuracy on messy handwritten or extremely low-quality photos, I'll consider integrating:
 - **Google Cloud Document AI**
 - **AWS Textract**
 *These offer superior handwriting recognition and field-key pairing at a per-page cost.*
