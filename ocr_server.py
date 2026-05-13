@@ -112,7 +112,7 @@ DEFAULT_QUICK_FILL_REQUIRED_FIELDS = {
     "marriage": ["husbands_name", "wifes_name", "date_of_marriage", "registry_number", "barangay"],
 }
 
-QUICK_FILL_MIN_CONFIDENCE = 0.62
+QUICK_FILL_MIN_CONFIDENCE = 0.60
 QUICK_FILL_MIN_MARKER_HITS = 1
 TEMPLATE_PROFILE_PATH = Path(__file__).resolve().parent / "Templates" / "roi_profiles.json"
 QUICK_FILL_TEMPLATE_FAMILIES = DEFAULT_QUICK_FILL_TEMPLATE_FAMILIES
