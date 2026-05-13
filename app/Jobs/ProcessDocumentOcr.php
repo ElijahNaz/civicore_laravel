@@ -154,14 +154,36 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                         }
                     }
 
+                    $quickFillUsed = false;
+                    $templateFamilyDetected = null;
+                    if (isset($aggregatedFields['_quick_fill_used'])) {
+                        $quickFillUsed = filter_var($aggregatedFields['_quick_fill_used'], FILTER_VALIDATE_BOOLEAN);
+                        unset($aggregatedFields['_quick_fill_used']);
+                    }
+                    if (isset($aggregatedFields['_template_family_detected'])) {
+                        $templateFamilyDetected = $aggregatedFields['_template_family_detected'];
+                        unset($aggregatedFields['_template_family_detected']);
+                    }
+                    if (isset($aggregatedFields['_detected_type'])) {
+                        $detectedType = $aggregatedFields['_detected_type'];
+                        unset($aggregatedFields['_detected_type']);
+                    }
+
+                    // Inject these flags into the document metadata so the frontend can read them
+                    $docData = DB::table('documents')->where('id', $docId)->first();
+                    $metadata = json_decode($docData->metadata ?? '{}', true) ?: [];
+                    $metadata['quick_fill_used'] = $quickFillUsed;
+                    $metadata['template_family_detected'] = $templateFamilyDetected;
+
                     DB::update(
                         "UPDATE documents
-                         SET ocr_text = ?, detected_type = ?, extracted_fields = ?, status = 'extracted'
+                         SET ocr_text = ?, detected_type = ?, extracted_fields = ?, metadata = ?, status = 'extracted'
                          WHERE id = ?",
                         [
                             $ocrText,
                             $detectedType,
                             json_encode($aggregatedFields, JSON_UNESCAPED_UNICODE),
+                            json_encode($metadata, JSON_UNESCAPED_UNICODE),
                             $docId,
                         ]
                     );

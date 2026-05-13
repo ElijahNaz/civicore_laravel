@@ -47,7 +47,7 @@ class ProcessImageOcrJob implements ShouldQueue
                 'file_path' => $this->imagePath,
                 'doc_type' => $this->docType,
                 'languages' => $this->languages,
-                'ocr_mode' => 'fast',
+                'ocr_mode' => 'balanced',
             ]);
 
             if ($response->failed() || !($response->json()['success'] ?? false)) {
@@ -57,14 +57,15 @@ class ProcessImageOcrJob implements ShouldQueue
             $result = $response->json();
             $newText = $result['text'] ?? '';
 
-            // --- NEW: Intercept and Parse in Laravel ---
-            $parser = new \App\Services\OcrParserService();
-            $parsedData = $parser->parseText($newText);
-
-            // Use our Laravel parsed data instead of the Python fallback
-            $detectedType = $parsedData['detected_type'];
-            $newFields = $parsedData['extracted_fields'];
-            // ------------------------------------------
+            // Use the Python parsed data instead of the legacy Laravel fallback
+            // Python's Spatial Extractor is far more accurate for these forms.
+            $detectedType = $result['detected_type'] ?? 'unknown';
+            $newFields = $result['extracted_fields'] ?? [];
+            
+            // Temporary storage in fields so ProcessDocumentOcr can aggregate them
+            $newFields['_quick_fill_used'] = $result['quick_fill_used'] ?? false;
+            $newFields['_template_family_detected'] = $result['template_family_detected'] ?? null;
+            $newFields['_detected_type'] = $detectedType;
 
             DB::table('document_ocr_pages')->updateOrInsert(
                 [

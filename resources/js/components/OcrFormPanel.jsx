@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -121,7 +121,13 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
     const fieldConfidence = ocrResult?.field_confidence || {};
-    const quickFillUsed = !!ocrResult?.quick_fill_used;
+    const meta = useMemo(() => {
+        try { return typeof file.metadata === 'string' ? JSON.parse(file.metadata) : (file.metadata || {}); }
+        catch (e) { return {}; }
+    }, [file.metadata]);
+
+    const quickFillUsed = !!(ocrResult?.quick_fill_used || meta.quick_fill_used);
+    const templateFamilyDetected = ocrResult?.template_family_detected || meta.template_family_detected || 'Not Detected';
     const templateOverlay = ocrResult?.template_overlay || null;
 
     const { templates } = useData();
@@ -313,7 +319,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                             <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
                         </div>
                         <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative">
-                            {file.name?.toLowerCase().endsWith('.pdf') ? (
+                            {(file.name?.toLowerCase().trim().endsWith('.pdf') || file.file_path?.toLowerCase().endsWith('.pdf')) ? (
                                     <iframe
                                         src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
                                         className="w-full h-full border-0"
@@ -324,6 +330,11 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                         src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
                                         className="w-full h-full object-contain"
                                         alt="Original Scan"
+                                        onError={(e) => {
+                                            // Fallback if the image fails to load but we suspect it's actually a PDF
+                                            e.target.style.display = 'none';
+                                            e.target.insertAdjacentHTML('afterend', `<iframe src="${e.target.src}" class="w-full h-full border-0" title="Original Document"></iframe>`);
+                                        }}
                                     />
                             )}
                         </div>
@@ -451,7 +462,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                             {quickFillUsed ? 'Quick-fill Active' : 'Fallback OCR Active'}
                                         </p>
                                         <p className="text-[10px] text-slate-500">
-                                            Family: {ocrResult?.template_family_detected || 'Not Detected'}
+                                            Family: {templateFamilyDetected}
                                         </p>
                                     </div>
                                 </div>

@@ -12,6 +12,20 @@ from typing import Literal, Optional
 # import easyocr (Moved to get_reader for memory efficiency)
 from PIL import Image
 import fitz  # PyMuPDF
+import cv2
+import numpy as np
+import threading
+from functools import wraps
+
+process_lock = threading.Lock()
+
+def serialize_processing(func):
+    """Decorator to force sequential execution of an endpoint."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with process_lock:
+            return func(*args, **kwargs)
+    return wrapper
 
 try:
     import docx
@@ -99,7 +113,7 @@ DEFAULT_QUICK_FILL_REQUIRED_FIELDS = {
 }
 
 QUICK_FILL_MIN_CONFIDENCE = 0.62
-QUICK_FILL_MIN_MARKER_HITS = 2
+QUICK_FILL_MIN_MARKER_HITS = 1
 TEMPLATE_PROFILE_PATH = Path(__file__).resolve().parent / "Templates" / "roi_profiles.json"
 QUICK_FILL_TEMPLATE_FAMILIES = DEFAULT_QUICK_FILL_TEMPLATE_FAMILIES
 QUICK_FILL_REQUIRED_FIELDS = DEFAULT_QUICK_FILL_REQUIRED_FIELDS
@@ -309,11 +323,22 @@ def quick_fill_extract_from_rois(image_path: str, template_family: str):
             continue
 
         crop = img.crop((left, top, right, bottom))
-        text, conf = _run_tesseract_roi(crop)
+        # Optional: pre-process the crop for better Tesseract/EasyOCR reading
+        crop_cv = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(crop_cv, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        crop_enhanced = Image.fromarray(thresh)
+
+        text, conf = _run_tesseract_roi(crop_enhanced)
         source = "roi_tesseract"
-        if not text:
-            text, conf = _run_easyocr_roi(crop)
-            source = "roi_easyocr"
+        
+        # If Tesseract fails or confidence is low, fall back to EasyOCR for this specific ROI
+        if not text or conf < 0.8:
+            easy_text, easy_conf = _run_easyocr_roi(crop_enhanced)
+            if easy_conf > conf and easy_text:
+                text, conf = easy_text, easy_conf
+                source = "roi_easyocr"
 
         cleaned_text = _normalize_roi_text(text)
         if _field_expected_type(field_name) == 'date':
@@ -663,10 +688,17 @@ def get_reader():
     global _reader
     if _reader is None:
         try:
-            import easyocr
             REDER_LANGS = ['en', 'tl']
             print(f"Loading EasyOCR models for {REDER_LANGS} (First run)...")
-            _reader = easyocr.Reader(REDER_LANGS, gpu=True, verbose=False)
+            import easyocr
+            import torch
+            use_gpu = torch.cuda.is_available()
+            if use_gpu:
+                print("Dedicated GPU detected. Hardware acceleration enabled.")
+            else:
+                print("No GPU detected. Running in CPU mode.")
+                
+            _reader = easyocr.Reader(REDER_LANGS, gpu=use_gpu, verbose=False)
         except Exception as e:
             print(f"Failed to load EasyOCR: {e}")
             return None
@@ -679,11 +711,63 @@ else:
 load_template_profiles()
 print("OCR Server initialized.")
 
+def preprocess_image(image_path: str, output_path: str = None) -> str:
+    """
+    Cleans up the image for better OCR accuracy:
+    - Deskewing (Straighten the document)
+    - Adaptive Thresholding (removes shadows/noise)
+    - Denoising
+    """
+    print(f"Applying OpenCV pre-processing to: {image_path}")
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return image_path
+
+        # 1. Grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # 2. Deskewing
+        coords = np.column_stack(np.where(gray < 127))
+        if len(coords) > 0:
+            rect = cv2.minAreaRect(coords)
+            angle = rect[-1]
+            if angle < -45:
+                angle = -(90 + angle)
+            else:
+                angle = -angle
+            
+            if abs(angle) > 0.5:
+                print(f"Deskewing document by {round(angle, 2)} degrees.")
+                (h, w) = img.shape[:2]
+                center = (w // 2, h // 2)
+                M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+        # 3. Denoising
+        denoised = cv2.bilateralFilter(gray, 9, 75, 75)
+
+        # Modern OCR engines (EasyOCR, Tesseract LSTM) perform much better on raw grayscale
+        # rather than harshly binarized images. We will skip adaptive thresholding.
+        processed = denoised
+
+        if not output_path:
+            base, ext = os.path.splitext(image_path)
+            output_path = f"{base}_proc{ext}"
+        
+        cv2.imwrite(output_path, processed)
+        print(f"Pre-processing complete: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"Pre-processing failed: {e}")
+        return image_path
+
 class OCRRequest(BaseModel):
     file_path: str
     doc_type: str = "birth"
     languages: str = "en,tl"
     ocr_mode: Literal["fast", "balanced", "accurate"] = "accurate"
+    preprocess: bool = True
 
 class SplitRequest(BaseModel):
     file_path: str
@@ -701,6 +785,7 @@ def status():
     return {"status": "ready", "engine": engine, "persistent": True}
 
 @app.post('/split')
+@serialize_processing
 def split_pdf(data: SplitRequest):
     file_path = data.file_path
     ext = _validate_input_file(file_path, expected_extensions=['.pdf'])
@@ -828,6 +913,7 @@ def split_pdf(data: SplitRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post('/ocr')
+@serialize_processing
 def process_ocr(data: OCRRequest):
     file_path = data.file_path
     ext = _validate_input_file(file_path)
@@ -871,7 +957,15 @@ def process_ocr(data: OCRRequest):
         # Image processing
         ocr_engine_used = "none"
         fast_mode_min_chars = 80
+        # Tesseract struggles heavily with table grids and small fonts on complex certificates,
+        # often outputting 55-65% confidence for complete hallucinated garbage.
+        # We enforce a strict 0.75 threshold. If it's lower, we MUST fall back to EasyOCR for Auto-Fill accuracy.
         fast_mode_min_conf = 0.75
+
+        # Apply OpenCV pre-processing if requested
+        original_file_path = file_path
+        if data.preprocess:
+            file_path = preprocess_image(original_file_path)
 
         def run_easyocr():
             reader = get_reader()
@@ -897,23 +991,46 @@ def process_ocr(data: OCRRequest):
             try:
                 print("Running PyTesseract...")
                 img = Image.open(file_path)
-                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                # psm 6: Assume a single uniform block of text. 
+                # This forces Tesseract to read left-to-right and keeps horizontally aligned fields 
+                # (like "Province CAVITE") on the same line, while ignoring scattered noise.
+                custom_config = r'--oem 3 --psm 6'
+                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, config=custom_config)
                 tess_lines = []
                 tess_scores = []
                 tess_raw = []
                 
                 n_boxes = len(data['level'])
+                current_line = []
+                current_line_scores = []
+                last_line_id = None
+
                 for i in range(n_boxes):
                     text = data['text'][i].strip()
-                    if text:
-                        conf = int(data['conf'][i])
-                        if conf > 0:
-                            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
-                            bbox = [[x, y], [x+w, y], [x+w, y+h], [x, y+h]]
-                            prob = conf / 100.0
-                            tess_raw.append((bbox, text, prob))
-                            tess_lines.append(text)
-                            tess_scores.append(prob)
+                    conf = int(data['conf'][i])
+                    # Filter out garbage hallucinated text (conf < 20%)
+                    if conf > 20 and text:
+                        line_id = f"{data['block_num'][i]}_{data['par_num'][i]}_{data['line_num'][i]}"
+                        
+                        if line_id != last_line_id and current_line:
+                            # Push previous line
+                            tess_lines.append(" ".join(current_line))
+                            tess_scores.append(sum(current_line_scores) / len(current_line_scores))
+                            current_line = []
+                            current_line_scores = []
+                            
+                        current_line.append(text)
+                        current_line_scores.append(conf / 100.0)
+                        last_line_id = line_id
+                        
+                        x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                        bbox = [[x, y], [x+w, y], [x+w, y+h], [x, y+h]]
+                        prob = conf / 100.0
+                        tess_raw.append((bbox, text, prob))
+
+                if current_line:
+                    tess_lines.append(" ".join(current_line))
+                    tess_scores.append(sum(current_line_scores) / len(current_line_scores))
                             
                 print("PyTesseract completed.")
                 return tess_lines, tess_scores, tess_raw
@@ -960,6 +1077,7 @@ def process_ocr(data: OCRRequest):
     
                 if quick_fields:
                     quick_fill_used = not should_run_full_ocr
+                    extracted_fields = quick_fields if quick_fill_used else {}
                     lines = [f"{k}: {v}" for k, v in quick_fields.items() if v]
                     scores = required_field_confs if required_field_confs else []
                     ocr_engine_used = "quick_fill_roi"
@@ -991,11 +1109,17 @@ def process_ocr(data: OCRRequest):
 
                 fast_text_len = len('\n'.join(lines))
                 fast_avg_conf = (sum(scores) / len(scores)) if scores else 0
-                should_fallback = (
-                    not lines
-                    or fast_text_len < fast_mode_min_chars
-                    or fast_avg_conf < fast_mode_min_conf
-                )
+                
+                should_fallback = False
+                if ocr_mode == "balanced":
+                    should_fallback = (
+                        not lines
+                        or fast_text_len < fast_mode_min_chars
+                        or fast_avg_conf < fast_mode_min_conf
+                    )
+                elif ocr_mode == "fast":
+                    # In fast mode, only fallback if literally no text was found
+                    should_fallback = not lines or fast_text_len < 10
 
                 if should_fallback:
                     print(
@@ -1096,21 +1220,16 @@ def process_ocr(data: OCRRequest):
 
 if __name__ == '__main__':
     import uvicorn
-    # Dynamic hardware scaling: Use max cores available, minus 1 for OS stability
-    cores = os.cpu_count() or 2
-    # Default to 1 worker for stability on low-end systems (i3/4GB RAM)
-    # Tesseract is so fast that parallelism isn't strictly required for a single user
-    workers = min(max(2, cores - 1), 4)
-    limit_concurrency = max(5, min(cores * 2, 10))
-    print(f"Starting OCR Server with DYNAMIC HARDWARE SCALING")
-    print(f"Detected CPU Cores: {cores}")
-    print(f"Launching {workers} workers with limit_concurrency={limit_concurrency}")
+    # Forced to 1 worker and 1 concurrency for stability on low-resource hardware
+    # This prevents OOM (Out Of Memory) crashes when multiple documents are processed.
+    workers = 1
+    
+    print(f"Starting OCR Server in LOW-RESOURCE MODE (Stability Optimized)")
+    print(f"Workers: {workers}")
     
     uvicorn.run(
-        "ocr_server:app",
+        app,
         host='0.0.0.0',
         port=8080,
-        workers=workers,
-        log_level="info",
-        limit_concurrency=limit_concurrency,
+        log_level="info"
     )
