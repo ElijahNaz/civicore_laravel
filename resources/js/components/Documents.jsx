@@ -466,87 +466,67 @@ const Documents = () => {
 
         const s = status?.toLowerCase();
 
-        // ── Active states: animated progress bar ────────────────────────────
-        if (s === 'processing' || s === 'uploading') {
+        // ── Active states: original pill + animated fill background ─────────
+        if (s === 'processing' || s === 'uploading' || s === 'pending') {
+            const isPending    = s === 'pending';
             const isProcessing = s === 'processing';
-            const stageLabel = isProcessing
-                ? (file.batch_total > 1 ? `Page ${file.batch_processed ?? 1}/${file.batch_total}` : 'Reading…')
-                : 'Uploading…';
-            const barColor = isProcessing
-                ? 'from-indigo-400 via-violet-400 to-indigo-500'
-                : 'from-slate-300 via-slate-400 to-slate-300';
-            const glowColor = isProcessing ? 'rgba(99,102,241,0.25)' : 'rgba(148,163,184,0.2)';
-            const dotColor  = isProcessing ? 'bg-indigo-500' : 'bg-slate-400';
+
+            const label = isPending ? 'Pending OCR'
+                        : isProcessing ? (file.batch_total > 1 ? `Processing ${file.batch_processed ?? 1}/${file.batch_total}` : 'Processing…')
+                        : 'Uploading…';
+
+            // Colors for the fill vs the base pill
+            const pillBase  = isPending
+                ? 'text-amber-700 border-amber-200 bg-amber-50'
+                : isProcessing
+                    ? 'text-indigo-700 border-indigo-200 bg-indigo-50'
+                    : 'text-slate-600 border-slate-200 bg-slate-50';
+
+            const fillColor = isPending
+                ? 'rgba(251,191,36,0.25)'   // amber
+                : isProcessing
+                    ? 'rgba(99,102,241,0.22)' // indigo
+                    : 'rgba(148,163,184,0.2)'; // slate
+
+            const animName  = isPending ? 'ocr-pending-fill' : 'ocr-active-fill';
 
             return (
-                <div className="flex flex-col gap-0.5 w-24">
-                    <div className="flex items-center justify-between">
-                        <span className={`text-[8px] font-black uppercase tracking-widest ${isProcessing ? 'text-indigo-500' : 'text-slate-400'}`}>
-                            {isProcessing ? 'OCR' : 'Upload'}
-                        </span>
-                        <span className="flex items-center gap-0.5">
-                            <span className={`w-1 h-1 rounded-full ${dotColor} animate-pulse`} />
-                            <span className={`text-[8px] font-semibold ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
-                                {isProcessing ? 'Active' : 'Sending'}
-                            </span>
-                        </span>
-                    </div>
-                    <div
-                        className="relative w-full h-1.5 rounded-full overflow-hidden bg-slate-100"
-                        style={{ boxShadow: `0 0 6px ${glowColor}` }}
-                    >
-                        <div
-                            className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${barColor}`}
-                            style={{ width: '60%', animation: 'ocr-progress-slide 1.8s ease-in-out infinite' }}
-                        />
-                        <div
-                            className="absolute inset-0 rounded-full"
-                            style={{
-                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)',
-                                animation: 'ocr-shimmer 1.8s linear infinite',
-                            }}
-                        />
-                    </div>
-                    <p className={`text-[7.5px] font-medium ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
-                        {stageLabel}
-                    </p>
-                </div>
+                <span
+                    className={`relative inline-flex items-center overflow-hidden text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-tight ${pillBase}`}
+                    style={{ minWidth: '90px', justifyContent: 'center' }}
+                >
+                    {/* Animated fill sweeping across the background */}
+                    <span
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                            background: `linear-gradient(90deg, ${fillColor} 0%, rgba(255,255,255,0) 100%)`,
+                            animation: `${animName} 1.8s ease-in-out infinite`,
+                        }}
+                    />
+                    {/* Label on top */}
+                    <span className="relative z-10">{label}</span>
+                </span>
             );
         }
 
-        if (s === 'pending') {
-            return (
-                <div className="flex flex-col gap-0.5 w-24">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-amber-500">OCR</span>
-                        <span className="flex items-center gap-0.5">
-                            <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                            <span className="text-[8px] font-semibold text-amber-400">Queued</span>
-                        </span>
-                    </div>
-                    <div className="relative w-full h-1.5 rounded-full overflow-hidden bg-amber-50 border border-amber-100">
-                        <div
-                            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300"
-                            style={{ width: '35%', animation: 'ocr-pending-pulse 2.4s ease-in-out infinite', opacity: 0.7 }}
-                        />
-                    </div>
-                    <p className="text-[7.5px] font-medium text-amber-400">Waiting in queue…</p>
-                </div>
-            );
-        }
-
-        // ── Terminal states: compact pill badges ─────────────────────────────
+        // ── Terminal states: original plain pill ─────────────────────────────
         let labelStr = status;
         if (s === 'processed') labelStr = '✓ Saved';
         else if (s === 'extracted') labelStr = '⚡ Done';
         else if (s === 'failed') labelStr = '✕ Failed';
         else if (s === 'stopped') labelStr = '⏹ Stopped';
-        const cls = map[s] || map.stopped;
+
+        const terminalCls = {
+            processed: 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]',
+            extracted: 'bg-blue-50 text-blue-700 border-blue-100 shadow-[0_0_12px_-4px_rgba(59,130,246,0.3)]',
+            failed:    'bg-rose-50 text-rose-700 border-rose-100',
+            stopped:   'bg-slate-100 text-slate-500 border-slate-300',
+        }[s] || 'bg-slate-100 text-slate-500 border-slate-200';
 
         return (
             <motion.span
                 initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-3 py-1 rounded-full border ${cls} uppercase tracking-tight`}
+                className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-tight ${terminalCls}`}
             >
                 {labelStr}
             </motion.span>

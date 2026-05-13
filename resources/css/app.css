@@ -70,25 +70,18 @@
         animation: edge-glow 4s infinite ease-in-out;
     }
 
-    /* ── OCR Progress Bar Animations ─────────────────────────────── */
+    /* ── OCR Status Pill Fill Animations ─────────────────────────── */
 
-    /* Indeterminate fill: slides left → right → left across the bar */
-    @keyframes ocr-progress-slide {
-        0%   { transform: translateX(-100%) scaleX(0.4); }
-        30%  { transform: translateX(0%)    scaleX(0.6); }
-        60%  { transform: translateX(80%)   scaleX(0.5); }
-        100% { transform: translateX(-100%) scaleX(0.4); }
+    /* Active (Processing / Uploading): fill sweeps left → right like a bar loading */
+    @keyframes ocr-active-fill {
+        0%   { transform: translateX(-100%); }
+        50%  { transform: translateX(0%); }
+        100% { transform: translateX(100%); }
     }
 
-    /* Shimmer: bright stripe that sweeps left-to-right */
-    @keyframes ocr-shimmer {
-        0%   { background-position: -200% center; }
-        100% { background-position: 200%  center; }
-    }
-
-    /* Pending queue breathe: gently pulses opacity on the amber bar */
-    @keyframes ocr-pending-pulse {
-        0%, 100% { opacity: 0.35; transform: scaleX(0.7); transform-origin: left; }
-        50%      { opacity: 0.75; transform: scaleX(1.0); transform-origin: left; }
+    /* Pending (Queued): gentle breathe — fill softly pulses in and out */
+    @keyframes ocr-pending-fill {
+        0%, 100% { opacity: 0.2; transform: scaleX(0.3); transform-origin: left; }
+        50%      { opacity: 0.9; transform: scaleX(1.0); transform-origin: left; }
     }
 }
