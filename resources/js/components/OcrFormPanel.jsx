@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     DocumentCheckIcon, XMarkIcon, ChevronDoubleDownIcon,
     ExclamationTriangleIcon, ShieldExclamationIcon,
-    CloudArrowUpIcon
+    CloudArrowUpIcon, SparklesIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 
@@ -121,6 +121,28 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
     const fieldConfidence = ocrResult?.field_confidence || {};
+
+    /**
+     * Returns Tailwind classes for field confidence:
+     * - Low confidence  (<0.65) → amber border + faint yellow bg
+     * - Medium          (<0.85) → slate border (default)
+     * - High            (>=0.85) → emerald ring flash (only on first load)
+     */
+    const getConfidenceClass = (fieldKey, hasError) => {
+        if (hasError) return 'border-rose-300 bg-rose-50/20 focus:ring-rose-100';
+        const meta = fieldConfidence[fieldKey];
+        if (!meta) return 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm';
+        if (meta.low_confidence || meta.confidence < 0.65) {
+            return 'border-amber-300 bg-amber-50/30 focus:ring-amber-100 focus:border-amber-400 shadow-sm';
+        }
+        return 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm';
+    };
+
+    const isLowConf = (fieldKey) => {
+        const meta = fieldConfidence[fieldKey];
+        return meta && (meta.low_confidence || meta.confidence < 0.65);
+    };
+
     const meta = useMemo(() => {
         try { return typeof file.metadata === 'string' ? JSON.parse(file.metadata) : (file.metadata || {}); }
         catch (e) { return {}; }
@@ -412,30 +434,40 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                         <label className={`block text-[11px] font-black uppercase tracking-widest mb-2.5 transition-colors ${errors[field.key] ? 'text-rose-500' : 'text-slate-500'}`}>
                                                             {field.label} {field.required && <span className="text-rose-400">*</span>}
                                                         </label>
-                                                        {field.type === 'select' ? (
+                                                         {field.type === 'select' ? (
                                                             <select
                                                                 value={formData[field.key] || ''}
                                                                 onChange={e => {
                                                                     setFormData(p => ({ ...p, [field.key]: e.target.value }));
                                                                     if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
                                                                 }}
-                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all ${errors[field.key] ? 'border-rose-300 bg-rose-50/20 focus:ring-rose-100' : 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm'}`}
+                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all ${getConfidenceClass(field.key, errors[field.key])}`}
                                                             >
                                                                 <option value="">Select…</option>
                                                                 {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                                                             </select>
                                                         ) : (
-                                                            <input
-                                                                type={field.type === 'date' ? 'date' : 'text'}
-                                                                value={formData[field.key] || ''}
-                                                                onChange={e => {
-                                                                    setFormData(p => ({ ...p, [field.key]: e.target.value }));
-                                                                    if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
-                                                                }}
-                                                                required={field.required}
-                                                                placeholder={`…`}
-                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${errors[field.key] ? 'border-rose-300 bg-rose-50/20 focus:ring-rose-100' : 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm'}`}
-                                                            />
+                                                            <div className="relative">
+                                                                <input
+                                                                    type={field.type === 'date' ? 'date' : 'text'}
+                                                                    value={formData[field.key] || ''}
+                                                                    onChange={e => {
+                                                                        setFormData(p => ({ ...p, [field.key]: e.target.value }));
+                                                                        if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
+                                                                    }}
+                                                                    required={field.required}
+                                                                    placeholder={`…`}
+                                                                    className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${getConfidenceClass(field.key, errors[field.key])}`}
+                                                                />
+                                                                {isLowConf(field.key) && (
+                                                                    <span
+                                                                        title="Low OCR confidence — please verify this value"
+                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400"
+                                                                    >
+                                                                        <ExclamationTriangleIcon className="w-4 h-4" />
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 ))}

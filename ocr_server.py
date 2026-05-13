@@ -123,6 +123,162 @@ DATE_PATTERNS = [
     r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4}\b',
 ]
 
+# ---------------------------------------------------------------------------
+# OCR CLEANING LAYER
+# Common OCR artifacts for Philippine civil registry forms.
+# Maps misread strings -> correct strings. Checked case-insensitively.
+# ---------------------------------------------------------------------------
+OCR_CORRECTION_MAP = {
+    # Months (leading-character OCR drops)
+    "ANUARY": "JANUARY", "JNNUARY": "JANUARY", "JANURY": "JANUARY", "JANUAPY": "JANUARY",
+    "FEBURARY": "FEBRUARY", "FEBRUAPY": "FEBRUARY", "EBRUARY": "FEBRUARY",
+    "MACH": "MARCH", "MARH": "MARCH", "NARCH": "MARCH",
+    "APIL": "APRIL", "APRL": "APRIL",
+    "JNE": "JUNE", "JNE": "JUNE",
+    "JLY": "JULY", "JVLY": "JULY",
+    "AGUST": "AUGUST", "AUGAST": "AUGUST", "UGUST": "AUGUST",
+    "SEPTEBER": "SEPTEMBER", "SEPTEMBE": "SEPTEMBER", "EPTEMBER": "SEPTEMBER",
+    "OCTBER": "OCTOBER", "OCTOBR": "OCTOBER", "CTOBER": "OCTOBER",
+    "NOVEBER": "NOVEMBER", "NOVEMBE": "NOVEMBER", "OVEMBER": "NOVEMBER",
+    "DECEBER": "DECEMBER", "DECEMBE": "DECEMBER", "ECEMBER": "DECEMBER",
+    # Sex field
+    "MAIE": "MALE", "MALF": "MALE", "NALE": "MALE", "MA LE": "MALE",
+    "FEMAL": "FEMALE", "FEMALF": "FEMALE", "FENALE": "FEMALE",
+    # Marital/Type
+    "SONGLE": "SINGLE", "SINGL": "SINGLE", "SIHGLE": "SINGLE",
+    "MARIED": "MARRIED", "MARRIAD": "MARRIED",
+    "WIDDOW": "WIDOW", "WIDW": "WIDOW",
+    # Citizenship
+    "FILIPINC": "FILIPINO", "FILIPLNO": "FILIPINO", "FILLPINO": "FILIPINO",
+    # Type of birth
+    "SINGLR": "SINGLE", "TWINN": "TWIN", "TRIPLRT": "TRIPLET",
+    "NOT APPLIGASLE": "NOT APPLICABLE", "NOT APPLICABIE": "NOT APPLICABLE",
+    # Generic noise tokens to drop
+    "-E": "", "—": "", "–": "",
+}
+
+# Canonical month name -> number mapping (for date reconstruction)
+MONTH_MAP = {
+    "january": "01", "february": "02", "march": "03", "april": "04",
+    "may": "05", "june": "06", "july": "07", "august": "08",
+    "september": "09", "october": "10", "november": "11", "december": "12",
+}
+
+# Philippine provinces for fuzzy geographic correction
+PH_PROVINCES = [
+    "Abra", "Agusan del Norte", "Agusan del Sur", "Aklan", "Albay", "Antique",
+    "Apayao", "Aurora", "Basilan", "Bataan", "Batanes", "Batangas", "Benguet",
+    "Biliran", "Bohol", "Bukidnon", "Bulacan", "Cagayan", "Camarines Norte",
+    "Camarines Sur", "Camiguin", "Capiz", "Catanduanes", "Cavite", "Cebu",
+    "Compostela Valley", "Cotabato", "Davao de Oro", "Davao del Norte",
+    "Davao del Sur", "Davao Occidental", "Davao Oriental", "Dinagat Islands",
+    "Eastern Samar", "Guimaras", "Ifugao", "Ilocos Norte", "Ilocos Sur",
+    "Iloilo", "Isabela", "Kalinga", "La Union", "Laguna", "Lanao del Norte",
+    "Lanao del Sur", "Leyte", "Maguindanao", "Marinduque", "Masbate",
+    "Metro Manila", "NCR", "Misamis Occidental", "Misamis Oriental",
+    "Mountain Province", "Negros Occidental", "Negros Oriental",
+    "Northern Samar", "Nueva Ecija", "Nueva Vizcaya", "Occidental Mindoro",
+    "Oriental Mindoro", "Palawan", "Pampanga", "Pangasinan", "Quezon",
+    "Quirino", "Rizal", "Romblon", "Samar", "Sarangani", "Siquijor",
+    "Sorsogon", "South Cotabato", "Southern Leyte", "Sultan Kudarat",
+    "Sulu", "Surigao del Norte", "Surigao del Sur", "Tarlac",
+    "Tawi-Tawi", "Zambales", "Zamboanga del Norte", "Zamboanga del Sur",
+    "Zamboanga Sibugay", "Cavite", "Rizal", "Bulacan", "Laguna",
+]
+
+def _fuzzy_match(value: str, candidates: list, cutoff: float = 0.72) -> str:
+    """
+    Simple character-level similarity match. Returns the best match from
+    `candidates` if it exceeds `cutoff`, otherwise returns the original value.
+    """
+    if not value or len(value) < 3:
+        return value
+    best_match = value
+    best_score = cutoff
+    val_lower = value.lower()
+    for candidate in candidates:
+        cand_lower = candidate.lower()
+        # Compute a simple overlap ratio
+        common = sum(1 for a, b in zip(val_lower, cand_lower) if a == b)
+        length = max(len(val_lower), len(cand_lower))
+        score = common / length if length > 0 else 0.0
+        if score > best_score:
+            best_score = score
+            best_match = candidate
+    return best_match
+
+def _clean_ocr_field(field_name: str, raw_value: str) -> str:
+    """
+    Intelligently clean a raw OCR string based on the expected field type.
+    - Strips trailing/leading noise
+    - Applies the OCR correction dictionary
+    - Title-cases names
+    - Normalizes months for dob_month fields
+    - Strips trailing punctuation from registry numbers
+    - Fuzzy-matches provinces to canonical PH names
+    """
+    if not raw_value:
+        return raw_value
+
+    text = raw_value.strip()
+    # Strip common leading/trailing OCR noise characters
+    text = re.sub(r'^[|=\-–—.,;:!?]+|[|=\-–—.,;:!?]+$', '', text).strip()
+    # Collapse internal whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    if not text:
+        return text
+
+    # Apply correction dictionary (case-insensitive, whole-word preferred)
+    for wrong, right in OCR_CORRECTION_MAP.items():
+        text = re.sub(re.escape(wrong), right, text, flags=re.IGNORECASE).strip()
+
+    fl = field_name.lower()
+
+    # --- Month field: normalize to canonical full month name ---
+    if 'month' in fl:
+        for month_name, _ in MONTH_MAP.items():
+            if month_name[:3] in text.lower():
+                text = month_name.capitalize()
+                break
+
+    # --- Day/Year fields: strip all non-digit characters ---
+    if fl.endswith('_day') or fl.endswith('_year'):
+        digits_only = re.sub(r'[^\d]', '', text)
+        if digits_only:
+            text = digits_only
+
+    # --- Registry number: strip trailing punctuation and spaces ---
+    if 'registry' in fl:
+        text = re.sub(r'[^A-Za-z0-9\-]', '', text)
+
+    # --- Name fields: apply title case, remove stray digits ---
+    if 'name' in fl:
+        # Remove isolated digits or short noise tokens
+        text = re.sub(r'\b\d{1,2}\b', '', text).strip()
+        text = re.sub(r'\s+', ' ', text).strip()
+        if text:
+            text = text.title()
+
+    # --- Sex field: normalize to MALE / FEMALE ---
+    if fl == 'sex':
+        upper = text.upper().split()[0] if text.split() else ''
+        if upper in ('M', 'MALE', 'MAKE', 'MALF', 'MALI'):
+            text = 'MALE'
+        elif upper in ('F', 'FEMALE', 'FEMAL', 'FENALE'):
+            text = 'FEMALE'
+
+    # --- Citizenship: normalize to FILIPINO ---
+    if 'citizenship' in fl:
+        if 'filip' in text.lower() or 'phili' in text.lower():
+            text = 'Filipino'
+
+    # --- Province fields: fuzzy match against PH province list ---
+    if 'province' in fl and len(text) > 3:
+        text = _fuzzy_match(text, PH_PROVINCES, cutoff=0.65)
+
+    return text.strip()
+
 def load_template_profiles():
     global QUICK_FILL_TEMPLATE_FAMILIES, QUICK_FILL_REQUIRED_FIELDS
     if not TEMPLATE_PROFILE_PATH.exists():
@@ -343,6 +499,9 @@ def quick_fill_extract_from_rois(image_path: str, template_family: str):
         cleaned_text = _normalize_roi_text(text)
         if _field_expected_type(field_name) == 'date':
             cleaned_text = _normalize_roi_text(_extract_likely_date(cleaned_text))
+
+        # --- Apply intelligent field cleaning ---
+        cleaned_text = _clean_ocr_field(field_name, cleaned_text)
 
         validation_passed = _validate_field_value(field_name, cleaned_text)
         if not validation_passed and cleaned_text:
