@@ -457,37 +457,110 @@ const Documents = () => {
         const map = {
             processed: 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]',
             extracted: 'bg-blue-50 text-blue-700 border-blue-100 shadow-[0_0_12px_-4px_rgba(59,130,246,0.3)]',
-            processing: 'bg-indigo-50 text-indigo-700 border-indigo-100 shadow-[0_0_12px_-4px_rgba(99,102,241,0.3)]',
-            uploading: 'bg-slate-50 text-slate-600 border-slate-200',
+            processing: 'text-indigo-700',
+            uploading: 'text-slate-600',
             failed: 'bg-rose-50 text-rose-700 border-rose-100',
             stopped: 'bg-slate-100 text-slate-500 border-slate-300',
-            pending: 'bg-amber-50 text-amber-700 border-amber-100 shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)]',
+            pending: 'text-amber-700',
         };
-        
-        let labelStr = status;
-        if (status?.toLowerCase() === 'processed') labelStr = '✓ Saved';
-        else if (status?.toLowerCase() === 'extracted') labelStr = '⚡ Done';
-        else if (status?.toLowerCase() === 'processing') {
-            if (file.batch_total > 1) {
-                labelStr = `Processing ${file.batch_processed}/${file.batch_total}`;
-            } else {
-                labelStr = 'Processing…';
-            }
+
+        const s = status?.toLowerCase();
+
+        // ── Active states: animated progress bar ────────────────────────────
+        if (s === 'processing' || s === 'uploading') {
+            const isProcessing = s === 'processing';
+            const stageLabel = isProcessing
+                ? (file.batch_total > 1 ? `Page ${file.batch_processed ?? 1} of ${file.batch_total}` : 'Reading document…')
+                : 'Uploading file…';
+            const barColor = isProcessing
+                ? 'from-indigo-400 via-violet-400 to-indigo-500'
+                : 'from-slate-300 via-slate-400 to-slate-300';
+            const glowColor = isProcessing ? 'rgba(99,102,241,0.25)' : 'rgba(148,163,184,0.2)';
+            const dotColor  = isProcessing ? 'bg-indigo-500' : 'bg-slate-400';
+
+            return (
+                <div className="flex flex-col gap-0.5 w-32">
+                    {/* Stage label row */}
+                    <div className="flex items-center justify-between px-0.5">
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${isProcessing ? 'text-indigo-500' : 'text-slate-400'}`}>
+                            {isProcessing ? 'OCR' : 'Uploading'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} animate-pulse`} />
+                            <span className={`text-[9px] font-semibold ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
+                                {isProcessing ? 'Active' : 'Sending'}
+                            </span>
+                        </span>
+                    </div>
+                    {/* Progress bar track */}
+                    <div
+                        className="relative w-full h-2 rounded-full overflow-hidden bg-slate-100"
+                        style={{ boxShadow: `0 0 8px ${glowColor}` }}
+                    >
+                        {/* Indeterminate fill with shimmer */}
+                        <div
+                            className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${barColor}`}
+                            style={{
+                                width: '60%',
+                                animation: 'ocr-progress-slide 1.8s ease-in-out infinite',
+                            }}
+                        />
+                        {/* Shimmer overlay */}
+                        <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)',
+                                animation: 'ocr-shimmer 1.8s linear infinite',
+                            }}
+                        />
+                    </div>
+                    {/* Sub-label */}
+                    <p className={`text-[8.5px] font-medium truncate max-w-[128px] ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
+                        {stageLabel}
+                    </p>
+                </div>
+            );
         }
-        else if (status?.toLowerCase() === 'uploading') labelStr = 'Uploading…';
-        else if (status?.toLowerCase() === 'failed') labelStr = 'Failed';
-        else if (status?.toLowerCase() === 'stopped') labelStr = 'Stopped';
-        else if (status?.toLowerCase() === 'pending') labelStr = 'Pending OCR';
-        const cls = map[status?.toLowerCase()] || map.pending;
+
+        if (s === 'pending') {
+            return (
+                <div className="flex flex-col gap-0.5 w-32">
+                    <div className="flex items-center justify-between px-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">OCR</span>
+                        <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="text-[9px] font-semibold text-amber-400">Queued</span>
+                        </span>
+                    </div>
+                    <div className="relative w-full h-2 rounded-full overflow-hidden bg-amber-50 border border-amber-100">
+                        {/* Waiting shimmer — low opacity amber pulse */}
+                        <div
+                            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300"
+                            style={{
+                                width: '35%',
+                                animation: 'ocr-pending-pulse 2.4s ease-in-out infinite',
+                                opacity: 0.7,
+                            }}
+                        />
+                    </div>
+                    <p className="text-[8.5px] font-medium text-amber-400">Waiting in queue…</p>
+                </div>
+            );
+        }
+
+        // ── Terminal states: compact pill badges ─────────────────────────────
+        let labelStr = status;
+        if (s === 'processed') labelStr = '✓ Saved';
+        else if (s === 'extracted') labelStr = '⚡ Done';
+        else if (s === 'failed') labelStr = '✕ Failed';
+        else if (s === 'stopped') labelStr = '⏹ Stopped';
+        const cls = map[s] || map.stopped;
 
         return (
             <motion.span
                 initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold px-3 py-1 rounded-full border ${cls} uppercase tracking-tight`}
             >
-                {status?.toLowerCase() === 'processing' || status?.toLowerCase() === 'uploading'
-                    ? <svg className="animate-spin w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="3" strokeDasharray="32" className="opacity-25" /><path d="M4 12a8 8 0 018-8" strokeWidth="3" strokeLinecap="round" className="opacity-75" /></svg>
-                    : null}
                 {labelStr}
             </motion.span>
         );
