@@ -18,7 +18,8 @@ class OcrParserService
 {
     private const BIRTH_ANCHORS = [
         'province'                   => ['\bprovince\b'],
-        'city_municipality'          => ['city/municipality', 'city municipality', '\bmunicipality\b'],
+        'city_municipality'          => ['city/municipality', 'city municipality', 'cily municipality', '\bmunicipality\b'],
+        'barangay'                   => ['\bbarangay\b', '\bbrgy\b'],
         'first_name'                 => ['\(first\)', '1\. name', 'child.*first', 'name.*first'],
         'middle_name'                => ['\(middle\)', 'child.*middle', 'name.*middle'],
         'last_name'                  => ['\(last\)', 'child.*last', 'name.*last'],
@@ -36,12 +37,29 @@ class OcrParserService
         'father_first_name'          => ['14\. name.*first', 'father.*first'],
         'father_middle_name'         => ['14\. name.*middle', 'father.*middle'],
         'father_last_name'           => ['14\. name.*last', 'father.*last'],
+        'marriage_parents_day'       => ['20a\. date.*day'],
+        'marriage_parents_month'     => ['20a\. date.*month'],
+        'marriage_parents_year'      => ['20a\. date.*year'],
+        'attendant_type'             => ['21a\. attendant'],
+        'attendant_time'             => ['21b\. time of birth'],
+        'attendant_name'             => ['21b\. name in print', 'attendant.*name'],
+        'attendant_title'            => ['21b\. title or position', 'attendant.*title'],
+        'attendant_date'             => ['21b\. date', 'attendant.*date'],
+        'informant_name'             => ['22\. informant name', 'informant.*name'],
+        'informant_relationship'     => ['22\. relationship to child', 'informant.*relationship'],
+        'informant_date'             => ['22\. date', 'informant.*date'],
+        'prepared_by_name'           => ['23\. prepared by name', 'prepared.*name'],
+        'prepared_by_date'           => ['23\. date', 'prepared.*date'],
+        'received_by_name'           => ['24\. received by name', 'received.*name'],
+        'received_by_date'           => ['24\. date', 'received.*date'],
+        'registered_by_name'         => ['25\. registered by name', 'registered.*name'],
+        'registered_by_date'         => ['25\. date', 'registered.*date'],
     ];
 
     private const SKIP_WORDS = [
         'OFFICE', 'GENERAL', 'REGISTRAR', 'CERTIFICATE', 'BIRTH', 'REPUBLIC', 'FORM', 
         'PHILIPPINES', 'DEPARTMENT', 'HEALTH', 'STATISTICS', 'AUTHORITY', 'MUNICIPAL', 
-        'PROVINCIAL', 'CIVIL', 'REGISURY', 'REGISTRY', 'NUMBER'
+        'PROVINCIAL', 'CIVIL', 'REGISURY', 'REGISTRY', 'NUMBER', 'AFFIDAVIT', 'ACKNOWLEDGMENT', 'CERTIFICATION'
     ];
 
     public function parseText(string $rawText): array
@@ -101,6 +119,14 @@ class OcrParserService
             $fields['dob_month'] = $this->fixMonth($fields['dob_month']);
         }
 
+        // Barangay fuzzy match
+        if (!empty($fields['barangay'])) {
+            $fields['barangay'] = $this->fixBarangay($fields['barangay']);
+        } elseif (!empty($fields['mother_residence_house'])) {
+            // Try to find barangay inside residence text
+            $fields['barangay'] = $this->fixBarangay($fields['mother_residence_house']);
+        }
+
         return [
             'detected_type'   => $detectedType,
             'extracted_fields' => array_filter($fields, fn($v) => trim((string)$v) !== ''),
@@ -146,7 +172,10 @@ class OcrParserService
             $u = strtoupper(trim($line));
             if (preg_match('/^[A-Z\s\-\.]{3,}$/', $u)) {
                 $words = explode(' ', $u);
-                if (!in_array($words[0], self::SKIP_WORDS) && !preg_match('/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i', $words[0])) {
+                $firstWord = $words[0] ?? '';
+                if (!in_array($firstWord, self::SKIP_WORDS) && 
+                    !preg_match('/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i', $firstWord) &&
+                    !preg_match('/AFFIDAVIT|ACKNOWLEDGMENT|CERTIFICATION|NOTARY|SUBSCRIBED/i', $u)) {
                     $names[] = ucwords(strtolower($line));
                 }
             }
@@ -161,7 +190,7 @@ class OcrParserService
         if (in_array($text, self::SKIP_WORDS)) return true;
         $labels = ['PROVINCE', 'CITY', 'MUNICIPALITY', 'NAME', 'REGISTRY', 'SEX', 'BIRTH', 'DATE', 'PLACE', 'HOSPITAL'];
         foreach ($labels as $l) {
-            if ($text === $l || str_starts_with($text, $l . ' ')) return true;
+            if ($text === $l) return true;
         }
         return false;
     }
@@ -172,6 +201,30 @@ class OcrParserService
         $m = strtolower(trim($m));
         foreach ($map as $k => $v) if (str_starts_with($m, $k)) return $v;
         return ucfirst($m);
+    }
+
+    private function fixBarangay(string $val): string
+    {
+        $brgyList = [
+            'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
+            'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
+            'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
+            'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
+            'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
+            'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
+        ];
+        $val = strtoupper($val);
+        foreach ($brgyList as $b) {
+            $bUpper = strtoupper($b);
+            // Check for exact match or word match
+            if (str_contains($val, $bUpper)) return $b;
+            // Handle parts (e.g. "Timalan" matches "Timalan Balsahan")
+            $parts = explode(' ', str_replace(['(', ')', '.', '&', '2', '3'], ' ', $bUpper));
+            foreach ($parts as $p) {
+                if (strlen($p) > 3 && str_contains($val, trim($p))) return $b;
+            }
+        }
+        return '';
     }
 
     private function clean(string $key, string $val): string

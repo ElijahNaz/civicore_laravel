@@ -56,24 +56,30 @@ class ProcessImageOcrJob implements ShouldQueue
 
             $result = $response->json();
             $newText = $result['text'] ?? '';
-
-            // ── Priority 1: Use Python Zonal Spatial OCR (most accurate) ──────
-            // When quick_fill succeeds, Python returns clean extracted_fields
-            // directly from the calibrated ROI boxes. Trust these fully.
             $detectedType = $result['detected_type'] ?? 'unknown';
             $newFields = $result['extracted_fields'] ?? [];
 
-            // ── Priority 2: Fallback to Laravel OcrParserService ──────────────
-            // When Zonal OCR fails (template not detected, low confidence, etc.)
-            // Python returns an empty extracted_fields but still gives us the raw
-            // full-page OCR text. Run our Laravel regex parser on that text so
-            // the form is never completely blank for the user.
-            if (empty($newFields) && !empty($newText)) {
-                Log::info("ProcessImageOcrJob: Zonal OCR returned empty fields, using Laravel OcrParserService fallback for doc {$this->documentId}");
+            // ── Normalize Python Keys → React Form Keys ──────────────────────
+            // We do this BEFORE the fallback merge so that ROI data is correctly
+            // mapped and protected from being overwritten by PHP's regex guesses.
+            $newFields = $this->normalizePythonFields($newFields);
+
+            // ── Always Run PHP Anchor Parser Fallback + Merge ─────────────────
+            // Even if Python returns fields, our PHP parser might find missing 
+            // data using its regex anchor strategy.
+            if (!empty($newText)) {
                 $parser = new \App\Services\OcrParserService();
                 $parsedData = $parser->parseText($newText);
-                $newFields = $parsedData['extracted_fields'] ?? [];
-                // Only override detected_type if Python returned 'unknown'
+                $phpFields = $parsedData['extracted_fields'] ?? [];
+
+                // Merge: PHP fills any key that is STILL empty after Python+Normalization
+                foreach ($phpFields as $key => $value) {
+                    if (empty($newFields[$key]) && !empty($value)) {
+                        $newFields[$key] = $value;
+                    }
+                }
+
+                // If Python failed to detect type, trust PHP
                 if ($detectedType === 'unknown' && !empty($parsedData['detected_type'])) {
                     $detectedType = $parsedData['detected_type'];
                 }
@@ -108,5 +114,67 @@ class ProcessImageOcrJob implements ShouldQueue
                 @unlink($this->imagePath); // cleanup temp image
             }
         }
+    }
+
+    /**
+     * Translate Python OCR keys → BirthConfig.js expected keys
+     */
+    private function normalizePythonFields(array $fields): array
+    {
+        // 1. Split Child Name → first_name + middle_name + last_name
+        if (!empty($fields['full_name']) && empty($fields['first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['full_name']));
+            $fields['first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 2. Split Mother's Maiden Name
+        if (!empty($fields['mother_full_name']) && empty($fields['mother_first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['mother_full_name']));
+            $fields['mother_first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['mother_last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['mother_middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 3. Split Father's Name
+        if (!empty($fields['father_full_name']) && empty($fields['father_first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['father_full_name']));
+            $fields['father_first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['father_last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['father_middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 4. Split date_of_birth → dob_day + dob_month + dob_year
+        if (!empty($fields['date_of_birth']) && empty($fields['dob_day'])) {
+            $raw = $fields['date_of_birth'];
+            // Handle "January 11, 1943" or "11/01/1943" or "1943-01-11"
+            if (preg_match('/(\w+)\s+(\d{1,2}),?\s+(\d{4})/', $raw, $m)) {
+                $fields['dob_month'] = ucfirst(strtolower($m[1]));
+                $fields['dob_day']   = $m[2];
+                $fields['dob_year']  = $m[3];
+            } elseif (preg_match('#(\d{1,2})/(\d{1,2})/(\d{4})#', $raw, $m)) {
+                $fields['dob_day']   = $m[1];
+                $fields['dob_month'] = $m[2]; 
+                $fields['dob_year']  = $m[3];
+            }
+        }
+
+        // 5. Map place_of_birth → place_of_birth_hospital
+        if (!empty($fields['place_of_birth']) && empty($fields['place_of_birth_hospital'])) {
+            $fields['place_of_birth_hospital'] = $fields['place_of_birth'];
+        }
+
+        // 6. Normalize Sex (M/F → Male/Female)
+        if (!empty($fields['sex'])) {
+            $s = strtoupper(trim($fields['sex']));
+            if ($s === 'M' || str_contains($s, 'MAL')) $fields['sex'] = 'Male';
+            else if ($s === 'F' || str_contains($s, 'FEM')) $fields['sex'] = 'Female';
+        }
+
+        // Cleanup intermediate keys
+        unset($fields['full_name'], $fields['date_of_birth'], $fields['place_of_birth'], $fields['mother_full_name'], $fields['father_full_name']);
+
+        return $fields;
     }
 }
