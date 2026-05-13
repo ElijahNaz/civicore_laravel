@@ -606,14 +606,24 @@ class DocumentController extends Controller
                 $doc = DB::select("SELECT * FROM documents WHERE id = ?", [$id]);
                 if (count($doc) > 0) {
                     $docType = $doc[0]->detected_type ?: $doc[0]->type;
+
+                    // --- Logic Fix: Infer type from certNumber prefix if unknown ---
+                    if (empty($docType) || strtolower($docType) === 'unknown') {
+                        $p = strtoupper($prefix ?? '');
+                        if (str_starts_with($p, 'BC')) $docType = 'birth';
+                        elseif (str_starts_with($p, 'DC')) $docType = 'death';
+                        elseif (str_starts_with($p, 'ML') || str_starts_with($p, 'MC')) $docType = 'marriage';
+                    }
                     
-                    // Generate PDF (using full OCR text as primary output)
+                    // --- Dynamic Composite PDF Generation ---
+                    $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
+                    
                     $pdf = app('dompdf.wrapper');
                     $pdf->setPaper('a4', 'portrait');
-                    $pdf->loadView('pdf.ocr_report', [
+                    $pdf->loadView('pdf.composite_document', [
                         'doc' => $doc[0], 
                         'fields' => $extractedFields,
-                        'ocr_text' => $ocrText ?: $doc[0]->ocr_text
+                        'overlayFields' => $overlayFields
                     ]);
                     $pdfData = $pdf->output();
 
@@ -781,6 +791,36 @@ class DocumentController extends Controller
         if (empty($fileContent)) {
             if (!empty($doc->file_path) && \Storage::disk('public')->exists($doc->file_path)) {
                 $fullPath = \Storage::disk('public')->path($doc->file_path);
+                
+                // --- SMART REFERENCE PREVIEW ---
+                // If it's a PDF and we're asking for 'raw' preview, try to serve the split IMAGE 
+                // that actually has the Birth/Death/Marriage content.
+                $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+                if ($request->has('raw') && $ext === 'pdf') {
+                    $dir = dirname($fullPath);
+                    $base = pathinfo($fullPath, PATHINFO_FILENAME);
+                    
+                    // Check page 1 and page 2 (in case page 1 was a screenshot)
+                    $p1 = $dir . '/' . $base . '_page_1.jpg';
+                    $p2 = $dir . '/' . $base . '_page_2.jpg';
+                    $p1p = $dir . '/' . $base . '_page_1_proc.jpg';
+                    $p2p = $dir . '/' . $base . '_page_2_proc.jpg';
+                    
+                    $bestImage = null;
+                    // Prioritize the processed (proc) images as they are cleaned up
+                    if (file_exists($p1p)) $bestImage = $p1p;
+                    elseif (file_exists($p2p)) $bestImage = $p2p;
+                    elseif (file_exists($p1)) $bestImage = $p1;
+                    elseif (file_exists($p2)) $bestImage = $p2;
+                    
+                    if ($bestImage) {
+                        return response()->file($bestImage, [
+                            'Content-Type' => 'image/jpeg',
+                            'Content-Disposition' => 'inline; filename="preview.jpg"'
+                        ]);
+                    }
+                }
+
                 return response()->file($fullPath, [
                     'Content-Type' => $mimetype,
                     'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? 'document') . '"'

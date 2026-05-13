@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PrinterIcon, DocumentMinusIcon,
@@ -24,6 +25,70 @@ const NAIC_BARANGAYS = [
     'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
     'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
 ].sort();
+
+// ── Issuance Preview Modal ──────────────────────────────────────────────────
+const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload }) => {
+    const viewUrl = cert.source === 'issuance' 
+        ? `/api/issuances/view/${cert.realId}` 
+        : `/api/documents/view/${cert.realId}`;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300">
+            {/* Premium Header */}
+            <div className="flex items-center justify-between px-8 py-5 bg-slate-900/50 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                        <ShieldCheckIcon className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-black text-white tracking-tight leading-none uppercase">{cert.name}</h2>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">
+                            Official {cert.type} Record • <span className="text-indigo-400/80">REF: {cert.number}</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={onPrint}
+                        className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
+                    >
+                        <PrinterIcon className="w-4 h-4" />
+                        Print Record
+                    </button>
+                    <button 
+                        onClick={onDownload}
+                        className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 rounded-xl transition-all border border-blue-500/30 active:scale-95 cursor-pointer shadow-lg shadow-blue-500/5"
+                    >
+                        <ArrowDownTrayIcon className="w-4 h-4" />
+                        Download
+                    </button>
+                    <div className="w-px h-8 bg-white/10 mx-3" />
+                    <button
+                        onClick={onClose}
+                        className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-all group cursor-pointer"
+                    >
+                        <XMarkIcon className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Immersive Preview Content */}
+            <div className="flex-1 overflow-hidden p-8 flex justify-center bg-gradient-to-b from-slate-900 to-slate-950">
+                <div className="w-full max-w-5xl h-full bg-white rounded-3xl shadow-[0_40px_70px_-15px_rgba(0,0,0,0.6)] overflow-hidden border border-white/5 animate-in zoom-in-95 duration-500 relative group">
+                    <iframe
+                        src={viewUrl}
+                        title={cert.name}
+                        className="w-full h-full border-none relative z-10"
+                    />
+                    {/* Subtle decorative background pulse */}
+                    <div className="absolute inset-0 bg-slate-100 animate-pulse opacity-5 z-0" />
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const Issuances = () => {
     const { showAlert } = useModal();
@@ -102,8 +167,9 @@ const Issuances = () => {
     // Security Modal State
     const [passwordModal, setPasswordModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '' });
 
-    // Editing State
+    // Editing/Viewing State
     const [editingCert, setEditingCert] = useState(null);
+    const [viewingCert, setViewingCert] = useState(null);
 
     useEffect(() => {
         // Create a set of IDs that are already issued to prevent duplicates
@@ -112,23 +178,57 @@ const Issuances = () => {
 
         const combined = [
             // Finalized Issuances (The main records)
-            ...rawIssuances.map(i => ({
-                id: `iss-${i.id}`,
-                realId: i.id,
-                number: i.certNumber || i.number || ('ISS-' + i.id),
-                type: (i.type || 'unknown').toLowerCase(),
-                name: i.name || 'Unnamed Record',
-                barangay: i.barangay || '—',
-                date: i.issuanceDate || i.date,
-                status: 'Issued',
-                encoded_by: i.encoded_by,
-                source: 'issuance',
-                raw: {
-                    ...i,
-                    // Normalize data structure for the edit form panel
-                    extracted_fields: i.extracted_data || i.extracted_fields
-                }
-            }))
+            ...rawIssuances.map(i => {
+                const linkedDoc = rawDocuments.find(d => Number(d.id) === Number(i.document_id));
+                const rawType = (i.type || 'birth').toLowerCase();
+                const type = rawType === 'unknown' ? 'birth' : rawType;
+                
+                return {
+                    id: `iss-${i.id}`,
+                    realId: i.id,
+                    number: i.certNumber || i.number || ('ISS-' + i.id),
+                    type,
+                    name: i.name || 'Unnamed Record',
+                    barangay: i.barangay || '—',
+                    date: i.issuanceDate || i.date,
+                    status: 'Issued',
+                    encoded_by: i.encoded_by,
+                    source: 'issuance',
+                    raw: {
+                        ...i,
+                        type,
+                        // Pull essential data from linked document if missing
+                        ocr_text: i.ocr_text || linkedDoc?.ocr_text || '',
+                        file_path: i.file_path || linkedDoc?.file_path || '',
+                        // Normalize data structure for the edit form panel
+                        extracted_fields: i.extracted_data || i.extracted_fields || linkedDoc?.extracted_fields
+                    }
+                };
+            }),
+            // Non-issued Documents (Master Database entries not yet finalized)
+            ...rawDocuments.filter(d => !issuedDocIds.has(Number(d.id))).map(d => {
+                const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
+                const rawType = (d.detected_type || d.type || 'birth').toLowerCase();
+                const type = rawType === 'unknown' ? 'birth' : rawType;
+
+                return {
+                    id: `doc-${d.id}`,
+                    realId: d.id,
+                    number: d.tracking_number || `DOC-${d.id}`,
+                    type,
+                    name: ef.full_name || ef.husbands_name || ef.wifes_name || d.name || 'Pending Review',
+                    barangay: ef.barangay || d.barangay || '—',
+                    date: d.created_at,
+                    status: d.status || 'Pending',
+                    encoded_by: d.encoded_by || 'System',
+                    source: 'document',
+                    raw: {
+                        ...d,
+                        type,
+                        extracted_fields: ef
+                    }
+                };
+            })
         ];
         // Sort by date descending
         combined.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -288,7 +388,7 @@ const Issuances = () => {
         };
 
         if (action === 'View') {
-            perform(); // View stays direct for quick navigation
+            setViewingCert(cert);
         } else {
             withConfirmation({
                 title: `${action} Document?`,
@@ -471,6 +571,14 @@ const Issuances = () => {
                         onClose={() => setEditingCert(null)}
                     />
                 )}
+                {viewingCert && (
+                    <IssuancePreviewModal
+                        cert={viewingCert}
+                        onClose={() => setViewingCert(null)}
+                        onPrint={() => handleAction('Print', viewingCert)}
+                        onDownload={() => handleAction('Download', viewingCert)}
+                    />
+                )}
             </AnimatePresence>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -488,7 +596,7 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Documents Issued</p>
+                                <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Records</p>
                                 <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length}</h3>
                             </div>
                             <div className="w-12 h-12 bg-[#d4a574]/10 rounded-2xl flex items-center justify-center text-[#d4a574] border border-[#d4a574]/20 shadow-sm">👶</div>
@@ -496,7 +604,7 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mb-1">Death Certificates Issued</p>
+                                <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mb-1">Death Records</p>
                                 <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'death').length}</h3>
                             </div>
                             <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 border border-rose-100 shadow-sm">📋</div>
@@ -504,7 +612,7 @@ const Issuances = () => {
 
                         <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
                             <div>
-                                <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Certificates Issued</p>
+                                <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Records</p>
                                 <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length}</h3>
                             </div>
                             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 border border-indigo-100 shadow-sm">💍</div>
@@ -827,7 +935,7 @@ const Issuances = () => {
             {/* Floating Bulk Action Bar */}
             <AnimatePresence>
                 {selectedIds.length > 0 && (
-                    <motion.div
+            <motion.div
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ 
                             y: isBarMinimized ? 80 : 0, 

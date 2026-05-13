@@ -154,7 +154,18 @@ const Mapping = () => {
                     marriageCount++;
                     if (monthIdx !== -1) monthData.marriages[monthIdx]++;
                 }
+            });
 
+            // Count everything: Finalized Issuances + Unlinked Documents
+            const combinedForStats = [
+                ...apiData.map(i => ({ brgy: i.barangay, type: i.type || 'birth' })),
+                ...docsData.filter(d => !apiData.some(i => Number(i.document_id) === Number(d.id))).map(d => ({ brgy: d.barangay, type: d.type || 'birth' }))
+            ];
+
+            combinedForStats.forEach(item => {
+                const brgy = item.brgy;
+                const type = (item.type || 'birth').toLowerCase();
+                
                 if (brgy) {
                     if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
                     if (type.includes('birth')) brgyCounts[brgy].births++;
@@ -169,8 +180,10 @@ const Mapping = () => {
                 }
             });
 
-            // Match TOTAL UPLOADED to the sum of all categorized Master Registry records
-            const totalDocs = apiData.length;
+            // Match TOTAL UPLOADED to the sum of all unique records
+            const issuedDocIds = new Set(apiData.map(i => i.document_id ? Number(i.document_id) : null).filter(id => id !== null));
+            const unlinkedDocs = docsData.filter(d => !issuedDocIds.has(Number(d.id)));
+            const totalDocs = apiData.length + unlinkedDocs.length;
 
             const barangaysForMap = staticBarangays.map(b => ({
                 ...b,

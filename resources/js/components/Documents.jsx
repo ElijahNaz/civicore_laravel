@@ -19,6 +19,7 @@ import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
     const viewUrl = `/api/documents/view/${file.id}`;
+    const downloadUrl = `/api/documents/download/${file.id}`;
     const isPdf = file.name?.toLowerCase().endsWith('.pdf');
 
     return createPortal(
@@ -65,29 +66,36 @@ const DocumentPreviewModal = ({ file, onClose }) => {
             </div>
 
             {/* Preview content */}
-            <div className="flex-1 overflow-hidden flex items-center justify-center p-4">
-                {file.ocr_text ? (
-                    <div className="w-full max-w-4xl h-full bg-white rounded-xl shadow-inner border border-slate-200 overflow-y-auto p-10 font-mono text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Extracted Content Preview</span>
-                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold uppercase">Converted from {file.name}</span>
+            <div className="flex-1 overflow-hidden flex gap-4 p-4">
+                {/* Visual Document (Left/Main) */}
+                <div className={`flex-1 flex items-center justify-center ${file.ocr_text ? 'w-2/3' : 'w-full'}`}>
+                    {isPdf ? (
+                        <iframe
+                            src={viewUrl}
+                            title={file.name}
+                            className="w-full h-full rounded-xl border border-slate-700 bg-white shadow-2xl"
+                        />
+                    ) : (
+                        <img
+                            src={viewUrl}
+                            alt={file.name}
+                            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-slate-700"
+                            onError={e => { e.target.src = 'https://placehold.co/600x800?text=Preview+Error'; }}
+                        />
+                    )}
+                </div>
+
+                {/* Extracted Text (Right/Side) - Only if it exists */}
+                {file.ocr_text && (
+                    <div className="w-1/3 h-full bg-slate-900/50 rounded-xl border border-slate-700 p-6 overflow-y-auto shadow-2xl">
+                        <div className="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Extracted Content</span>
+                            <BoltIcon className="w-4 h-4 text-emerald-400" />
                         </div>
-                        {file.ocr_text}
+                        <div className="font-mono text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            {file.ocr_text}
+                        </div>
                     </div>
-                ) : isPdf ? (
-                    <iframe
-                        src={viewUrl}
-                        title={file.name}
-                        className="w-full h-full rounded-xl border border-slate-700 bg-white"
-                        style={{ minHeight: '70vh' }}
-                    />
-                ) : (
-                    <img
-                        src={viewUrl}
-                        alt={file.name}
-                        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-slate-700"
-                        onError={e => { e.target.style.display = 'none'; }}
-                    />
                 )}
             </div>
         </div>,

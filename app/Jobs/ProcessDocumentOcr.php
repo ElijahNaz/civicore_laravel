@@ -79,8 +79,7 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 Log::info("PDF detected. Requesting Python to split into pages...");
                 
                 // Pass the Windows file path directly to the local Python server
-                $response = Http::retry(3, 1000) // Retry 3 times, waiting 1s between each
-                    ->timeout(600)
+                $response = Http::timeout(60)
                     ->post('http://127.0.0.1:8080/split', [
                     'file_path' => $sourceFilePath,
                 ]);
@@ -148,7 +147,9 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
 
                         $pageFields = json_decode($pageRow->extracted_fields ?? '[]', true) ?: [];
                         foreach ($pageFields as $key => $value) {
-                            if (!empty($value) || empty($aggregatedFields[$key])) {
+                            // PRIORITIZE Page 1: Only fill if the field is still empty
+                            // This prevents Page 2 from overwriting Page 1
+                            if (!empty($value) && empty($aggregatedFields[$key])) {
                                 $aggregatedFields[$key] = $value;
                             }
                         }

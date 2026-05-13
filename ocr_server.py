@@ -925,7 +925,7 @@ class OCRRequest(BaseModel):
     file_path: str
     doc_type: str = "birth"
     languages: str = "en,tl"
-    ocr_mode: Literal["fast", "balanced", "accurate"] = "accurate"
+    ocr_mode: Literal["fast", "balanced", "accurate"] = "balanced"
     preprocess: bool = True
 
 class SplitRequest(BaseModel):
@@ -1116,10 +1116,9 @@ def process_ocr(data: OCRRequest):
         # Image processing
         ocr_engine_used = "none"
         fast_mode_min_chars = 80
-        # Tesseract struggles heavily with table grids and small fonts on complex certificates,
-        # often outputting 55-65% confidence for complete hallucinated garbage.
-        # We enforce a strict 0.75 threshold. If it's lower, we MUST fall back to EasyOCR for Auto-Fill accuracy.
-        fast_mode_min_conf = 0.75
+        # Tesseract struggles heavily with table grids and small fonts on complex certificates.
+        # We lowered this from 0.75 to 0.45 so that the fast engine is used more often.
+        fast_mode_min_conf = 0.45
 
         # Apply OpenCV pre-processing if requested
         original_file_path = file_path
@@ -1167,8 +1166,8 @@ def process_ocr(data: OCRRequest):
                 for i in range(n_boxes):
                     text = data['text'][i].strip()
                     conf = int(data['conf'][i])
-                    # Filter out garbage hallucinated text (conf < 20%)
-                    if conf > 20 and text:
+                    # Lowered from 20 to 10 to capture more text even if low confidence
+                    if conf > 10 and text:
                         line_id = f"{data['block_num'][i]}_{data['par_num'][i]}_{data['line_num'][i]}"
                         
                         if line_id != last_line_id and current_line:
@@ -1265,8 +1264,6 @@ def process_ocr(data: OCRRequest):
 
         # Always run full-page OCR to produce real text for the "Full Extracted Text" tab
         # and as input for the OcrParserService PHP fallback parser.
-        # (Previously this was gated on `if not lines`, which meant when ROI quick_fill ran
-        #  it left `lines` empty and the text blob was blank.)
         if True:
             if ocr_mode in ("fast", "balanced"):
                 lines, scores, raw_results = run_tesseract()
@@ -1277,13 +1274,17 @@ def process_ocr(data: OCRRequest):
                 
                 should_fallback = False
                 if ocr_mode == "balanced":
-                    should_fallback = (
-                        not lines
-                        or fast_text_len < fast_mode_min_chars
-                        or fast_avg_conf < fast_mode_min_conf
-                    )
+                    # If we ALREADY have ROI fields (quick_fill), be more lenient with the text blob
+                    # only fallback if Tesseract is nearly empty (< 20 chars)
+                    if quick_fill_used:
+                        should_fallback = not lines or fast_text_len < 20
+                    else:
+                        should_fallback = (
+                            not lines
+                            or fast_text_len < fast_mode_min_chars
+                            or fast_avg_conf < fast_mode_min_conf
+                        )
                 elif ocr_mode == "fast":
-                    # In fast mode, only fallback if literally no text was found
                     should_fallback = not lines or fast_text_len < 10
 
                 if should_fallback:

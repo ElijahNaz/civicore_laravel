@@ -7,7 +7,8 @@ import {
     ClipboardDocumentCheckIcon,
     UsersIcon,
     MapPinIcon,
-    MegaphoneIcon
+    MegaphoneIcon,
+    Squares2X2Icon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import SaveToasts from './SaveToasts.jsx';

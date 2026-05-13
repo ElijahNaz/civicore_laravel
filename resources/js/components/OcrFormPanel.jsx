@@ -87,16 +87,18 @@ const FIELD_CONFIG = {
     marriage: MarriageConfig
 };
 
-const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
+const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = false, hideBoxes = false }) => {
     const [isSaving, setIsSaving] = useState(false);
     
     const effectiveType = ocrResult?.detected_type !== 'unknown' ? ocrResult.detected_type : (docType || file.type || 'unknown');
-    const fields = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
     
-    // Normalize extracted fields
-    const ef = ocrResult?.extracted_fields || file.extracted_fields || {};
-
+    // Normalize and parse extracted fields
     const [formData, setFormData] = useState(() => {
+        let ef = ocrResult?.extracted_fields || file.extracted_fields || {};
+        if (typeof ef === 'string') {
+            try { ef = JSON.parse(ef); } catch (e) { ef = {}; }
+        }
+
         const init = {};
         const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
         
@@ -116,7 +118,8 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     });
 
     const [ocrText, setOcrText] = useState(file.ocr_text || ocrResult?.text || '');
-    const [viewMode, setViewMode] = useState('text');
+    const [viewMode, setViewMode] = useState('fields');
+    const [showDiagnosticBoxes, setShowDiagnosticBoxes] = useState(hideBoxes); // Toggle state for green grid
     const [showConsent, setShowConsent] = useState(false);
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
@@ -155,46 +158,63 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
     const { templates } = useData();
     
     // Find a matching professional template for this document type
-    const matchedTemplate = templates.find(t => 
-        t.type === effectiveType && t.config
-    ) || templates.find(t => 
-        t.type === effectiveType
-    );
+    const matchedTemplate = templates.find(t => {
+        const tType = (t.type || '').toLowerCase();
+        const eType = (effectiveType || '').toLowerCase();
+        return (tType === eType || tType.includes(eType) || eType.includes(tType)) && t.config;
+    }) || templates.find(t => {
+        const tType = (t.type || '').toLowerCase();
+        const eType = (effectiveType || '').toLowerCase();
+        return tType === eType || tType.includes(eType) || eType.includes(tType);
+    });
 
     // Sync form data if background extraction finishes while modal is open
     useEffect(() => {
-        const latestFields = ocrResult?.extracted_fields || file.extracted_fields;
-        if (latestFields && Object.keys(latestFields).length > 0) {
-            setFormData(prev => {
-                const next = { ...prev };
-                let changed = false;
-                
-                const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
-                configSections.forEach(section => {
-                    section.fields.forEach(f => {
-                        // Only fill if the current value is empty to avoid overwriting user typing
-                        if (!next[f.key] && latestFields[f.key]) {
-                            let val = latestFields[f.key];
-                            if (f.type === 'date' && val) {
-                                const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                                if (!isNaN(d.getTime())) {
-                                    val = d.toISOString().split('T')[0];
-                                }
-                            }
-                            next[f.key] = val;
-                            changed = true;
-                        }
-                    });
-                });
-                
-                return changed ? next : prev;
-            });
+        // --- FIELD SYNC ---
+        // Prioritize ocrResult (fresh from server) over file.extracted_fields (saved in DB)
+        const rawFields = ocrResult?.extracted_fields || file.extracted_fields;
+        if (rawFields) {
+            let parsed = rawFields;
+            if (typeof rawFields === 'string') {
+                try { parsed = JSON.parse(rawFields); } catch (e) { console.error("Parse error", e); }
+            }
             
-            if (!ocrText && (file.ocr_text || ocrResult?.text)) {
-                setOcrText(file.ocr_text || ocrResult?.text);
+            if (parsed && typeof parsed === 'object') {
+                setFormData(prev => {
+                    const next = { ...prev };
+                    let changed = false;
+                    
+                    // We loop through our known field configuration to map the incoming data
+                    const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
+                    configSections.forEach(section => {
+                        section.fields.forEach(f => {
+                            // Only fill if current value is empty OR if this is a fresh OCR result
+                            const newValue = parsed[f.key];
+                            if (newValue && newValue !== prev[f.key]) {
+                                let val = newValue;
+                                // Basic date normalization
+                                if (f.type === 'date' && val) {
+                                    const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                                    if (!isNaN(d.getTime())) {
+                                        val = d.toISOString().split('T')[0];
+                                    }
+                                }
+                                next[f.key] = val;
+                                changed = true;
+                            }
+                        });
+                    });
+                    return changed ? next : prev;
+                });
             }
         }
-    }, [file.extracted_fields, ocrResult, effectiveType]);
+
+        // --- TEXT SYNC ---
+        const newText = ocrResult?.text || file.ocr_text;
+        if (newText && newText !== ocrText) {
+            setOcrText(newText);
+        }
+    }, [file.extracted_fields, ocrResult, file.ocr_text, effectiveType]);
 
     const typeMismatch = ocrResult?.type_mismatch;
     const mismatchMessage = ocrResult?.mismatch_message;
@@ -297,12 +317,14 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                             <h3 className="mt-6 text-xl font-black text-slate-900 tracking-tight">Securing Data to Registry...</h3>
                             <p className="text-sm text-slate-400 mt-2">Almost there! We're syncing your changes now.</p>
                             
-                            <button 
-                                onClick={(e) => handleSubmit(e, true)}
-                                className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
-                            >
-                                Minimize & Continue Working
-                            </button>
+                            {!isViewOnly && (
+                                <button 
+                                    onClick={(e) => handleSubmit(e, true)}
+                                    className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
+                                >
+                                    Minimize & Continue Working
+                                </button>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -321,13 +343,15 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button 
-                            onClick={(e) => handleSubmit(e, true)}
-                            title="Minimize to Tray"
-                            className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
-                        >
-                            <ChevronDoubleDownIcon className="w-6 h-6" />
-                        </button>
+                        {!isViewOnly && (
+                            <button 
+                                onClick={(e) => handleSubmit(e, true)}
+                                title="Minimize to Tray"
+                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
+                            >
+                                <ChevronDoubleDownIcon className="w-6 h-6" />
+                            </button>
+                        )}
                         <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer group">
                             <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                         </button>
@@ -339,26 +363,19 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         <div className="flex items-center justify-between mb-3 shrink-0">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
                             <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
-                        </div>
-                        <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative">
-                            {(file.name?.toLowerCase().trim().endsWith('.pdf') || file.file_path?.toLowerCase().endsWith('.pdf')) ? (
-                                    <iframe
-                                        src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
-                                        className="w-full h-full border-0"
-                                        title="Original PDF"
-                                    />
-                            ) : (
-                                    <img
-                                        src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
-                                        className="w-full h-full object-contain"
-                                        alt="Original Scan"
-                                        onError={(e) => {
-                                            // Fallback if the image fails to load but we suspect it's actually a PDF
-                                            e.target.style.display = 'none';
-                                            e.target.insertAdjacentHTML('afterend', `<iframe src="${e.target.src}" class="w-full h-full border-0" title="Original Document"></iframe>`);
-                                        }}
-                                    />
-                            )}
+                        <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center">
+                            <img
+                                src={`/api/documents/view/${file.id || file.file_id || file.document_id || file.realId}?raw=1&t=${new Date().getTime()}`}
+                                className="w-full h-full object-contain"
+                                alt="Original Scan"
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const iframe = document.createElement('iframe');
+                                    iframe.src = e.target.src;
+                                    iframe.className = "w-full h-full border-0";
+                                    e.target.parentNode.appendChild(iframe);
+                                }}
+                            />
                         </div>
                     </div>
 
@@ -489,13 +506,19 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                             Professional layout using calibrated clean templates.
                                         </p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className={`text-[11px] font-bold ${quickFillUsed ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                            {quickFillUsed ? 'Quick-fill Active' : 'Fallback OCR Active'}
-                                        </p>
-                                        <p className="text-[10px] text-slate-500">
-                                            Family: {templateFamilyDetected}
-                                        </p>
+                                    <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-xl">
+                                        <button 
+                                            onClick={() => setShowDiagnosticBoxes(false)}
+                                            className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${!showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            Clean View
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowDiagnosticBoxes(true)}
+                                            className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                        >
+                                            Diagnostic Grid
+                                        </button>
                                     </div>
                                 </div>
 
@@ -514,7 +537,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                 return (
                                                     <div
                                                         key={item.key}
-                                                        className="absolute flex flex-col justify-center px-0.5 border border-emerald-400/50 bg-emerald-50/30 rounded-px shadow-sm backdrop-blur-[0.5px]"
+                                                        className={`absolute flex flex-col justify-center px-0.5 rounded-px shadow-sm transition-all ${!showDiagnosticBoxes ? '' : 'border border-emerald-400/50 bg-emerald-50/30 shadow-sm backdrop-blur-[0.5px]'}`}
                                                         style={{
                                                             left: `${(item.x || 0) * 100}%`,
                                                             top: `${(item.y || 0) * 100}%`,
@@ -523,9 +546,13 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                         }}
                                                         title={`${label}`}
                                                     >
-                                                        <div className="text-[4px] font-black text-emerald-800/80 uppercase tracking-tighter absolute -top-1 left-0 whitespace-nowrap bg-white/90 px-0.5 rounded-px shadow-xs z-10 leading-none py-0.2">{label}</div>
-                                                        <div className="font-semibold text-slate-900 text-[6px] md:text-[7px] tracking-tight truncate px-0.5 leading-none">
-                                                            {value || '—'}
+                                                        {showDiagnosticBoxes && (
+                                                            <div className="text-[4px] font-black text-emerald-800/80 uppercase tracking-tighter absolute -top-1 left-0 whitespace-nowrap bg-white/90 px-0.5 rounded-px shadow-xs z-10 leading-none py-0.2">
+                                                                {label}
+                                                            </div>
+                                                        )}
+                                                        <div className={`font-black text-slate-950 tracking-tight truncate px-0.5 leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px]'}`}>
+                                                            {value || (!showDiagnosticBoxes ? '' : '—')}
                                                         </div>
                                                     </div>
                                                 );
@@ -588,22 +615,28 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                                                     const value = derivedValue || item.value || '';
                                                     const label = fieldLabelMap[item.key] || item.key;
                                                     return (
-                                                        <div
-                                                            key={item.key}
-                                                            className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
-                                                            style={{
-                                                                left: `${(x1 || 0) * 100}%`,
-                                                                top: `${(y1 || 0) * 100}%`,
-                                                                width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
-                                                                minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
-                                                            }}
-                                                            title={`${label}`}
-                                                        >
-                                                            <div className="font-bold uppercase tracking-wide text-[9px]">{label}</div>
-                                                            <div className="font-semibold truncate">{value || '—'}</div>
+                                                    <div
+                                                        key={item.key}
+                                                        className={`absolute rounded-lg transition-all ${!showDiagnosticBoxes ? '' : 'border-2 border-emerald-400 bg-emerald-100/50 p-1 backdrop-blur-[1px]'}`}
+                                                        style={{
+                                                            left: `${(x1 || 0) * 100}%`,
+                                                            top: `${(y1 || 0) * 100}%`,
+                                                            width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
+                                                            minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
+                                                        }}
+                                                        title={`${label}`}
+                                                    >
+                                                        {showDiagnosticBoxes && (
+                                                            <div className="font-bold uppercase tracking-wide text-[9px]">
+                                                                {label}
+                                                            </div>
+                                                        )}
+                                                        <div className={`font-black text-slate-950 truncate leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px] font-semibold'}`}>
+                                                            {value || (!showDiagnosticBoxes ? '' : '—')}
                                                         </div>
-                                                    );
-                                                })
+                                                    </div>
+                                                );
+                                            })
                                             )}
                                         </div>
                                     </div>
@@ -636,26 +669,37 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose }) => {
                         )}
 
                         <div className="pt-6 border-t border-slate-100">
-                              <button
-                                onClick={handleSubmit}
-                                disabled={isSaving}
-                                className={`w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer ${isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-slate-200'}`}
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Uploading...
-                                    </>
+                                {isViewOnly ? (
+                                    <button
+                                        onClick={onClose}
+                                        className="w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer bg-slate-900 hover:bg-slate-800 text-white shadow-slate-200"
+                                    >
+                                        <XMarkIcon className="w-6 h-6" />
+                                        Close Professional Preview
+                                    </button>
                                 ) : (
-                                    <>
-                                        <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
-                                        Save & Sync Changes
-                                    </>
+                                    <button
+                                        onClick={handleSubmit}
+                                        disabled={isSaving}
+                                        className={`w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer ${isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-slate-200'}`}
+                                    >
+                                        {isSaving ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                Uploading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
+                                                Save & Sync Changes
+                                            </>
+                                        )}
+                                    </button>
                                 )}
-                            </button>
                         </div>
                     </div>
                 </div>
+            </div>
             </motion.div>
         </div>,
         document.body

@@ -294,9 +294,9 @@ function Dashboard() {
             {/* Human-Centric Stats Grid - Clear & Helpful */}
             <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Total Record', val: stats.totalIssuances, icon: ShieldCheckIcon, color: 'text-white', bg: 'bg-indigo-600', border: 'border-indigo-700', sub: 'Master' },
-                    { label: 'Upload Pending', val: stats.pendingDocs, icon: DocumentTextIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Action Needed' },
-                    { label: 'Total Issued Files', val: stats.totalIssuances, icon: ClipboardDocumentCheckIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Finalized' },
+                    { label: 'TOTAL RECORD', val: stats.totalDocs, icon: ShieldCheckIcon, color: 'text-white', bg: 'bg-indigo-600', border: 'border-indigo-700', sub: 'Master' },
+                    { label: 'UPLOAD PENDING', val: stats.pendingDocs, icon: DocumentTextIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Action Needed' },
+                    { label: 'TOTAL ISSUED FILES', val: stats.totalIssuances, icon: ClipboardDocumentCheckIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Finalized' },
                     { label: 'Active Users', val: stats.totalUsers, icon: UsersIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Current' }
                 ].map((s, i) => (
                     <motion.div
@@ -328,7 +328,7 @@ function Dashboard() {
                     <div className="flex-1 relative flex items-center justify-center z-10">
                         <canvas id="docTypesChart"></canvas>
                         <div className="absolute pointer-events-none flex flex-col items-center justify-center mb-10 bg-white w-24 h-24 rounded-full border-4 border-slate-100 shadow-lg">
-                            <span className="text-4xl font-black text-slate-950 tracking-tighter">{stats.totalIssuances}</span>
+                            <span className="text-4xl font-black text-slate-950 tracking-tighter">{stats.totalDocs}</span>
                         </div>
                     </div>
                 </motion.div>

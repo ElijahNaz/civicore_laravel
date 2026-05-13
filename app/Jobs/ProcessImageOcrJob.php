@@ -80,8 +80,23 @@ class ProcessImageOcrJob implements ShouldQueue
                 }
 
                 // If Python failed to detect type, trust PHP
-                if ($detectedType === 'unknown' && !empty($parsedData['detected_type'])) {
+                if ($detectedType === 'unknown' && !empty($parsedData['detected_type']) && $parsedData['detected_type'] !== 'unknown') {
                     $detectedType = $parsedData['detected_type'];
+                }
+            }
+
+            // --- FINAL FALLBACK: Filename & Keyword Inspection ---
+            if ($detectedType === 'unknown') {
+                $doc = DB::table('documents')->where('id', $this->documentId)->first();
+                $searchPool = strtolower(($doc->name ?? '') . ' ' . $newText);
+                
+                // Form 102 = Birth, Form 103 = Death, Form 97 = Marriage
+                if (str_contains($searchPool, 'birth') || str_contains($searchPool, 'born') || str_contains($searchPool, 'form 102') || str_contains($searchPool, 'form no. 102')) {
+                    $detectedType = 'birth';
+                } elseif (str_contains($searchPool, 'death') || str_contains($searchPool, 'deceased') || str_contains($searchPool, 'form 103') || str_contains($searchPool, 'form no. 103')) {
+                    $detectedType = 'death';
+                } elseif (str_contains($searchPool, 'marriage') || str_contains($searchPool, 'contract') || str_contains($searchPool, 'form 97') || str_contains($searchPool, 'form no. 97')) {
+                    $detectedType = 'marriage';
                 }
             }
 
@@ -110,9 +125,10 @@ class ProcessImageOcrJob implements ShouldQueue
             Log::error("ProcessImageOcrJob failed for {$this->imagePath}: " . $e->getMessage());
             $this->fail($e);
         } finally {
-            if (file_exists($this->imagePath)) {
-                @unlink($this->imagePath); // cleanup temp image
-            }
+            // Logic Fix: We NO LONGER delete the imagePath here. 
+            // If it's a permanent upload, we need it for the PDF background.
+            // If it's a split PDF page, we might need page 1 for the preview.
+            // Cleanup of temporary pages should be handled by the coordinator if necessary.
         }
     }
 

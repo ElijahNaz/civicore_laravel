@@ -151,6 +151,38 @@ class IssuanceController extends Controller
         $sql = "UPDATE issuances SET " . implode(', ', $fields) . " WHERE id = ?";
         DB::update($sql, $params);
 
+        // --- Logic Fix: Regenerate PDF to keep it synced with the new data ---
+        $record = DB::selectOne("SELECT * FROM issuances WHERE id = ?", [$id]);
+        if ($record && $record->document_id) {
+            $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
+            if ($doc) {
+                $docType = $record->type;
+                $extractedFields = json_decode($record->extracted_data, true) ?: [];
+                
+                // Overlay current database values (the updated ones)
+                // Note: We should probably update extracted_data in the DB first if name/barangay changed, 
+                // but usually the React app sends the full updated extracted_data.
+                // Let's assume the request might have updated individual fields OR the whole extracted_data.
+                
+                if ($request->has('extracted_data')) {
+                     $extractedFields = is_string($request->extracted_data) ? json_decode($request->extracted_data, true) : $request->extracted_data;
+                }
+
+                $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
+                
+                $pdf = app('dompdf.wrapper');
+                $pdf->setPaper('a4', 'portrait');
+                $pdf->loadView('pdf.composite_document', [
+                    'doc' => $doc, 
+                    'fields' => $extractedFields,
+                    'overlayFields' => $overlayFields
+                ]);
+                $pdfData = $pdf->output();
+
+                DB::table('issuances')->where('id', $id)->update(['file_data' => $pdfData]);
+            }
+        }
+
         return response()->json(['success' => true]);
     }
 
@@ -206,17 +238,7 @@ class IssuanceController extends Controller
      */
     public function download($id)
     {
-        $issuances = DB::select("SELECT file_data, certNumber FROM issuances WHERE id = ?", [$id]);
-        
-        if (count($issuances) === 0 || empty($issuances[0]->file_data)) {
-            return response()->json(['error' => 'Not found or no file data'], 404);
-        }
-
-        $filename = 'Certificate_' . $issuances[0]->certNumber . '.pdf';
-        
-        return response($issuances[0]->file_data)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        return $this->getIssuanceFile($id, 'attachment');
     }
 
     /**
@@ -224,16 +246,54 @@ class IssuanceController extends Controller
      */
     public function view($id)
     {
-        $issuances = DB::select("SELECT file_data, certNumber FROM issuances WHERE id = ?", [$id]);
+        return $this->getIssuanceFile($id, 'inline');
+    }
+
+    /**
+     * Helper to get or generate the issuance PDF
+     */
+    private function getIssuanceFile($id, $disposition = 'inline')
+    {
+        $record = DB::selectOne("SELECT * FROM issuances WHERE id = ?", [$id]);
         
-        if (count($issuances) === 0 || empty($issuances[0]->file_data)) {
-            return response()->json(['error' => 'Not found or no file data'], 404);
+        if (!$record) {
+            return response()->json(['error' => 'Not found'], 404);
         }
 
-        $filename = 'Certificate_' . $issuances[0]->certNumber . '.pdf';
+        // If file_data is empty OR we want to ensure it's the latest clean version, regenerate it
+        // For this fix, we prioritize a fresh render to ensure the 'Clean Template' is used
+        if (empty($record->file_data) || request()->query('refresh') == '1' || true) {
+            $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
+            if ($doc) {
+                $docType = strtolower($record->type ?? 'birth');
+                $extractedFields = json_decode($record->extracted_data, true) ?: [];
+                $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
+                
+                $pdf = app('dompdf.wrapper');
+                $pdf->setPaper('a4', 'portrait');
+                $pdf->loadView('pdf.composite_document', [
+                    'doc' => $doc, 
+                    'fields' => $extractedFields,
+                    'overlayFields' => $overlayFields,
+                    'docType' => $docType // Pass it explicitly to the view
+                ]);
+                
+                $pdfData = $pdf->output();
+                
+                // Cache it back to the database for future performance
+                DB::table('issuances')->where('id', $id)->update(['file_data' => $pdfData]);
+                $record->file_data = $pdfData;
+            }
+        }
+
+        if (empty($record->file_data)) {
+            return response()->json(['error' => 'No file data available'], 404);
+        }
+
+        $filename = 'Certificate_' . $record->certNumber . '.pdf';
         
-        return response($issuances[0]->file_data)
+        return response($record->file_data)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'inline; filename="' . $filename . '"');
+            ->header('Content-Disposition', $disposition . '; filename="' . $filename . '"');
     }
 }

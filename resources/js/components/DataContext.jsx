@@ -184,26 +184,38 @@ export const DataProvider = ({ children }) => {
             const data = await response.json();
             
             if (data.data) {
-                const mapped = data.data.map(doc => ({
-                    id:               doc.id,
-                    name:             doc.name,
-                    type:             doc.type || 'Uncategorized',
-                    size:             doc.size,
-                    status:           doc.status ? doc.status.toLowerCase() : 'pending',
-                    date:             doc.date || '',
-                    detected_type:    doc.detected_type || '',
-                    extracted_fields: doc.extracted_fields ? JSON.parse(doc.extracted_fields) : null,
-                    ocr_text:         doc.ocr_text,
-                    encoded_by:       doc.encoded_by,
-                    personName:       doc.personName || '',
-                    barangay:         doc.barangay || '',
-                    metadata:         doc.metadata ? JSON.parse(doc.metadata) : {},
-                    created_at:       doc.created_at,
-                    // batch progress fields (populated by server for active processing docs)
-                    batch_progress:   doc.batch_progress,
-                    batch_total:      doc.batch_total,
-                    batch_processed:  doc.batch_processed,
-                }));
+                const mapped = data.data.map(doc => {
+                    let ef = doc.extracted_fields;
+                    if (typeof ef === 'string') {
+                        try { ef = JSON.parse(ef); } catch (e) { ef = null; }
+                    }
+                    
+                    let meta = doc.metadata;
+                    if (typeof meta === 'string') {
+                        try { meta = JSON.parse(meta); } catch (e) { meta = {}; }
+                    }
+
+                    return {
+                        id:               doc.id,
+                        name:             doc.name,
+                        type:             (doc.type && doc.type.toLowerCase() !== 'unknown') ? doc.type : 'birth',
+                        size:             doc.size,
+                        status:           doc.status ? doc.status.toLowerCase() : 'pending',
+                        date:             doc.date || '',
+                        detected_type:    (doc.detected_type && doc.detected_type.toLowerCase() !== 'unknown') ? doc.detected_type : 'birth',
+                        extracted_fields: ef,
+                        ocr_text:         doc.ocr_text,
+                        encoded_by:       doc.encoded_by,
+                        personName:       doc.personName || '',
+                        barangay:         doc.barangay || '',
+                        metadata:         meta || {},
+                        created_at:       doc.created_at,
+                        // batch progress fields (populated by server for active processing docs)
+                        batch_progress:   doc.batch_progress,
+                        batch_total:      doc.batch_total,
+                        batch_processed:  doc.batch_processed,
+                    };
+                });
                 setDocuments(mapped);
                 sessionStorage.setItem('civicore_documents', JSON.stringify(mapped));
             }
@@ -228,7 +240,7 @@ export const DataProvider = ({ children }) => {
                 const mapped = data.data.map(i => ({
                     id:              i.id,
                     number:          i.certNumber,
-                    type:            i.type,
+                    type:            (i.type && i.type.toLowerCase() !== 'unknown') ? i.type : 'birth',
                     name:            i.name,
                     barangay:        i.barangay,
                     date:            i.issuanceDate,
