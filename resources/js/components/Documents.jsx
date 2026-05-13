@@ -466,7 +466,7 @@ const Documents = () => {
 
         const s = status?.toLowerCase();
 
-        // ── Active states: original pill + animated fill background ─────────
+        // ── Active states: real progress bar pill ───────────────────────────
         if (s === 'processing' || s === 'uploading' || s === 'pending') {
             const isPending    = s === 'pending';
             const isProcessing = s === 'processing';
@@ -475,36 +475,48 @@ const Documents = () => {
                         : isProcessing ? (file.batch_total > 1 ? `Processing ${file.batch_processed ?? 1}/${file.batch_total}` : 'Processing…')
                         : 'Uploading…';
 
-            // Colors for the fill vs the base pill
-            const pillBase  = isPending
-                ? 'text-amber-700 border-amber-200 bg-amber-50'
+            // Solid fill colors
+            const fillGradient = isPending
+                ? 'linear-gradient(90deg, #f97316, #fb923c, #fdba74)'  // orange
                 : isProcessing
-                    ? 'text-indigo-700 border-indigo-200 bg-indigo-50'
-                    : 'text-slate-600 border-slate-200 bg-slate-50';
+                    ? 'linear-gradient(90deg, #6366f1, #818cf8, #a5b4fc)' // indigo
+                    : 'linear-gradient(90deg, #94a3b8, #cbd5e1)';
 
-            const fillColor = isPending
-                ? 'rgba(251,191,36,0.25)'   // amber
-                : isProcessing
-                    ? 'rgba(99,102,241,0.22)' // indigo
-                    : 'rgba(148,163,184,0.2)'; // slate
+            const trackBg = isPending  ? '#fff7ed'
+                          : isProcessing ? '#eef2ff'
+                          : '#f8fafc';
 
-            const animName  = isPending ? 'ocr-pending-fill' : 'ocr-active-fill';
+            const borderColor = isPending  ? '#fed7aa'
+                              : isProcessing ? '#c7d2fe'
+                              : '#e2e8f0';
+
+            const textColor = isPending  ? '#9a3412'
+                            : isProcessing ? '#3730a3'
+                            : '#475569';
+
+            const animName = isPending ? 'ocr-pending-fill' : 'ocr-active-fill';
 
             return (
                 <span
-                    className={`relative inline-flex items-center overflow-hidden text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-tight ${pillBase}`}
-                    style={{ minWidth: '90px', justifyContent: 'center' }}
+                    className="relative inline-flex items-center overflow-hidden rounded-full border text-[10px] font-extrabold uppercase tracking-tight"
+                    style={{
+                        minWidth: '96px',
+                        height: '24px',
+                        backgroundColor: trackBg,
+                        borderColor: borderColor,
+                        justifyContent: 'center',
+                    }}
                 >
-                    {/* Animated fill sweeping across the background */}
+                    {/* Solid fill bar that sweeps left → right */}
                     <span
-                        className="absolute inset-0 rounded-full"
+                        className="absolute inset-y-0 left-0 rounded-full"
                         style={{
-                            background: `linear-gradient(90deg, ${fillColor} 0%, rgba(255,255,255,0) 100%)`,
-                            animation: `${animName} 1.8s ease-in-out infinite`,
+                            background: fillGradient,
+                            animation: `${animName} 2s ease-in-out infinite`,
                         }}
                     />
                     {/* Label on top */}
-                    <span className="relative z-10">{label}</span>
+                    <span className="relative z-10" style={{ color: textColor }}>{label}</span>
                 </span>
             );
         }

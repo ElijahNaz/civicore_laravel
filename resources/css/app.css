@@ -72,16 +72,19 @@
 
     /* ── OCR Status Pill Fill Animations ─────────────────────────── */
 
-    /* Active (Processing / Uploading): fill sweeps left → right like a bar loading */
+    /* Active (Processing / Uploading): grows 0% → 100% → resets, like a real loader */
     @keyframes ocr-active-fill {
-        0%   { transform: translateX(-100%); }
-        50%  { transform: translateX(0%); }
-        100% { transform: translateX(100%); }
+        0%   { width: 0%; }
+        70%  { width: 100%; }
+        85%  { width: 100%; opacity: 1; }
+        100% { width: 0%;   opacity: 0; }
     }
 
-    /* Pending (Queued): gentle breathe — fill softly pulses in and out */
+    /* Pending (Queued): slower breathe — grows and shrinks to show it's waiting */
     @keyframes ocr-pending-fill {
-        0%, 100% { opacity: 0.2; transform: scaleX(0.3); transform-origin: left; }
-        50%      { opacity: 0.9; transform: scaleX(1.0); transform-origin: left; }
+        0%   { width: 0%;  opacity: 0.7; }
+        55%  { width: 80%; opacity: 1;   }
+        80%  { width: 80%; opacity: 1;   }
+        100% { width: 0%;  opacity: 0.7; }
     }
 }
