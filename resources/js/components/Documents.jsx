@@ -470,8 +470,8 @@ const Documents = () => {
         if (s === 'processing' || s === 'uploading') {
             const isProcessing = s === 'processing';
             const stageLabel = isProcessing
-                ? (file.batch_total > 1 ? `Page ${file.batch_processed ?? 1} of ${file.batch_total}` : 'Reading document…')
-                : 'Uploading file…';
+                ? (file.batch_total > 1 ? `Page ${file.batch_processed ?? 1}/${file.batch_total}` : 'Reading…')
+                : 'Uploading…';
             const barColor = isProcessing
                 ? 'from-indigo-400 via-violet-400 to-indigo-500'
                 : 'from-slate-300 via-slate-400 to-slate-300';
@@ -479,33 +479,26 @@ const Documents = () => {
             const dotColor  = isProcessing ? 'bg-indigo-500' : 'bg-slate-400';
 
             return (
-                <div className="flex flex-col gap-0.5 w-32">
-                    {/* Stage label row */}
-                    <div className="flex items-center justify-between px-0.5">
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${isProcessing ? 'text-indigo-500' : 'text-slate-400'}`}>
-                            {isProcessing ? 'OCR' : 'Uploading'}
+                <div className="flex flex-col gap-0.5 w-24">
+                    <div className="flex items-center justify-between">
+                        <span className={`text-[8px] font-black uppercase tracking-widest ${isProcessing ? 'text-indigo-500' : 'text-slate-400'}`}>
+                            {isProcessing ? 'OCR' : 'Upload'}
                         </span>
-                        <span className="flex items-center gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} animate-pulse`} />
-                            <span className={`text-[9px] font-semibold ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
+                        <span className="flex items-center gap-0.5">
+                            <span className={`w-1 h-1 rounded-full ${dotColor} animate-pulse`} />
+                            <span className={`text-[8px] font-semibold ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
                                 {isProcessing ? 'Active' : 'Sending'}
                             </span>
                         </span>
                     </div>
-                    {/* Progress bar track */}
                     <div
-                        className="relative w-full h-2 rounded-full overflow-hidden bg-slate-100"
-                        style={{ boxShadow: `0 0 8px ${glowColor}` }}
+                        className="relative w-full h-1.5 rounded-full overflow-hidden bg-slate-100"
+                        style={{ boxShadow: `0 0 6px ${glowColor}` }}
                     >
-                        {/* Indeterminate fill with shimmer */}
                         <div
                             className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${barColor}`}
-                            style={{
-                                width: '60%',
-                                animation: 'ocr-progress-slide 1.8s ease-in-out infinite',
-                            }}
+                            style={{ width: '60%', animation: 'ocr-progress-slide 1.8s ease-in-out infinite' }}
                         />
-                        {/* Shimmer overlay */}
                         <div
                             className="absolute inset-0 rounded-full"
                             style={{
@@ -514,8 +507,7 @@ const Documents = () => {
                             }}
                         />
                     </div>
-                    {/* Sub-label */}
-                    <p className={`text-[8.5px] font-medium truncate max-w-[128px] ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
+                    <p className={`text-[7.5px] font-medium ${isProcessing ? 'text-indigo-400' : 'text-slate-400'}`}>
                         {stageLabel}
                     </p>
                 </div>
@@ -524,26 +516,21 @@ const Documents = () => {
 
         if (s === 'pending') {
             return (
-                <div className="flex flex-col gap-0.5 w-32">
-                    <div className="flex items-center justify-between px-0.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-500">OCR</span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            <span className="text-[9px] font-semibold text-amber-400">Queued</span>
+                <div className="flex flex-col gap-0.5 w-24">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-amber-500">OCR</span>
+                        <span className="flex items-center gap-0.5">
+                            <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="text-[8px] font-semibold text-amber-400">Queued</span>
                         </span>
                     </div>
-                    <div className="relative w-full h-2 rounded-full overflow-hidden bg-amber-50 border border-amber-100">
-                        {/* Waiting shimmer — low opacity amber pulse */}
+                    <div className="relative w-full h-1.5 rounded-full overflow-hidden bg-amber-50 border border-amber-100">
                         <div
                             className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300"
-                            style={{
-                                width: '35%',
-                                animation: 'ocr-pending-pulse 2.4s ease-in-out infinite',
-                                opacity: 0.7,
-                            }}
+                            style={{ width: '35%', animation: 'ocr-pending-pulse 2.4s ease-in-out infinite', opacity: 0.7 }}
                         />
                     </div>
-                    <p className="text-[8.5px] font-medium text-amber-400">Waiting in queue…</p>
+                    <p className="text-[7.5px] font-medium text-amber-400">Waiting in queue…</p>
                 </div>
             );
         }
@@ -822,11 +809,9 @@ const Documents = () => {
                                         <thead>
                                             <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
                                                 <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500 w-20">Type</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500 w-16">Size</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500 w-24">Uploader</th>
-                                                <th className="px-2 py-2.5 text-center font-black text-slate-500 w-28">Status</th>
-                                                <th className="px-3 py-2.5 text-right font-black text-slate-500 w-32">Actions</th>
+                                                <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
+                                                <th className="px-2 py-2.5 text-center font-black text-slate-500">Status</th>
+                                                <th className="px-3 py-2.5 text-right font-black text-slate-500 w-28">Actions</th>
                                             </tr>
                                         </thead>
                                             <tbody className="divide-y divide-slate-50">
@@ -843,14 +828,14 @@ const Documents = () => {
                                                                     <div className="flex items-center">
                                                                         <div className="min-w-0">
                                                                             <p
-                                                                                className="text-[11px] font-bold text-slate-800 truncate max-w-[25ch] hover:text-[#d4a574] cursor-pointer transition-colors"
+                                                                                className="text-[11px] font-bold text-slate-800 truncate max-w-[22ch] hover:text-[#d4a574] cursor-pointer transition-colors"
                                                                                 title={file.name}
                                                                                 onClick={() => setPreviewFile(file)}
                                                                             >
                                                                                 {file.name}
                                                                             </p>
                                                                             <p className="text-[9px] text-slate-400 font-medium truncate uppercase tracking-tighter">
-                                                                                {file.extracted_fields?.full_name || 'No Extraction'}
+                                                                                {file.extracted_fields?.full_name || file.personName || `${file.size || ''} · ${file.encoded_by || 'Unknown'}`}
                                                                             </p>
                                                                         </div>
                                                                     </div>
@@ -860,9 +845,7 @@ const Documents = () => {
                                                                         {(file.detected_type && file.detected_type.toLowerCase() !== 'unknown') ? file.detected_type : (file.type && file.type.toLowerCase() !== 'unknown' ? file.type : 'birth')}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-2 py-2.5 text-[10px] font-bold text-slate-400 tabular-nums whitespace-nowrap">{file.size}</td>
-                                                                <td className="px-2 py-2.5 text-[10px] font-bold text-slate-400 truncate max-w-[12ch] uppercase tracking-tighter">{file.encoded_by || '—'}</td>
-                                                                <td className="px-2 py-2.5 text-center whitespace-nowrap">{statusBadge(file)}</td>
+                                                                <td className="px-2 py-2.5 text-center">{statusBadge(file)}</td>
                                                                 <td className="px-3 py-2.5 text-right">
                                                                     <div className="flex items-center justify-end gap-1 px-1">
                                                                         {['pending', 'processing'].includes(file.status?.toLowerCase()) && (

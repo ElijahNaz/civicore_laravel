@@ -185,17 +185,24 @@ export const DataProvider = ({ children }) => {
             
             if (data.data) {
                 const mapped = data.data.map(doc => ({
-                    id:              doc.id,
-                    name:            doc.name,
-                    type:            doc.type || 'Uncategorized',
-                    size:            doc.size,
-                    status:          doc.status ? doc.status.toLowerCase() : 'pending',
-                    date:            doc.date || '',
-                    detected_type:   doc.detected_type || '',
+                    id:               doc.id,
+                    name:             doc.name,
+                    type:             doc.type || 'Uncategorized',
+                    size:             doc.size,
+                    status:           doc.status ? doc.status.toLowerCase() : 'pending',
+                    date:             doc.date || '',
+                    detected_type:    doc.detected_type || '',
                     extracted_fields: doc.extracted_fields ? JSON.parse(doc.extracted_fields) : null,
-                    ocr_text:        doc.ocr_text,
-                    encoded_by:      doc.encoded_by,
-                    created_at:      doc.created_at
+                    ocr_text:         doc.ocr_text,
+                    encoded_by:       doc.encoded_by,
+                    personName:       doc.personName || '',
+                    barangay:         doc.barangay || '',
+                    metadata:         doc.metadata ? JSON.parse(doc.metadata) : {},
+                    created_at:       doc.created_at,
+                    // batch progress fields (populated by server for active processing docs)
+                    batch_progress:   doc.batch_progress,
+                    batch_total:      doc.batch_total,
+                    batch_processed:  doc.batch_processed,
                 }));
                 setDocuments(mapped);
                 sessionStorage.setItem('civicore_documents', JSON.stringify(mapped));
