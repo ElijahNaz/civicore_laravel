@@ -507,12 +507,12 @@ const Documents = () => {
                         justifyContent: 'center',
                     }}
                 >
-                    {/* Solid fill bar that sweeps left → right */}
+                    {/* Solid fill bar that sweeps left → right smoothly */}
                     <span
                         className="absolute inset-y-0 left-0 rounded-full"
                         style={{
                             background: fillGradient,
-                            animation: `${animName} 2s ease-in-out infinite`,
+                            animation: `${animName} 1.6s linear infinite`,
                         }}
                     />
                     {/* Label on top */}

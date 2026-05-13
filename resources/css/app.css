@@ -72,19 +72,14 @@
 
     /* ── OCR Status Pill Fill Animations ─────────────────────────── */
 
-    /* Active (Processing / Uploading): grows 0% → 100% → resets, like a real loader */
+    /* Normal Indeterminate Progress: a sliding block instead of a resetting growth */
     @keyframes ocr-active-fill {
-        0%   { width: 0%; }
-        70%  { width: 100%; }
-        85%  { width: 100%; opacity: 1; }
-        100% { width: 0%;   opacity: 0; }
+        0%   { left: -60%; width: 60%; }
+        100% { left: 100%;  width: 60%; }
     }
 
-    /* Pending (Queued): slower breathe — grows and shrinks to show it's waiting */
     @keyframes ocr-pending-fill {
-        0%   { width: 0%;  opacity: 0.7; }
-        55%  { width: 80%; opacity: 1;   }
-        80%  { width: 80%; opacity: 1;   }
-        100% { width: 0%;  opacity: 0.7; }
+        0%   { left: -60%; width: 60%; opacity: 0.5; }
+        100% { left: 100%;  width: 60%; opacity: 0.5; }
     }
 }
