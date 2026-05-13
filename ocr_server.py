@@ -1237,7 +1237,9 @@ def process_ocr(data: OCRRequest):
                 if quick_fields:
                     quick_fill_used = not should_run_full_ocr
                     extracted_fields = quick_fields if quick_fill_used else {}
-                    lines = [f"{k}: {v}" for k, v in quick_fields.items() if v]
+                    # NOTE: Do NOT overwrite `lines` here. `lines` must always contain the
+                    # raw OCR text so that the full-page text blob is clean and readable.
+                    # The extracted_fields dict is the correct place for structured ROI output.
                     scores = required_field_confs if required_field_confs else []
                     ocr_engine_used = "quick_fill_roi"
                     print(
@@ -1261,10 +1263,14 @@ def process_ocr(data: OCRRequest):
                 quick_fill_debug["fallback_reason"] = "template_markers_not_confident_enough"
             print("No quick-fill template markers found; using full-page OCR.")
 
-        if not lines:
+        # Always run full-page OCR to produce real text for the "Full Extracted Text" tab
+        # and as input for the OcrParserService PHP fallback parser.
+        # (Previously this was gated on `if not lines`, which meant when ROI quick_fill ran
+        #  it left `lines` empty and the text blob was blank.)
+        if True:
             if ocr_mode in ("fast", "balanced"):
                 lines, scores, raw_results = run_tesseract()
-                ocr_engine_used = "pytesseract" if lines else "none"
+                ocr_engine_used = ocr_engine_used if quick_fill_used else ("pytesseract" if lines else "none")
 
                 fast_text_len = len('\n'.join(lines))
                 fast_avg_conf = (sum(scores) / len(scores)) if scores else 0
