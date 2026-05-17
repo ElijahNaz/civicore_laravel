@@ -223,6 +223,25 @@ Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
 
 ---
 
+## 🧠 Advanced OCR with Gemini Integration
+
+To achieve the highest accuracy and handle various document layouts, we have integrated **Google Gemini (gemini-2.5-flash)** into our OCR pipeline.
+
+### 📄 Handling Multiple Form Varieties
+Philippine civil registry documents have evolved over the years. We support extracting data from different layouts, such as:
+- **Municipal Form No. 102 (Revised January 1993)**: The modern grid layout.
+- **Municipal Form No. 102 (Revised Dec. 1, 1958)**: Older text-heavy layouts.
+
+### 🗺️ Intelligent Field Mapping
+Instead of relying on fixed pixel coordinates, we use Gemini's vision and language capabilities to:
+1. **Identify the Form Version**: Automatically recognize the layout style.
+2. **Map Fields to a Consistent Schema**: Map fields from older forms (e.g., "Usual Residence of Mother", "Previous Deliveries") to our standardized modern database schema (e.g., `mother_residence_house`, `mother_children_living`).
+3. **Handle Missing Data**: Intelligently fill or skip fields that are not present in older forms.
+
+This ensures that the frontend and database always receive data in a uniform structure, regardless of the physical layout of the uploaded certificate.
+
+---
+
 ## 🔮 Future OCR Roadmap & Performance Options
 
 To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), the system is being evolved with the following strategies:
