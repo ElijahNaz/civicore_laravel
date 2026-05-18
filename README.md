@@ -242,28 +242,23 @@ This ensures that the frontend and database always receive data in a uniform str
 
 ---
 
-## 🔮 Future OCR Roadmap & Performance Options
+## 📝 Work Summary - May 18, 2026
 
-To ensure high-fidelity data extraction across all types of document uploads (flatbed scans, smartphone photos, skewed images), the system is being evolved with the following strategies:
+Here are the accomplishments and updates implemented today:
 
-### 🛠️ Phase 1: Flexible Spatial Extraction (Current Implementation)
-We have moved away from rigid pixel-based Zonal OCR to **Flexible Spatial Extraction**. 
-- **How it works**: The system identifies "Anchor Labels" (e.g., "Name of Child", "Date of Birth") and uses bounding box geometry to find the nearest text to the right or below the anchor.
-- **Benefit**: This method is immune to image tilting, zooming, or weird aspect ratios from smartphone cameras.
+### Interface & Layout Updates
+- **Fixed Dashboard and Data Interfaces**: Moved the search bar to the upper left and placed action buttons below the text for a cleaner look.
+- **Added Checkboxes**: Added checkboxes to the document list to allow for batch operations.
 
-### 📈 Phase 2: Accuracy Enhancement Options
+### File Management
+- **Fixed Connected Files Display**: Fixed the issue where deleting or viewing files affected connected files incorrectly.
+- **Fixed Disappearing Files Bug**: Fixed the bug where uploading many files caused some or all of them to disappear from the list temporarily.
 
-To further improve the raw text accuracy, we have the following two paths:
+### OCR Queue & Rate Limit Optimizations
+- **Added Delay in Jobs**: Added a 15-second pause between jobs in Laravel to avoid hammering the Gemini API.
+- **Added Retry Logic in Python**: Added a retry loop (up to 5 attempts) with exponential backoff in the OCR server to handle rate limits gracefully.
+- **Implemented API Key Rotation**: Added support for reading multiple keys from the `.env` file and rotating them automatically to increase throughput.
+- **Enforced Strict Sequential Processing**: Moved all OCR jobs to the `low` queue to ensure they process strictly one by one and never in parallel.
 
-#### Option A: Local OpenCV Pre-processing (Recommended)
-I plan to add an image cleaning pipeline before the OCR engine:
-1. **Adaptive Thresholding**: Converts images to pure black-and-white to remove shadows/lighting noise.
-2. **Deskewing**: Automatically straightens tilted images.
-3. **Dilation**: Thickens thin text for better engine recognition.
-*This keeps the system 100% private, local, and free of cost.*
-
-#### Option B: Enterprise Cloud Vision (For Mission Critical Accuracy)
-For 99%+ accuracy on messy handwritten or extremely low-quality photos, I'll consider integrating:
-- **Google Cloud Document AI**
-- **AWS Textract**
-*These offer superior handwriting recognition and field-key pairing at a per-page cost.*
+### Outstanding Problem
+- **Gemini Rate Limits**: Batch processing is still difficult because the Gemini free tier has strict limits on requests per minute (RPM). Even with delays and retries, processing many files quickly hits these limits. Using multiple keys (Key Rotation) is our best free solution so far!

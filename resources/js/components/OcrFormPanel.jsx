@@ -363,6 +363,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                         <div className="flex items-center justify-between mb-3 shrink-0">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
                             <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
+                        </div>
                         <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center">
                             <img
                                 src={`/api/documents/view/${file.id || file.file_id || file.document_id || file.realId}?raw=1&t=${new Date().getTime()}`}
@@ -699,7 +700,6 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                         </div>
                     </div>
                 </div>
-            </div>
             </motion.div>
         </div>,
         document.body

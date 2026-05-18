@@ -33,10 +33,10 @@ class OcrController extends Controller
         }
 
         $doc         = $documents[0];
-        $fileContent = $doc->file_data;
+        $filePath = $doc->file_path;
 
-        if (empty($fileContent)) {
-            return response()->json(['success' => false, 'error' => 'File content not found in database'], 404);
+        if (empty($filePath) || !\Storage::disk('public')->exists($filePath)) {
+            return response()->json(['success' => false, 'error' => 'File not found on disk'], 404);
         }
 
         // --- Prevent duplicate processing ---
@@ -62,8 +62,8 @@ class OcrController extends Controller
         // Ensure the status is set to processing
         DB::update("UPDATE documents SET status = 'processing' WHERE id = ?", [$documentId]);
 
-        // Dispatch the coordinator to the high-priority queue so OCR starts immediately
-        \App\Jobs\ProcessDocumentOcr::dispatch($documentId, $docType, $languages)->onQueue('high');
+        // Dispatch the coordinator to the low-priority queue to ensure sequential processing
+        \App\Jobs\ProcessDocumentOcr::dispatch($documentId, $docType, $languages)->onQueue('low');
 
         return response()->json([
             'success' => true,

@@ -121,10 +121,21 @@ const Documents = () => {
 
     const [files, setFiles] = useState([]);
     const [archivedIds, setArchivedIds] = useState([]);
+    const [selectedIds, setSelectedIds] = useState([]);
 
     useEffect(() => {
-        // Filter out any IDs that were optimistically archived to prevent "flickering" during background refreshes
-        setFiles(globalFiles.filter(f => !archivedIds.includes(f.id)));
+        setFiles(prev => {
+            // Keep files that are currently uploading
+            const uploading = prev.filter(f => f.status === 'uploading');
+            
+            // Filter fetched files
+            const fetched = globalFiles.filter(f => !archivedIds.includes(f.id));
+            
+            // Remove uploading files that have appeared in fetched files (by name)
+            const uploadingFiltered = uploading.filter(u => !fetched.some(f => f.name === u.name));
+            
+            return [...uploadingFiltered, ...fetched];
+        });
     }, [globalFiles, archivedIds]);
 
     const [selectedDocType, setSelectedDocType] = useState('birth');
@@ -143,6 +154,20 @@ const Documents = () => {
     const [previewFile, setPreviewFile] = useState(null); // file to preview
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '', type: 'info' });
+
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = (filteredFiles) => {
+        if (selectedIds.length === filteredFiles.length && filteredFiles.length > 0) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(filteredFiles.map(f => f.id));
+        }
+    };
 
     useEffect(() => {
         const hasProcessing = files.some(f => f.status === 'processing' || f.status === 'uploading');
@@ -434,7 +459,7 @@ const Documents = () => {
                     const res = await fetch(`/api/documents/${fileId}`, { method: 'DELETE', credentials: 'include' });
                     if (res.ok) {
                         refreshAll();
-                        return { success: true, type: 'delete', message: 'Document archived successfully' };
+                        return { success: true, type: 'delete', message: 'Document deleted successfully' };
                     }
                     // Revert on failure
                     refreshAll();
@@ -452,6 +477,35 @@ const Documents = () => {
         await fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' });
         refreshDocuments(true);
         refreshStats(true);
+    };
+
+    const bulkDeleteSelected = async () => {
+        if (!selectedIds.length) return;
+
+        setConfirmModal({
+            isOpen: true,
+            title: 'Delete Selected Documents',
+            message: `Are you sure you want to delete all ${selectedIds.length} selected documents?`,
+            type: 'danger',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Deleting ${selectedIds.length} files`, async () => {
+                    let successCount = 0;
+                    for (const id of selectedIds) {
+                        try {
+                            const res = await fetch(`/api/documents/${id}`, { method: 'DELETE', credentials: 'include' });
+                            if (res.ok) successCount++;
+                        } catch (err) {
+                            console.error(`Failed to delete ${id}`, err);
+                        }
+                    }
+                    setSelectedIds([]); // Clear selection after delete
+                    refreshAll();
+                    return { success: true, message: `Successfully deleted ${successCount} files.` };
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
     };
 
     const docTypes = [
@@ -479,8 +533,8 @@ const Documents = () => {
             const isPending    = s === 'pending';
             const isProcessing = s === 'processing';
 
-            const label = isPending ? 'Pending OCR'
-                        : isProcessing ? (file.batch_total > 1 ? `Processing ${file.batch_processed ?? 1}/${file.batch_total}` : 'Processing…')
+            const label = isPending ? 'In Queue'
+                        : isProcessing ? (file.batch_total > 1 ? `OCR Working ${file.batch_processed ?? 1}/${file.batch_total}` : 'OCR Working…')
                         : 'Uploading…';
 
             // Solid fill colors
@@ -763,7 +817,7 @@ const Documents = () => {
                         {activeTab === 'queue' ? (
                             <>
                                 {/* Queue Header */}
-                                <div className="p-5 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between bg-slate-50/50">
+                                <div className="p-5 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
                                     <div>
                                         <h3 className="text-lg font-bold text-slate-800">Active Queue</h3>
                                         <p className="text-xs text-slate-400 mt-0.5">Documents waiting for extraction or approval</p>
@@ -790,6 +844,13 @@ const Documents = () => {
                                                 Process All
                                             </button>
                                         )}
+                                        {selectedIds.length > 0 && (
+                                            <button onClick={bulkDeleteSelected}
+                                                className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white px-3 py-2 rounded-lg border border-rose-100 transition-all flex items-center gap-1.5 shadow-sm">
+                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                Delete Selected ({selectedIds.length})
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -808,6 +869,14 @@ const Documents = () => {
                                     <table className="w-full text-left border-collapse table-auto">
                                         <thead>
                                             <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                <th className="px-3 py-2.5 font-black text-slate-500 w-10">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
+                                                        checked={selectedIds.length === filteredQueue.length && filteredQueue.length > 0}
+                                                        onChange={() => toggleSelectAll(filteredQueue)}
+                                                    />
+                                                </th>
                                                 <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
                                                 <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
                                                 <th className="px-2 py-2.5 text-center font-black text-slate-500">Status</th>
@@ -824,6 +893,14 @@ const Documents = () => {
                                                             </td>
                                                         ) : (
                                                             <>
+                                                                <td className="px-3 py-2.5">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
+                                                                        checked={selectedIds.includes(file.id)}
+                                                                        onChange={() => toggleSelect(file.id)}
+                                                                    />
+                                                                </td>
                                                                 <td className="px-3 py-2.5">
                                                                     <div className="flex items-center">
                                                                         <div className="min-w-0">

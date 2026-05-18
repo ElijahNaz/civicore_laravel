@@ -26,7 +26,7 @@ if /I "%RAM_PROFILE%"=="4GB" (
     set "DEFAULT_TIMEOUT=90"
 ) else (
     set "HIGH_WORKERS=1"
-    set "LOW_WORKERS=2"
+    set "LOW_WORKERS=1"
     set "DEFAULT_WORKERS=1"
     set "HIGH_SLEEP=1"
     set "LOW_SLEEP=1"

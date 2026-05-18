@@ -94,6 +94,7 @@ Route::middleware('web')->group(function () {
     Route::get('/issuances/download/{id}',            [IssuanceController::class, 'download']);
     Route::get('/issuances/view/{id}',                [IssuanceController::class, 'view']);
     Route::post('/issuances',                         [IssuanceController::class, 'store']);
+    Route::put('/issuances/{id}',                     [IssuanceController::class, 'update']);
     Route::delete('/issuances/{id}',                  [IssuanceController::class, 'destroy']);
     Route::post('/issuances/{id}/undo',               [IssuanceController::class, 'undo']);
     Route::post('/issuances/{id}/issue',              [IssuanceController::class, 'markAsIssued']);

@@ -24,11 +24,25 @@ return new class extends Migration
                 $table->string('personName')->nullable();
                 $table->string('barangay')->nullable();
                 $table->json('metadata')->nullable();
+                
+                // File path instead of LONGBLOB
+                $table->string('file_path')->nullable()->comment('Path to stored file in storage/app/public/documents');
+                
+                // OCR and extraction fields
+                $table->longText('raw_text')->nullable()->comment('Raw OCR text for full-text searchability');
+                $table->json('extracted_data')->nullable()->comment('JSON extracted fields from OCR (Name, Date, etc.)');
                 $table->longText('ocr_text')->nullable();
+                $table->json('extracted_fields')->nullable();
+                $table->string('detected_type')->nullable();
+                $table->boolean('parental_consent')->default(false);
+                
+                $table->string('encoded_by')->nullable();
                 $table->timestamps();
+                $table->softDeletes();
             });
-            // Add LONGBLOB column separately — Laravel's binary() maps to TINYBLOB in MySQL
-            DB::statement('ALTER TABLE documents ADD COLUMN file_data LONGBLOB NULL');
+
+            // Create FULLTEXT index for full-text search on raw_text and name
+            DB::statement('ALTER TABLE documents ADD FULLTEXT INDEX ft_raw_text_name (raw_text, name)');
         }
     }
 

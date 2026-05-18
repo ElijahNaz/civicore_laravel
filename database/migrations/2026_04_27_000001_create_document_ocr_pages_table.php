@@ -18,7 +18,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['document_id', 'page_no']);
-            $table->index('document_id');
+            $table->foreign('document_id')->references('id')->on('documents')->cascadeOnDelete();
         });
     }
 

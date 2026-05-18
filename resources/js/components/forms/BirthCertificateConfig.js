@@ -194,28 +194,40 @@ export const BirthConfig = [
         ]
     },
     {
-        section: '22-25. Certifications',
+        section: '22. Informant',
         fields: [
-            { key: 'informant_signature', label: '22. Informant Signature', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'informant_name', label: '22. Informant Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'informant_relationship', label: '22. Relationship to Child', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'informant_address', label: '22. Informant Address', type: 'text', required: false, width: 'sm:col-span-2' },
-            { key: 'informant_date', label: '22. Date', type: 'date', required: false, width: 'sm:col-span-1' },
-
-            { key: 'prepared_by_signature', label: '23. Prepared By Signature', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'prepared_by_name', label: '23. Prepared By Name', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'prepared_by_title', label: '23. Prepared By Title', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'prepared_by_date', label: '23. Date', type: 'date', required: false, width: 'sm:col-span-1' },
-
-            { key: 'received_by_signature', label: '24. Received By Signature', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'received_by_name', label: '24. Received By Name', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'received_by_title', label: '24. Received By Title', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'received_by_date', label: '24. Date', type: 'date', required: false, width: 'sm:col-span-1' },
-
-            { key: 'registered_by_signature', label: '25. Registered By Signature', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'registered_by_name', label: '25. Registered By Name', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'registered_by_title', label: '25. Registered By Title', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'registered_by_date', label: '25. Date', type: 'date', required: false, width: 'sm:col-span-1' },
+            { key: 'informant_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'informant_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'informant_relationship', label: 'Relationship to Child', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'informant_address', label: 'Address', type: 'text', required: false, width: 'sm:col-span-2' },
+            { key: 'informant_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
+        ]
+    },
+    {
+        section: '23. Prepared By',
+        fields: [
+            { key: 'prepared_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'prepared_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'prepared_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'prepared_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
+        ]
+    },
+    {
+        section: '24. Received By',
+        fields: [
+            { key: 'received_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'received_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'received_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'received_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
+        ]
+    },
+    {
+        section: '25. Registered at the Office of the Civil Registrar',
+        fields: [
+            { key: 'registered_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'registered_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'registered_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'registered_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
         ]
     },
     {

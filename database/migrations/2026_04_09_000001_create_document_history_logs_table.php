@@ -22,6 +22,8 @@ return new class extends Migration
             $table->string('action'); // Uploaded, Processed, Deleted
             $table->text('details')->nullable();
             $table->timestamps();
+            
+            $table->foreign('document_id')->references('id')->on('documents')->cascadeOnDelete();
         });
     }
 

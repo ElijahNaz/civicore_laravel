@@ -49,7 +49,7 @@ class DocumentController extends Controller
         $totalResult = DB::select($countQuery, $params);
         $total = $totalResult[0]->total;
         
-        // Get paginated results (exclude file_data for performance)
+        // Get paginated results without loading binary content.
         $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, extracted_fields, detected_type, created_at, updated_at, encoded_by 
                   FROM documents" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
@@ -114,7 +114,7 @@ class DocumentController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('high');
+                ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('low');
                 $queuedCount++;
             });
         }
@@ -157,7 +157,7 @@ class DocumentController extends Controller
                 'status' => 'Pending',
                 'updated_at' => now(),
             ]);
-            ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('high');
+            ProcessDocumentOcr::dispatch($id, $doc->type)->onQueue('low');
             return response()->json(['success' => true, 'new_status' => 'Pending']);
         }
     }
@@ -202,7 +202,7 @@ class DocumentController extends Controller
         ]);
 
         // 4. Pass the database record to the background worker
-        ProcessDocumentOcr::dispatch($document->id, 'Uncategorized')->onQueue('high');
+        ProcessDocumentOcr::dispatch($document->id, 'Uncategorized')->onQueue('low');
 
         // 5. Return success instantly to the React frontend
         return response()->json([
@@ -277,7 +277,7 @@ class DocumentController extends Controller
             $this->logHistory($newId, 'Uploaded');
 
             // STEP 4: Hand off to the Background Queue to do the OCR later!
-            ProcessDocumentOcr::dispatch($newId, $docType)->onQueue('high');
+            ProcessDocumentOcr::dispatch($newId, $docType)->onQueue('low');
 
             // STEP 5: Return to React INSTANTLY (< 500ms)
             return response()->json([
@@ -627,6 +627,10 @@ class DocumentController extends Controller
                     ]);
                     $pdfData = $pdf->output();
 
+                    // Save the PDF to disk instead of the database
+                    $issuanceFilePath = 'issuances/' . $docType . '_' . $id . '_' . time() . '.pdf';
+                    \Storage::disk('public')->put($issuanceFilePath, $pdfData);
+
                     if (count($existing) > 0) {
                         // 2. UPDATE existing Master Record (Keep certNumber)
                         DB::table('issuances')->where('document_id', $id)->update([
@@ -636,7 +640,7 @@ class DocumentController extends Controller
                             'status' => 'Active',
                             'encoded_by' => $encodedBy,
                             'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
-                            'file_data' => $pdfData,
+                            'file_path' => $issuanceFilePath,
                             'updated_at' => now()
                         ]);
                     } else {
@@ -669,7 +673,7 @@ class DocumentController extends Controller
                             'encoded_by' => $encodedBy,
                             'document_id' => $id,
                             'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
-                            'file_data' => $pdfData,
+                            'file_path' => $issuanceFilePath,
                             'created_at' => now(),
                             'updated_at' => now()
                         ]);
@@ -704,12 +708,25 @@ class DocumentController extends Controller
      */
     public function destroy($id)
     {
-        // Log deletion before soft-deleting
-        $this->logHistory($id, 'Deleted');
+        $document = DB::table('documents')->where('id', $id)->first();
+        if (!$document) {
+            return response()->json(['success' => false, 'error' => 'Document not found'], 404);
+        }
 
-        // Soft delete from database
-        DB::update("UPDATE documents SET deleted_at = NOW() WHERE id = ?", [$id]);
-        
+        DB::transaction(function () use ($id) {
+            $this->logHistory($id, 'Deleted');
+
+            DB::table('documents')->where('id', $id)->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('issuances')->where('document_id', $id)->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
         return response()->json(['success' => true]);
     }
 
@@ -718,7 +735,22 @@ class DocumentController extends Controller
      */
     public function undo($id)
     {
-        DB::update("UPDATE documents SET deleted_at = NULL WHERE id = ?", [$id]);
+        $document = DB::table('documents')->where('id', $id)->first();
+        if (!$document) {
+            return response()->json(['success' => false, 'error' => 'Document not found'], 404);
+        }
+
+        DB::transaction(function () use ($id) {
+            DB::table('documents')->where('id', $id)->update([
+                'deleted_at' => null,
+                'updated_at' => now(),
+            ]);
+
+            DB::table('issuances')->where('document_id', $id)->update([
+                'deleted_at' => null,
+                'updated_at' => now(),
+            ]);
+        });
         
         return response()->json(['success' => true]);
     }
@@ -755,7 +787,7 @@ class DocumentController extends Controller
         }
 
         $doc = $documents[0];
-        $metadata = json_decode($doc->metadata, true);
+        $metadata = json_decode($doc->metadata ?? '[]', true) ?: [];
         $status = strtolower($doc->status ?? 'pending');
         
         // --- If extracted or processed, generate a PDF preview with the text ---
@@ -787,64 +819,40 @@ class DocumentController extends Controller
             };
         }
 
-        $fileContent = $doc->file_data;
-        if (empty($fileContent)) {
-            if (!empty($doc->file_path) && \Storage::disk('public')->exists($doc->file_path)) {
-                $fullPath = \Storage::disk('public')->path($doc->file_path);
-                
-                // --- SMART REFERENCE PREVIEW ---
-                // If it's a PDF and we're asking for 'raw' preview, try to serve the split IMAGE 
-                // that actually has the Birth/Death/Marriage content.
-                $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
-                if ($request->has('raw') && $ext === 'pdf') {
-                    $dir = dirname($fullPath);
-                    $base = pathinfo($fullPath, PATHINFO_FILENAME);
-                    
-                    // Check page 1 and page 2 (in case page 1 was a screenshot)
-                    $p1 = $dir . '/' . $base . '_page_1.jpg';
-                    $p2 = $dir . '/' . $base . '_page_2.jpg';
-                    $p1p = $dir . '/' . $base . '_page_1_proc.jpg';
-                    $p2p = $dir . '/' . $base . '_page_2_proc.jpg';
-                    
-                    $bestImage = null;
-                    // Prioritize the processed (proc) images as they are cleaned up
-                    if (file_exists($p1p)) $bestImage = $p1p;
-                    elseif (file_exists($p2p)) $bestImage = $p2p;
-                    elseif (file_exists($p1)) $bestImage = $p1;
-                    elseif (file_exists($p2)) $bestImage = $p2;
-                    
-                    if ($bestImage) {
-                        return response()->file($bestImage, [
-                            'Content-Type' => 'image/jpeg',
-                            'Content-Disposition' => 'inline; filename="preview.jpg"'
-                        ]);
-                    }
-                }
-
-                return response()->file($fullPath, [
-                    'Content-Type' => $mimetype,
-                    'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? 'document') . '"'
-                ]);
-            }
-
-            \Log::error("File data missing for document ID: " . $id);
+        if (empty($doc->file_path) || !\Storage::disk('public')->exists($doc->file_path)) {
+            \Log::error("File path missing for document ID: " . $id);
             return response()->json(['error' => 'File content not found'], 404);
         }
 
-        // Clean output buffers to ensure binary safety
-        if (ob_get_length()) ob_end_clean();
-        if (!$mimetype) {
-            $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);
-            $mimetype = match(strtolower($ext)) {
-                'png' => 'image/png', 'jpg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp',
-                'gif' => 'image/gif', 'pdf' => 'application/pdf', default => 'application/octet-stream'
-            };
+        $fullPath = \Storage::disk('public')->path($doc->file_path);
+
+        // If it's a PDF and we're asking for the raw preview, prefer generated page images.
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+        if ($request->has('raw') && $ext === 'pdf') {
+            $dir = dirname($fullPath);
+            $base = pathinfo($fullPath, PATHINFO_FILENAME);
+
+            $candidates = [
+                $dir . '/' . $base . '_page_1_proc.jpg',
+                $dir . '/' . $base . '_page_2_proc.jpg',
+                $dir . '/' . $base . '_page_1.jpg',
+                $dir . '/' . $base . '_page_2.jpg',
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (file_exists($candidate)) {
+                    return response()->file($candidate, [
+                        'Content-Type' => 'image/jpeg',
+                        'Content-Disposition' => 'inline; filename="preview.jpg"'
+                    ]);
+                }
+            }
         }
 
-        // Use a binary response with correct length
-        return response($fileContent)
-            ->header('Content-Type', $mimetype)
-            ->header('Content-Disposition', $disposition . '; filename="' . ($metadata['originalName'] ?? 'document') . '"');
+        return response()->file($fullPath, [
+            'Content-Type' => $mimetype,
+            'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? $doc->name ?? 'document') . '"'
+        ]);
     }
 
     /**

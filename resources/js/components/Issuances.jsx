@@ -101,7 +101,8 @@ const Issuances = () => {
         refreshIssuances,
         refreshDocuments,
         refreshStats,
-        refreshAll
+        refreshAll,
+        stats
     } = useData();
 
     const isLoading = dataLoading.issuances || dataLoading.documents;
@@ -205,33 +206,17 @@ const Issuances = () => {
                     }
                 };
             }),
-            // Non-issued Documents (Master Database entries not yet finalized)
-            ...rawDocuments.filter(d => !issuedDocIds.has(Number(d.id))).map(d => {
-                const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
-                const rawType = (d.detected_type || d.type || 'birth').toLowerCase();
-                const type = rawType === 'unknown' ? 'birth' : rawType;
-
-                return {
-                    id: `doc-${d.id}`,
-                    realId: d.id,
-                    number: d.tracking_number || `DOC-${d.id}`,
-                    type,
-                    name: ef.full_name || ef.husbands_name || ef.wifes_name || d.name || 'Pending Review',
-                    barangay: ef.barangay || d.barangay || '—',
-                    date: d.created_at,
-                    status: d.status || 'Pending',
-                    encoded_by: d.encoded_by || 'System',
-                    source: 'document',
-                    raw: {
-                        ...d,
-                        type,
-                        extracted_fields: ef
-                    }
-                };
-            })
+            // Non-issued Documents removed as requested
         ];
-        // Sort by date descending
-        combined.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Sort by date descending, fallback to realId
+        combined.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            if (dateA.getTime() !== dateB.getTime()) {
+                return dateB - dateA;
+            }
+            return b.realId - a.realId;
+        });
         setCertificates(combined);
     }, [rawIssuances, rawDocuments]);
 
@@ -411,18 +396,30 @@ const Issuances = () => {
                 
                 runBackgroundTask(`Bulk Delete: ${idsToDelete.length} Records`, async () => {
                     let ok = 0;
+                    let failed = 0;
                     for (const fullId of idsToDelete) {
                         const cert = certificates.find(c => c.id === fullId);
                         if (!cert) continue;
                         const endpoint = cert.source === 'issuance' ? `/api/issuances/${cert.realId}` : `/api/documents/${cert.realId}`;
-                        const res = await axios.delete(endpoint);
-                        if (res.data.success) {
-                            logActivity('Deleted (Bulk)', cert);
-                            ok++;
+                        try {
+                            const res = await axios.delete(endpoint);
+                            if (res.data.success) {
+                                logActivity('Deleted (Bulk)', cert);
+                                ok++;
+                            } else {
+                                failed++;
+                            }
+                        } catch (err) {
+                            console.error(`Failed to delete ${fullId}:`, err);
+                            failed++;
                         }
                     }
                     refreshAll();
-                    return { success: true, message: `Successfully removed ${ok} records.`, type: 'bulk-delete' };
+                    return { 
+                        success: true, 
+                        message: `Successfully removed ${ok} records.${failed > 0 ? ` Failed to remove ${failed} records.` : ''}`, 
+                        type: 'bulk-delete' 
+                    };
                 }, {
                     type: 'bulk-delete',
                     undoFn: async () => {

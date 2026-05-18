@@ -34,7 +34,7 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
         $this->documentId = $documentId;
         $this->docType = $docType;
         $this->languages = $languages;
-        $this->onQueue('high');
+        $this->onQueue('low');
     }
 
     public function uniqueId()
@@ -113,7 +113,7 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                     1,
                     $this->docType,
                     $this->languages
-                ))->onQueue('high');
+                ))->onQueue('low');
             }
 
             $docId = $this->documentId;

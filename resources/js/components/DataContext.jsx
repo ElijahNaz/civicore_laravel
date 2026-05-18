@@ -246,6 +246,7 @@ export const DataProvider = ({ children }) => {
                     date:            i.issuanceDate,
                     status:          i.status || 'Pending',
                     encoded_by:      i.encoded_by,
+                    document_id:     i.document_id,
                     created_at:      i.created_at
                 }));
                 setIssuances(mapped);

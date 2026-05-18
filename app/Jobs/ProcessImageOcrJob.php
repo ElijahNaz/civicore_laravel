@@ -40,10 +40,13 @@ class ProcessImageOcrJob implements ShouldQueue
             return;
         }
 
+        // Add delay to prevent hitting Gemini API rate limits
+        sleep(15);
+
         Log::info("ProcessImageOcrJob starting for doc {$this->documentId}, image: {$this->imagePath}");
 
         try {
-            $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr', [
+            $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr/gemini', [
                 'file_path' => $this->imagePath,
                 'doc_type' => $this->docType,
                 'languages' => $this->languages,

@@ -15,6 +15,7 @@ import fitz  # PyMuPDF
 import cv2
 import numpy as np
 import threading
+from google import genai
 from functools import wraps
 
 process_lock = threading.Lock()
@@ -111,7 +112,7 @@ DEFAULT_QUICK_FILL_REQUIRED_FIELDS = {
     "death": ["full_name", "date_of_death", "registry_number", "barangay"],
     "marriage": ["husbands_name", "wifes_name", "date_of_marriage", "registry_number", "barangay"],
 }
-
+# Thresholds for quick fill confidence, 0.60 is the lowest 0.75 the highest
 QUICK_FILL_MIN_CONFIDENCE = 0.60
 QUICK_FILL_MIN_MARKER_HITS = 1
 TEMPLATE_PROFILE_PATH = Path(__file__).resolve().parent / "Templates" / "roi_profiles.json"
@@ -169,7 +170,7 @@ PH_PROVINCES = [
     "Abra", "Agusan del Norte", "Agusan del Sur", "Aklan", "Albay", "Antique",
     "Apayao", "Aurora", "Basilan", "Bataan", "Batanes", "Batangas", "Benguet",
     "Biliran", "Bohol", "Bukidnon", "Bulacan", "Cagayan", "Camarines Norte",
-    "Camarines Sur", "Camiguin", "Capiz", "Catanduanes", "Cavite", "Cebu",
+    "Camarines Sur", "Camiguin", "Capiz", "Catanduanes", "Cavite", "Cebu",  
     "Compostela Valley", "Cotabato", "Davao de Oro", "Davao del Norte",
     "Davao del Sur", "Davao Occidental", "Davao Oriental", "Dinagat Islands",
     "Eastern Samar", "Guimaras", "Ifugao", "Ilocos Norte", "Ilocos Sur",
@@ -1070,6 +1071,172 @@ def split_pdf(data: SplitRequest):
         return {"success": True, "pages": image_paths, "total": len(image_paths)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+current_key_index = 0
+
+@app.post('/ocr/gemini')
+@serialize_processing
+def process_ocr_gemini(data: dict):
+    global current_key_index
+    file_path = data.get('file_path')
+    doc_type = data.get('doc_type', 'birth')
+    
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail=f"File not found: {file_path}")
+        
+    print(f"Processing Gemini OCR for: {file_path}")
+    
+    # Read API keys
+    api_keys = []
+    keys_str = os.environ.get("GEMINI_API_KEYS")
+    
+    if not keys_str:
+        env_path = Path(__file__).resolve().parent / '.env'
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                for line in f:
+                    if line.startswith('GEMINI_API_KEYS='):
+                        keys_str = line.split('=', 1)[1].strip().strip('"').strip("'")
+                        break
+                    elif line.startswith('GEMINI_API_KEY='):
+                        keys_str = line.split('=', 1)[1].strip().strip('"').strip("'")
+                        
+    if keys_str:
+        api_keys = [k.strip() for k in keys_str.split(',') if k.strip()]
+    else:
+        single_key = os.environ.get("GEMINI_API_KEY")
+        if single_key:
+            api_keys = [single_key]
+            
+    if not api_keys:
+        raise HTTPException(status_code=500, detail="No Gemini API keys found in environment or .env file.")
+        
+    print(f"Found {len(api_keys)} API keys for rotation.")
+    
+    ext = Path(file_path).suffix.lower()
+    img = None
+    if ext == '.pdf':
+        try:
+            import fitz
+            doc = fitz.open(file_path)
+            page = doc.load_page(0)
+            pix = page.get_pixmap()
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+    else:
+        try:
+            img = Image.open(file_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to open image: {str(e)}")
+            
+    prompt = """
+    You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Live Birth).
+    There may be different varieties of this form (e.g., older forms from 1958, newer forms from 1993, or others).
+    Please extract the data from this image and return it in a clean JSON format.
+    Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
+    
+    The valid options for the 'barangay' field are:
+    'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
+    'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
+    'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
+    'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
+    'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
+    'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
+    Please map the extracted barangay to the closest match from this list if possible.
+    
+    Special Instructions:
+    - For 'mother_children_dead', if the value is '0', blank, not specified, or indicates none, please return 'None' instead of null.
+    - For marriage date fields ('marriage_parents_day', 'marriage_parents_month', 'marriage_parents_year'), if the document indicates the date is unknown, forgotten, or not applicable, you may return the text found (e.g., 'Forgotten') instead of a number.
+    - For 'office_registry_code' (Registry Coding), if it contains a sequence of numbers, please return them with a space between each digit (e.g., '1 2 3 4').
+    - **Form Varieties**: If the document is an older version (like the 1958 form), some field labels may differ. Please map them logically to the target schema. For example, "Usual Residence" or similar address fields should map to the corresponding residence fields (e.g., `mother_residence_house` or `place_of_birth_city` depending on context).
+    
+    JSON Structure to follow (use null for empty or unreadable fields):
+    {
+      "registry_number": null, "province": null, "city_municipality": null, "barangay": null,
+      "first_name": null, "middle_name": null, "last_name": null, "sex": null,
+      "dob_day": null, "dob_month": null, "dob_year": null,
+      "place_of_birth_hospital": null, "place_of_birth_city": null, "place_of_birth_province": null,
+      "type_of_birth": null, "multiple_birth_order": null, "birth_order": null, "weight_at_birth": null,
+      
+      "mother_first_name": null, "mother_middle_name": null, "mother_last_name": null,
+      "mother_citizenship": null, "mother_religion": null,
+      "mother_children_total": null, "mother_children_living": null, "mother_children_dead": null,
+      "mother_occupation": null, "mother_age": null,
+      "mother_residence_house": null, "mother_residence_city": null, "mother_residence_province": null, "mother_residence_country": null,
+      
+      "father_first_name": null, "father_middle_name": null, "father_last_name": null,
+      "father_citizenship": null, "father_religion": null,
+      "father_occupation": null, "father_age": null,
+      "father_residence_house": null, "father_residence_city": null, "father_residence_province": null, "father_residence_country": null,
+      
+      "marriage_parents_day": null, "marriage_parents_month": null, "marriage_parents_year": null,
+      "marriage_parents_place_city": null, "marriage_parents_place_province": null, "marriage_parents_place_country": null,
+      
+      "attendant_type": null, "attendant_time": null,
+      "attendant_name": null, "attendant_title": null, "attendant_address": null, "attendant_date": null,
+      
+      "informant_name": null, "informant_relationship": null, "informant_address": null, "informant_date": null,
+      
+      "prepared_by_name": null, "prepared_by_title": null, "prepared_by_date": null,
+      "received_by_name": null, "received_by_title": null, "received_by_date": null,
+      "registered_by_name": null, "registered_by_title": null, "registered_by_date": null,
+      
+      "remarks": null, "office_registry_code": null
+    }
+    """
+    
+    max_retries = len(api_keys) * 2
+    retry_delay = 5  # shorter delay because we switch keys
+    response = None
+    
+    for attempt in range(max_retries):
+        key_idx = (current_key_index + attempt) % len(api_keys)
+        key = api_keys[key_idx]
+        print(f"Using API Key index {key_idx} (Attempt {attempt+1}/{max_retries})")
+        
+        try:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[img, prompt]
+            )
+            
+            # Update index on success
+            current_key_index = (key_idx + 1) % len(api_keys)
+            break  # success!
+        except Exception as e:
+            err_str = str(e)
+            if '429' in err_str or '503' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
+                if attempt < max_retries - 1:
+                    print(f"Key {key_idx} rate limited. Retrying with next key in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    continue
+            raise HTTPException(status_code=500, detail=f"Gemini API error after {attempt+1} attempts: {err_str}")
+            
+    if not response:
+        raise HTTPException(status_code=500, detail="Gemini API failed to return a response.")
+        
+    clean_text = response.text.strip()
+    if clean_text.startswith("```json"):
+        clean_text = clean_text[7:]
+    if clean_text.endswith("```"):
+        clean_text = clean_text[:-3]
+    clean_text = clean_text.strip()
+    
+    try:
+        extracted_data = json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse JSON from Gemini response: {str(e)}. Response was: {clean_text}")
+    
+    return {
+        "success": True,
+        "text": response.text,
+        "detected_type": doc_type,
+        "extracted_fields": extracted_data,
+        "engine_used": "gemini-2.5-flash",
+        "quick_fill_used": True
+    }
 
 @app.post('/ocr')
 @serialize_processing

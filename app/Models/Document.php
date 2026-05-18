@@ -21,7 +21,6 @@ class Document extends Model
         'personName',
         'barangay',
         'metadata',
-        'file_data',
         'file_path',
         'raw_text',
         'ocr_text',
@@ -38,8 +37,22 @@ class Document extends Model
         'extracted_data' => 'json',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
+
+    public function issuance()
+    {
+        return $this->hasOne(Issuance::class);
+    }
+
+    public function ocrPages()
+    {
+        return $this->hasMany(DocumentOcrPage::class);
+    }
+
+    public function historyLogs()
+    {
+        return $this->hasMany(DocumentHistoryLog::class);
+    }
 
     /**
      * Search documents by raw_text and file_name using FULLTEXT search
@@ -54,7 +67,6 @@ class Document extends Model
             'MATCH(raw_text, name) AGAINST(? IN BOOLEAN MODE)',
             [$query]
         )
-        ->where('deleted_at', null)
         ->orderByRaw('MATCH(raw_text, name) AGAINST(? IN BOOLEAN MODE) DESC', [$query])
         ->paginate($limit);
     }
@@ -70,7 +82,6 @@ class Document extends Model
             'MATCH(raw_text) AGAINST(? IN BOOLEAN MODE)',
             [$query]
         )
-        ->where('deleted_at', null)
         ->orderByRaw('MATCH(raw_text) AGAINST(? IN BOOLEAN MODE) DESC', [$query]);
     }
 
@@ -82,7 +93,6 @@ class Document extends Model
     public static function searchByFileName($query)
     {
         return self::where('name', 'LIKE', "%{$query}%")
-            ->where('deleted_at', null)
             ->orderBy('created_at', 'desc');
     }
 
@@ -94,7 +104,7 @@ class Document extends Model
      */
     public function scopeByType($query, $type)
     {
-        return $query->where('type', $type)->where('deleted_at', null);
+        return $query->where('type', $type);
     }
 
     /**
@@ -105,7 +115,7 @@ class Document extends Model
      */
     public function scopeByStatus($query, $status)
     {
-        return $query->where('status', $status)->where('deleted_at', null);
+        return $query->where('status', $status);
     }
 
     /**

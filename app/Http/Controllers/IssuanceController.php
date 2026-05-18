@@ -112,7 +112,15 @@ class IssuanceController extends Controller
      */
     public function destroy($id)
     {
-        DB::delete("DELETE FROM issuances WHERE id = ?", [$id]);
+        $issuance = DB::table('issuances')->where('id', $id)->first();
+        if (!$issuance) {
+            return response()->json(['success' => false, 'error' => 'Issuance not found'], 404);
+        }
+
+        DB::table('issuances')->where('id', $id)->update([
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
         
         return response()->json(['success' => true]);
     }
@@ -179,7 +187,8 @@ class IssuanceController extends Controller
                 ]);
                 $pdfData = $pdf->output();
 
-                DB::table('issuances')->where('id', $id)->update(['file_data' => $pdfData]);
+                $filePath = $this->storeIssuancePdf($id, $docType, $pdfData);
+                DB::table('issuances')->where('id', $id)->update(['file_path' => $filePath]);
             }
         }
 
@@ -191,7 +200,15 @@ class IssuanceController extends Controller
      */
     public function undo($id)
     {
-        DB::update("UPDATE issuances SET deleted_at = NULL WHERE id = ?", [$id]);
+        $issuance = DB::table('issuances')->where('id', $id)->first();
+        if (!$issuance) {
+            return response()->json(['success' => false, 'error' => 'Issuance not found'], 404);
+        }
+
+        DB::table('issuances')->where('id', $id)->update([
+            'deleted_at' => null,
+            'updated_at' => now(),
+        ]);
         
         return response()->json(['success' => true]);
     }
@@ -260,40 +277,55 @@ class IssuanceController extends Controller
             return response()->json(['error' => 'Not found'], 404);
         }
 
-        // If file_data is empty OR we want to ensure it's the latest clean version, regenerate it
-        // For this fix, we prioritize a fresh render to ensure the 'Clean Template' is used
-        if (empty($record->file_data) || request()->query('refresh') == '1' || true) {
-            $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
-            if ($doc) {
-                $docType = strtolower($record->type ?? 'birth');
-                $extractedFields = json_decode($record->extracted_data, true) ?: [];
-                $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
-                
-                $pdf = app('dompdf.wrapper');
-                $pdf->setPaper('a4', 'portrait');
-                $pdf->loadView('pdf.composite_document', [
-                    'doc' => $doc, 
-                    'fields' => $extractedFields,
-                    'overlayFields' => $overlayFields,
-                    'docType' => $docType // Pass it explicitly to the view
-                ]);
-                
-                $pdfData = $pdf->output();
-                
-                // Cache it back to the database for future performance
-                DB::table('issuances')->where('id', $id)->update(['file_data' => $pdfData]);
-                $record->file_data = $pdfData;
-            }
+        $filePath = property_exists($record, 'file_path') ? $record->file_path : null;
+        if ($filePath && request()->query('refresh') !== '1' && \Storage::disk('public')->exists($filePath)) {
+            return response()->file(\Storage::disk('public')->path($filePath), [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $disposition . '; filename="' . $this->issuanceFilename($record) . '"',
+            ]);
         }
 
-        if (empty($record->file_data)) {
+        $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
+        if (!$doc) {
             return response()->json(['error' => 'No file data available'], 404);
         }
 
-        $filename = 'Certificate_' . $record->certNumber . '.pdf';
-        
-        return response($record->file_data)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', $disposition . '; filename="' . $filename . '"');
+        $docType = strtolower($record->type ?? 'birth');
+        $extractedFields = json_decode($record->extracted_data, true) ?: [];
+        $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->setPaper('a4', 'portrait');
+        $pdf->loadView('pdf.composite_document', [
+            'doc' => $doc,
+            'fields' => $extractedFields,
+            'overlayFields' => $overlayFields,
+            'docType' => $docType,
+        ]);
+
+        $pdfData = $pdf->output();
+        $filePath = $this->storeIssuancePdf($id, $docType, $pdfData);
+        DB::table('issuances')->where('id', $id)->update(['file_path' => $filePath]);
+
+        return response()->file(\Storage::disk('public')->path($filePath), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $this->issuanceFilename($record) . '"',
+        ]);
+    }
+
+    private function storeIssuancePdf($id, $docType, $pdfData)
+    {
+        $safeType = preg_replace('/[^a-z0-9_-]/i', '_', strtolower($docType ?: 'certificate'));
+        $filePath = 'issuances/' . $safeType . '_' . $id . '_' . time() . '.pdf';
+
+        \Storage::disk('public')->put($filePath, $pdfData);
+
+        return $filePath;
+    }
+
+    private function issuanceFilename($record)
+    {
+        $certNumber = preg_replace('/[^a-z0-9_-]/i', '_', $record->certNumber ?? 'certificate');
+        return 'Certificate_' . $certNumber . '.pdf';
     }
 }

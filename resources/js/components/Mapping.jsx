@@ -26,7 +26,8 @@ const Mapping = () => {
         issuances: apiData,
         documents: docsData,
         loading: dataLoading,
-        refreshAll
+        refreshAll,
+        stats: backendStats
     } = useData();
 
 
@@ -137,35 +138,37 @@ const Mapping = () => {
             };
 
             apiData.forEach(issuance => {
-                const brgy = issuance.barangay;
                 const type = (issuance.type || '').toLowerCase();
                 const dateStr = issuance.issuanceDate || issuance.created_at;
                 const date = new Date(dateStr);
                 const month = date.toLocaleString('default', { month: 'short' });
                 const monthIdx = last6Months.indexOf(month);
 
-                if (type.includes('birth')) {
-                    birthCount++;
-                    if (monthIdx !== -1) monthData.births[monthIdx]++;
-                } else if (type.includes('death')) {
-                    deathCount++;
-                    if (monthIdx !== -1) monthData.deaths[monthIdx]++;
-                } else if (type.includes('marriage')) {
-                    marriageCount++;
-                    if (monthIdx !== -1) monthData.marriages[monthIdx]++;
+                if (monthIdx !== -1) {
+                    if (type.includes('birth')) monthData.births[monthIdx]++;
+                    else if (type.includes('death')) monthData.deaths[monthIdx]++;
+                    else if (type.includes('marriage')) monthData.marriages[monthIdx]++;
                 }
             });
 
             // Count everything: Finalized Issuances + Unlinked Documents
             const combinedForStats = [
                 ...apiData.map(i => ({ brgy: i.barangay, type: i.type || 'birth' })),
-                ...docsData.filter(d => !apiData.some(i => Number(i.document_id) === Number(d.id))).map(d => ({ brgy: d.barangay, type: d.type || 'birth' }))
+                ...docsData.filter(d => !apiData.some(i => Number(i.document_id) === Number(d.id))).map(d => {
+                    const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
+                    return { brgy: ef.barangay || d.barangay, type: d.detected_type || d.type || 'birth' };
+                })
             ];
 
             combinedForStats.forEach(item => {
                 const brgy = item.brgy;
                 const type = (item.type || 'birth').toLowerCase();
                 
+                // Global counts
+                if (type.includes('birth')) birthCount++;
+                else if (type.includes('death')) deathCount++;
+                else if (type.includes('marriage')) marriageCount++;
+
                 if (brgy) {
                     if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
                     if (type.includes('birth')) brgyCounts[brgy].births++;
@@ -183,7 +186,7 @@ const Mapping = () => {
             // Match TOTAL UPLOADED to the sum of all unique records
             const issuedDocIds = new Set(apiData.map(i => i.document_id ? Number(i.document_id) : null).filter(id => id !== null));
             const unlinkedDocs = docsData.filter(d => !issuedDocIds.has(Number(d.id)));
-            const totalDocs = apiData.length + unlinkedDocs.length;
+            const totalDocs = backendStats?.totalDocs || (apiData.length + unlinkedDocs.length);
 
             const barangaysForMap = staticBarangays.map(b => ({
                 ...b,
