@@ -261,5 +261,8 @@ Here are the accomplishments and updates implemented today:
 - **Implemented API Key Rotation**: Added support for reading multiple keys from the `.env` file and rotating them automatically to increase throughput.
 - **Enforced Strict Sequential Processing**: Moved all OCR jobs to the `low` queue to ensure they process strictly one by one and never in parallel.
 
+### OCR Form Support
+- **Civil Birth Record Variety Handling**: Verified support for handling multiple varieties of the Certificate of Live Birth (e.g., 1958 and 1993 forms) using the Gemini OCR engine, ensuring correct mapping to the standard schema regardless of layout changes.
+
 ### Outstanding Problem
 - **Gemini Rate Limits**: Batch processing is still difficult because the Gemini free tier has strict limits on requests per minute (RPM). Even with delays and retries, processing many files quickly hits these limits. Using multiple keys (Key Rotation) is our best free solution so far!
