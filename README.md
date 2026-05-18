@@ -249,6 +249,7 @@ Here are the accomplishments and updates implemented today:
 ### Interface & Layout Updates
 - **Fixed Dashboard and Data Interfaces**: Moved the search bar to the upper left and placed action buttons below the text for a cleaner look.
 - **Added Checkboxes**: Added checkboxes to the document list to allow for batch operations.
+- **Fixed Dashboard Numbers**: Corrected the data display in the dashboard to show the right numbers.
 
 ### File Management
 - **Fixed Connected Files Display**: Fixed the issue where deleting or viewing files affected connected files incorrectly.
