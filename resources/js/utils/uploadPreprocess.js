@@ -1,5 +1,5 @@
-const TARGET_LONG_EDGE = 2000;
-const MAX_LONG_EDGE = 2200;
+const TARGET_LONG_EDGE = 1600;
+const MAX_LONG_EDGE = 1800;
 
 const detectDeviceType = () => {
     if (typeof window === 'undefined') return 'desktop';

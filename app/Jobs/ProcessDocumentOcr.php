@@ -72,17 +72,16 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
         $extension = strtolower(pathinfo($sourceFilePath, PATHINFO_EXTENSION));
 
         try {
-            $jobs = [];
+            $imagePath = $sourceFilePath;
 
-            // If it's a PDF, we must split it into images first
+            // 1. If it's a PDF, split it and take only the first page
             if ($extension === 'pdf') {
                 Log::info("PDF detected. Requesting Python to split into pages...");
                 
-                // Pass the Windows file path directly to the local Python server
                 $response = Http::timeout(60)
                     ->post('http://127.0.0.1:8080/split', [
-                    'file_path' => $sourceFilePath,
-                ]);
+                        'file_path' => $sourceFilePath,
+                    ]);
 
                 if ($response->failed() || !($response->json()['success'] ?? false)) {
                     throw new \Exception("Failed to split PDF: " . $response->body());
@@ -91,125 +90,181 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 $pages = $response->json()['pages'];
                 Log::info("PDF split into " . count($pages) . " pages.");
 
-                foreach ($pages as $index => $pageImage) {
-                    // low priority queue for batch pages
-                    $jobs[] = (new ProcessImageOcrJob(
-                        $this->documentId,
-                        $pageImage,
-                        $index + 1,
-                        $this->docType,
-                        $this->languages
-                    ))->onQueue('low');
+                if (count($pages) === 0) {
+                    throw new \Exception("PDF contains no pages.");
                 }
-                
-                // IMPORTANT: We removed the @unlink() here so the original PDF stays saved in CiviCORE!
 
-            } else {
-                // Single image or native document (docx/txt bypass)
-                // high priority
-                $jobs[] = (new ProcessImageOcrJob(
-                    $this->documentId,
-                    $sourceFilePath, // Using the direct disk path
-                    1,
-                    $this->docType,
-                    $this->languages
-                ))->onQueue('low');
+                // Strictly process only the first page to save Gemini paid API tokens
+                $imagePath = $pages[0];
             }
 
-            $docId = $this->documentId;
-            DB::table('document_ocr_pages')->where('document_id', $docId)->delete();
+            // 2. Enforce Daily Scan Limit (Token budget manager check)
+            $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 500);
+            $todayDate = date('Y-m-d');
+            $todayScans = DB::table('documents')
+                ->whereIn('status', ['extracted', 'Processed', 'Issued'])
+                ->whereDate('updated_at', $todayDate)
+                ->count();
 
-            // Dispatch batch
-            $batch = Bus::batch($jobs)
-                ->name("Document OCR - {$docId}")
-                ->then(function (Batch $batch) use ($docId) {
-                    // All jobs completed successfully
-                    Log::info("Batch {$batch->id} completed for doc {$docId}");
+            if ($todayScans >= $dailyLimit) {
+                Log::warning("Daily OCR scan limit of {$dailyLimit} reached. Halting job for Document ID: " . $this->documentId);
+                $metadata = json_decode($doc->metadata ?? '{}', true) ?: [];
+                $metadata['failure_reason'] = 'Daily paid API scan limit reached (' . $dailyLimit . ').';
+                DB::table('documents')->where('id', $this->documentId)->update([
+                    'status' => 'failed',
+                    'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE),
+                    'updated_at' => now()
+                ]);
+                return;
+            }
 
-                    $pageRows = DB::table('document_ocr_pages')
-                        ->where('document_id', $docId)
-                        ->orderBy('page_no')
-                        ->get();
+            // 3. Mark status as Processing
+            DB::table('documents')->where('id', $this->documentId)->update([
+                'status' => 'Processing',
+                'updated_at' => now(),
+            ]);
 
-                    $ocrText = $pageRows
-                        ->pluck('text')
-                        ->filter(fn ($value) => filled($value))
-                        ->implode("\n");
+            // 4. Execute OCR via Gemini API (runs synchronously inside this job)
+            Log::info("Executing Gemini OCR for Document ID {$this->documentId} using image: {$imagePath}");
+            $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr/gemini', [
+                'file_path' => $imagePath,
+                'doc_type' => $this->docType,
+                'languages' => $this->languages,
+                'ocr_mode' => 'balanced',
+            ]);
 
-                    $detectedType = '';
-                    $aggregatedFields = [];
+            if ($response->failed() || !($response->json()['success'] ?? false)) {
+                throw new \Exception("OCR Server error: " . $response->body());
+            }
 
-                    foreach ($pageRows as $pageRow) {
-                        $pageDetectedType = (string) ($pageRow->detected_type ?? '');
-                        if ($detectedType === '' && $pageDetectedType !== '') {
-                            $detectedType = $pageDetectedType;
-                        }
+            $result = $response->json();
+            $ocrText = $result['text'] ?? '';
+            $detectedType = $result['detected_type'] ?? 'unknown';
+            $extractedFields = $result['extracted_fields'] ?? [];
+            $quickFillUsed = $result['quick_fill_used'] ?? false;
+            $templateFamilyDetected = $result['template_family_detected'] ?? null;
 
-                        $pageFields = json_decode($pageRow->extracted_fields ?? '[]', true) ?: [];
-                        foreach ($pageFields as $key => $value) {
-                            // PRIORITIZE Page 1: Only fill if the field is still empty
-                            // This prevents Page 2 from overwriting Page 1
-                            if (!empty($value) && empty($aggregatedFields[$key])) {
-                                $aggregatedFields[$key] = $value;
-                            }
-                        }
+            // Normalize Python fields to match React form fields
+            $extractedFields = $this->normalizePythonFields($extractedFields);
+
+            // 5. Always Run PHP Anchor Parser Fallback + Merge
+            if (!empty($ocrText)) {
+                $parser = new \App\Services\OcrParserService();
+                $parsedData = $parser->parseText($ocrText);
+                $phpFields = $parsedData['extracted_fields'] ?? [];
+
+                // Merge PHP parser fallback fields if missing
+                foreach ($phpFields as $key => $value) {
+                    if (empty($extractedFields[$key]) && !empty($value)) {
+                        $extractedFields[$key] = $value;
                     }
+                }
 
-                    $quickFillUsed = false;
-                    $templateFamilyDetected = null;
-                    if (isset($aggregatedFields['_quick_fill_used'])) {
-                        $quickFillUsed = filter_var($aggregatedFields['_quick_fill_used'], FILTER_VALIDATE_BOOLEAN);
-                        unset($aggregatedFields['_quick_fill_used']);
-                    }
-                    if (isset($aggregatedFields['_template_family_detected'])) {
-                        $templateFamilyDetected = $aggregatedFields['_template_family_detected'];
-                        unset($aggregatedFields['_template_family_detected']);
-                    }
-                    if (isset($aggregatedFields['_detected_type'])) {
-                        $detectedType = $aggregatedFields['_detected_type'];
-                        unset($aggregatedFields['_detected_type']);
-                    }
+                if ($detectedType === 'unknown' && !empty($parsedData['detected_type']) && $parsedData['detected_type'] !== 'unknown') {
+                    $detectedType = $parsedData['detected_type'];
+                }
+            }
 
-                    // Inject these flags into the document metadata so the frontend can read them
-                    $docData = DB::table('documents')->where('id', $docId)->first();
-                    $metadata = json_decode($docData->metadata ?? '{}', true) ?: [];
-                    $metadata['quick_fill_used'] = $quickFillUsed;
-                    $metadata['template_family_detected'] = $templateFamilyDetected;
+            // Keyword fallback for document type
+            if ($detectedType === 'unknown') {
+                $searchPool = strtolower(($doc->name ?? '') . ' ' . $ocrText);
+                if (str_contains($searchPool, 'birth') || str_contains($searchPool, 'born') || str_contains($searchPool, 'form 102') || str_contains($searchPool, 'form no. 102')) {
+                    $detectedType = 'birth';
+                } elseif (str_contains($searchPool, 'death') || str_contains($searchPool, 'deceased') || str_contains($searchPool, 'form 103') || str_contains($searchPool, 'form no. 103')) {
+                    $detectedType = 'death';
+                } elseif (str_contains($searchPool, 'marriage') || str_contains($searchPool, 'contract') || str_contains($searchPool, 'form 97') || str_contains($searchPool, 'form no. 97')) {
+                    $detectedType = 'marriage';
+                }
+            }
 
-                    DB::update(
-                        "UPDATE documents
-                         SET ocr_text = ?, detected_type = ?, extracted_fields = ?, metadata = ?, status = 'extracted'
-                         WHERE id = ?",
-                        [
-                            $ocrText,
-                            $detectedType,
-                            json_encode($aggregatedFields, JSON_UNESCAPED_UNICODE),
-                            json_encode($metadata, JSON_UNESCAPED_UNICODE),
-                            $docId,
-                        ]
-                    );
-                })
-                ->catch(function (Batch $batch, Throwable $e) use ($docId) {
-                    // First batch job failure detected
-                    Log::error("Batch {$batch->id} failed for doc {$docId}: " . $e->getMessage());
-                    DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$docId]);
-                })
-                ->finally(function (Batch $batch) use ($docId) {
-                    // The batch has finished executing (whether successful or not)
-                })
-                ->dispatch();
-
-            // Store batch ID in document metadata so frontend can poll progress
+            // Save metadata
             $metadata = json_decode($doc->metadata ?? '{}', true) ?: [];
-            $metadata['batch_id'] = $batch->id;
-            DB::update("UPDATE documents SET metadata = ? WHERE id = ?", [json_encode($metadata), $docId]);
+            $metadata['quick_fill_used'] = $quickFillUsed;
+            $metadata['template_family_detected'] = $templateFamilyDetected;
+            $metadata['processed_pages_count'] = 1;
 
-            Log::info("Dispatched batch {$batch->id} for Document ID: " . $docId);
+            // 6. Update database record with final values and status = extracted
+            DB::update(
+                "UPDATE documents
+                 SET ocr_text = ?, detected_type = ?, extracted_fields = ?, metadata = ?, status = 'extracted', updated_at = NOW()
+                 WHERE id = ?",
+                [
+                    $ocrText,
+                    $detectedType,
+                    json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
+                    json_encode($metadata, JSON_UNESCAPED_UNICODE),
+                    $this->documentId,
+                ]
+            );
 
-        } catch (\Throwable $e) { // Use \Throwable to catch even fatal errors
-            Log::error("CRITICAL FAILURE in ProcessDocumentOcr: " . $e->getMessage());
-            Log::error("Stack trace: " . $e->getTraceAsString()); // ADD THIS
-            DB::update("UPDATE documents SET status = 'failed' WHERE id = ?", [$this->documentId]);
+            Log::info("ProcessDocumentOcr finished successfully for Document ID: " . $this->documentId);
+
+        } catch (\Throwable $e) {
+            Log::error("ProcessDocumentOcr failed for Document ID {$this->documentId}: " . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            DB::update("UPDATE documents SET status = 'failed', updated_at = NOW() WHERE id = ?", [$this->documentId]);
         }
+    }
+
+    /**
+     * Translate Python OCR keys → BirthConfig.js expected keys
+     */
+    private function normalizePythonFields(array $fields): array
+    {
+        // 1. Split Child Name → first_name + middle_name + last_name
+        if (!empty($fields['full_name']) && empty($fields['first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['full_name']));
+            $fields['first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 2. Split Mother's Maiden Name
+        if (!empty($fields['mother_full_name']) && empty($fields['mother_first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['mother_full_name']));
+            $fields['mother_first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['mother_last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['mother_middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 3. Split Father's Name
+        if (!empty($fields['father_full_name']) && empty($fields['father_first_name'])) {
+            $parts = preg_split('/\s+/', trim($fields['father_full_name']));
+            $fields['father_first_name']  = ucfirst(strtolower($parts[0] ?? ''));
+            $fields['father_last_name']   = ucfirst(strtolower(array_pop($parts) ?? ''));
+            $fields['father_middle_name'] = ucfirst(strtolower(implode(' ', array_slice($parts, 1))));
+        }
+
+        // 4. Split date_of_birth → dob_day + dob_month + dob_year
+        if (!empty($fields['date_of_birth']) && empty($fields['dob_day'])) {
+            $raw = $fields['date_of_birth'];
+            // Handle "January 11, 1943" or "11/01/1943" or "1943-01-11"
+            if (preg_match('/(\w+)\s+(\d{1,2}),?\s+(\d{4})/', $raw, $m)) {
+                $fields['dob_month'] = ucfirst(strtolower($m[1]));
+                $fields['dob_day']   = $m[2];
+                $fields['dob_year']  = $m[3];
+            } elseif (preg_match('#(\d{1,2})/(\d{1,2})/(\d{4})#', $raw, $m)) {
+                $fields['dob_day']   = $m[1];
+                $fields['dob_month'] = $m[2]; 
+                $fields['dob_year']  = $m[3];
+            }
+        }
+
+        // 5. Map place_of_birth → place_of_birth_hospital
+        if (!empty($fields['place_of_birth']) && empty($fields['place_of_birth_hospital'])) {
+            $fields['place_of_birth_hospital'] = $fields['place_of_birth'];
+        }
+
+        // 6. Normalize Sex (M/F → Male/Female)
+        if (!empty($fields['sex'])) {
+            $s = strtoupper(trim($fields['sex']));
+            if ($s === 'M' || str_contains($s, 'MAL')) $fields['sex'] = 'Male';
+            else if ($s === 'F' || str_contains($s, 'FEM')) $fields['sex'] = 'Female';
+        }
+
+        // Cleanup intermediate keys
+        unset($fields['full_name'], $fields['date_of_birth'], $fields['place_of_birth'], $fields['mother_full_name'], $fields['father_full_name']);
+
+        return $fields;
     }
 }

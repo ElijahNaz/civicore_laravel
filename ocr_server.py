@@ -1130,6 +1130,20 @@ def process_ocr_gemini(data: dict):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to open image: {str(e)}")
             
+    # -- TOKEN OPTIMIZATION / BUDGET SAVINGS --
+    # Downscale the loaded image to a maximum dimension of 1200px.
+    # Gemini calculates image tokens based on 768x768 pixel tiles (each tile costs 258 tokens).
+    # A high-res photo (e.g. 3000x4000) costs 24 tiles (6,192 tokens).
+    # Downscaling to 1200px preserves maximum text readability for OCR while keeping
+    # the image within 2-4 tiles (516 - 1,032 tokens). This reduces token costs by 60% to 80%.
+    if img:
+        max_size = 1200
+        if max(img.size) > max_size:
+            orig_w, orig_h = img.size
+            resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+            img.thumbnail((max_size, max_size), resample_filter)
+            print(f"Optimized tokens: Image resized from {orig_w}x{orig_h} to {img.size[0]}x{img.size[1]}")
+            
     prompt = """
     You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Live Birth).
     There may be different varieties of this form (e.g., older forms from 1958, newer forms from 1993, or others).
@@ -1186,29 +1200,45 @@ def process_ocr_gemini(data: dict):
     }
     """
     
-    max_retries = len(api_keys) * 2
     retry_delay = 5  # shorter delay because we switch keys
     response = None
     
-    for attempt in range(max_retries):
-        key_idx = (current_key_index + attempt) % len(api_keys)
-        key = api_keys[key_idx]
-        print(f"Using API Key index {key_idx} (Attempt {attempt+1}/{max_retries})")
+    # Prioritize primary key (index 0, e.g. Paid API key) and use others as fallback backup.
+    keys_to_try = []
+    if len(api_keys) > 0:
+        # First key is primary
+        keys_to_try.append((0, api_keys[0]))
+        # Remaining keys are backup (rotating backups to distribute load)
+        backup_indices = list(range(1, len(api_keys)))
+        if backup_indices:
+            start_back_idx = current_key_index % len(backup_indices)
+            rotated_backups = backup_indices[start_back_idx:] + backup_indices[:start_back_idx]
+            for idx in rotated_backups:
+                keys_to_try.append((idx, api_keys[idx]))
+    else:
+        raise HTTPException(status_code=500, detail="No Gemini API keys found.")
+
+    for attempt, (key_idx, key) in enumerate(keys_to_try):
+        print(f"Using API Key index {key_idx} (Attempt {attempt+1}/{len(keys_to_try)})")
         
         try:
             client = genai.Client(api_key=key)
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
-                contents=[img, prompt]
+                contents=[img, prompt],
+                config={
+                    "response_mime_type": "application/json"
+                }
             )
             
-            # Update index on success
-            current_key_index = (key_idx + 1) % len(api_keys)
+            # Keep backup key distribution rotated if backup keys are used
+            if key_idx > 0:
+                current_key_index = key_idx
             break  # success!
         except Exception as e:
             err_str = str(e)
             if '429' in err_str or '503' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
-                if attempt < max_retries - 1:
+                if attempt < len(keys_to_try) - 1:
                     print(f"Key {key_idx} rate limited. Retrying with next key in {retry_delay}s...")
                     time.sleep(retry_delay)
                     continue
