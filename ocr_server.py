@@ -4,6 +4,7 @@ import os
 import re
 import argparse
 import time
+import math
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -1226,61 +1227,151 @@ def process_ocr_gemini(data: dict):
             img.thumbnail((max_size, max_size), resample_filter)
             print(f"Optimized tokens: Image resized from {orig_w}x{orig_h} to {img.size[0]}x{img.size[1]}")
             
-    prompt = """
-    You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Live Birth).
-    There may be different varieties of this form (e.g., older forms from 1958, newer forms from 1993, or others).
-    Please extract the data from this image and return it in a clean JSON format.
-    Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
+    # Dynamic prompt selection based on doc_type
+    doc_type_clean = str(doc_type).lower().strip()
     
-    The valid options for the 'barangay' field are:
-    'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
-    'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
-    'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
-    'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
-    'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
-    'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
-    Please map the extracted barangay to the closest match from this list if possible.
-    
-    Special Instructions:
-    - For 'mother_children_dead', if the value is '0', blank, not specified, or indicates none, please return 'None' instead of null.
-    - For marriage date fields ('marriage_parents_day', 'marriage_parents_month', 'marriage_parents_year'), if the document indicates the date is unknown, forgotten, or not applicable, you may return the text found (e.g., 'Forgotten') instead of a number.
-    - For 'office_registry_code' (Registry Coding), if it contains a sequence of numbers, please return them with a space between each digit (e.g., '1 2 3 4').
-    - **Form Varieties**: If the document is an older version (like the 1958 form), some field labels may differ. Please map them logically to the target schema. For example, "Usual Residence" or similar address fields should map to the corresponding residence fields (e.g., `mother_residence_house` or `place_of_birth_city` depending on context).
-    
-    JSON Structure to follow (use null for empty or unreadable fields):
-    {
-      "registry_number": null, "province": null, "city_municipality": null, "barangay": null,
-      "first_name": null, "middle_name": null, "last_name": null, "sex": null,
-      "dob_day": null, "dob_month": null, "dob_year": null,
-      "place_of_birth_hospital": null, "place_of_birth_city": null, "place_of_birth_province": null,
-      "type_of_birth": null, "multiple_birth_order": null, "birth_order": null, "weight_at_birth": null,
-      
-      "mother_first_name": null, "mother_middle_name": null, "mother_last_name": null,
-      "mother_citizenship": null, "mother_religion": null,
-      "mother_children_total": null, "mother_children_living": null, "mother_children_dead": null,
-      "mother_occupation": null, "mother_age": null,
-      "mother_residence_house": null, "mother_residence_city": null, "mother_residence_province": null, "mother_residence_country": null,
-      
-      "father_first_name": null, "father_middle_name": null, "father_last_name": null,
-      "father_citizenship": null, "father_religion": null,
-      "father_occupation": null, "father_age": null,
-      "father_residence_house": null, "father_residence_city": null, "father_residence_province": null, "father_residence_country": null,
-      
-      "marriage_parents_day": null, "marriage_parents_month": null, "marriage_parents_year": null,
-      "marriage_parents_place_city": null, "marriage_parents_place_province": null, "marriage_parents_place_country": null,
-      
-      "attendant_type": null, "attendant_time": null,
-      "attendant_name": null, "attendant_title": null, "attendant_address": null, "attendant_date": null,
-      
-      "informant_name": null, "informant_relationship": null, "informant_address": null, "informant_date": null,
-      
-      "prepared_by_name": null, "prepared_by_title": null, "prepared_by_date": null,
-      "received_by_name": null, "received_by_title": null, "received_by_date": null,
-      "registered_by_name": null, "registered_by_title": null, "registered_by_date": null,
-      
-      "remarks": null, "office_registry_code": null
-    }
-    """
+    if doc_type_clean == 'marriage' or doc_type_clean == 'marriage_license':
+        prompt = """
+        You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Marriage).
+        Please extract the data from this image and return it in a clean JSON format.
+        Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
+        
+        The valid options for the 'barangay' field are:
+        'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
+        'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
+        'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
+        'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
+        'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
+        'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
+        Please map the extracted barangay to the closest match from this list if possible.
+        
+        JSON Structure to follow (use null for empty or unreadable fields):
+        {
+          "registry_number": null,
+          "province": null,
+          "city_municipality": null,
+          "barangay": null,
+          "date_of_marriage": null,
+          "place_of_marriage": null,
+          
+          "husband_first_name": null,
+          "husband_middle_name": null,
+          "husband_last_name": null,
+          "husband_suffix": null,
+          
+          "wife_first_name": null,
+          "wife_middle_name": null,
+          "wife_last_name": null,
+          "wife_suffix": null
+        }
+        """
+    elif doc_type_clean == 'death':
+        prompt = """
+        You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Death).
+        Please extract the data from this image and return it in a clean JSON format.
+        Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
+        
+        The valid options for the 'barangay' field are:
+        'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
+        'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
+        'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
+        'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
+        'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
+        'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
+        Please map the extracted barangay to the closest match from this list if possible.
+        
+        JSON Structure to follow (use null for empty or unreadable fields):
+        {
+          "registry_number": null,
+          "province": null,
+          "city_municipality": null,
+          "barangay": null,
+          
+          "first_name": null,
+          "middle_name": null,
+          "last_name": null,
+          "suffix": null,
+          "sex": null,
+          "date_of_death": null,
+          "date_of_birth": null,
+          "age": null,
+          "place_of_death": null,
+          "civil_status": null,
+          "religion": null,
+          "citizenship": null,
+          "residence": null,
+          "occupation": null,
+          
+          "father_first_name": null,
+          "father_middle_name": null,
+          "father_last_name": null,
+          "father_suffix": null,
+          
+          "mother_maiden_first_name": null,
+          "mother_maiden_middle_name": null,
+          "mother_maiden_last_name": null,
+          "mother_maiden_suffix": null,
+          
+          "cause_of_death": null
+        }
+        """
+    else:
+        # Default/Birth
+        prompt = """
+        You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Live Birth).
+        There may be different varieties of this form (e.g., older forms from 1958, newer forms from 1993, or others).
+        Please extract the data from this image and return it in a clean JSON format.
+        Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
+        
+        The valid options for the 'barangay' field are:
+        'Gomez-Zamora (Pob.)', 'Capt. C. Nazareno (Pob.)', 'Ibayo Silangan', 'Ibayo Estacion', 'Kanluran',
+        'Makina', 'Sapa', 'Bucana Malaki', 'Bucana Sasahan', 'Bagong Karsada',
+        'Balsahan', 'Bancaan', 'Muzon', 'Latoria', 'Labac',
+        'Mabolo', 'San Roque', 'Santulan', 'Molino', 'Calubcob',
+        'Halang', 'Malainen Bago', 'Malainen Luma', 'Palangue 1', 'Palangue 2 & 3',
+        'Humbac', 'Munting Mapino', 'Sabang', 'Timalan Balsahan', 'Timalan Concepcion'
+        Please map the extracted barangay to the closest match from this list if possible.
+        
+        Special Instructions:
+        - For 'mother_children_dead', if the value is '0', blank, not specified, or indicates none, please return 'None' instead of null.
+        - For marriage date fields ('marriage_parents_day', 'marriage_parents_month', 'marriage_parents_year'), if the document indicates the date is unknown, forgotten, or not applicable, you may return the text found (e.g., 'Forgotten') instead of a number.
+        - For 'office_registry_code' (Registry Coding), if it contains a sequence of numbers, please return them with a space between each digit (e.g., '1 2 3 4').
+        - **Form Varieties**: If the document is an older version (like the 1958 form), some field labels may differ. Please map them logically to the target schema. For example, "Usual Residence" or similar address fields should map to the corresponding residence fields (e.g., `mother_residence_house` or `place_of_birth_city` depending on context).
+        
+        JSON Structure to follow (use null for empty or unreadable fields):
+        {
+          "registry_number": null, "province": null, "city_municipality": null, "barangay": null,
+          "first_name": null, "middle_name": null, "last_name": null, "sex": null,
+          "dob_day": null, "dob_month": null, "dob_year": null,
+          "place_of_birth_hospital": null, "place_of_birth_city": null, "place_of_birth_province": null,
+          "type_of_birth": null, "multiple_birth_order": null, "birth_order": null, "weight_at_birth": null,
+          
+          "mother_first_name": null, "mother_middle_name": null, "mother_last_name": null,
+          "mother_citizenship": null, "mother_religion": null,
+          "mother_children_total": null, "mother_children_living": null, "mother_children_dead": null,
+          "mother_occupation": null, "mother_age": null,
+          "mother_residence_house": null, "mother_residence_city": null, "mother_residence_province": null, "mother_residence_country": null,
+          
+          "father_first_name": null, "father_middle_name": null, "father_last_name": null,
+          "father_citizenship": null, "father_religion": null,
+          "father_occupation": null, "father_age": null,
+          "father_residence_house": null, "father_residence_city": null, "father_residence_province": null, "father_residence_country": null,
+          
+          "marriage_parents_day": null, "marriage_parents_month": null, "marriage_parents_year": null,
+          "marriage_parents_place_city": null, "marriage_parents_place_province": null, "marriage_parents_place_country": null,
+          
+          "attendant_type": null, "attendant_time": null,
+          "attendant_name": null, "attendant_title": null, "attendant_address": null, "attendant_date": null,
+          
+          "informant_name": null, "informant_relationship": null, "informant_address": null, "informant_date": null,
+          
+          "prepared_by_name": null, "prepared_by_title": null, "prepared_by_date": null,
+          "received_by_name": null, "received_by_title": null, "received_by_date": null,
+          "registered_by_name": null, "registered_by_title": null, "registered_by_date": null,
+          
+          "remarks": null, "office_registry_code": null
+        }
+        """
     
     retry_delay = 5  # shorter delay because we switch keys
     response = None
@@ -1346,13 +1437,26 @@ def process_ocr_gemini(data: dict):
     for k, v in signatures.items():
         extracted_data[k] = v
 
+    # Calculate image token cost based on 768x768 pixel tiles
+    img_w, img_h = img.size if img else (1200, 1200)
+    tiles = math.ceil(img_w / 768) * math.ceil(img_h / 768)
+    image_token_cost = tiles * 258
+
+    print(f"\n========================================")
+    print(f" Gemini OCR Scan Token Usage Summary:")
+    print(f" - Document Type: {doc_type}")
+    print(f" - Image Size   : {img_w}x{img_h}")
+    print(f" - Tile Count   : {tiles} (each tile is 258 tokens)")
+    print(f" - Token Cost   : {image_token_cost} tokens")
+    print(f"========================================\n")
+
     return {
         "success": True,
-        "text": response.text,
         "detected_type": doc_type,
         "extracted_fields": extracted_data,
         "engine_used": "gemini-2.5-flash",
-        "quick_fill_used": True
+        "quick_fill_used": True,
+        "image_token_cost": image_token_cost
     }
 
 
