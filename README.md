@@ -430,7 +430,7 @@ The following features and updates were implemented during the night session of 
 
 The following requirements have been logged for future updates:
 
-- **Real-Time Issuance Duplicate Status:** Make the status indicator in the Issuances section dynamically update in real-time when a duplicate record is detected.
+- **Real-Time Duplicate Status Change:** Make the status indicator in the Upload Section section dynamically update in real-time when a duplicate record is detected.
 - **Manual Registration Input Types:** Review form schemas to determine whether date inputs (currently text) should remain text fields or be normalized/converted into integer formats if needed.
-- **Interactive Camera Edge & Light Scanner (GCash-style):** Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success) to guide users when to capture the document.
+- **Interactive Camera Edge & Light Scanner (GCash-style):** Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success) to guide users when to capture the document. fix the camera in the issuance section too, there will be many changes
 - **Death & Marriage Certificate Templates:** Expand composite template layouts to support Death Certificates and Marriage Certificates.
