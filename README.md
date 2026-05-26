@@ -233,6 +233,7 @@ To achieve the highest OCR accuracy across multiple document layouts, CiviCORE i
 
 | Issue | Details | Workaround |
 |-------|---------|------------|
+| **Mobile Responsive UI Layouts** | Dashboard stats grid, mapping cards, welcome banner sizing, public landing page vertical scrolling, and Account settings are optimized for PC/large screens only. Mobile/tablet views have layout breakages, scroll locks, and oversized UI elements. | Tracked as a future development item to be resolved after PC interface is fully finalized. |
 | **OCR Stability on Low RAM** | On 4GB machines, running multiple EasyOCR workers may cause system instability. | Use Tesseract mode or limit to 1 queue worker (`RAM_PROFILE=4GB`). |
 | **Auto-Fill Sync Delay** | OCR results may not auto-populate template preview boxes on first load. | Manually edit any field to trigger a re-sync. |
 | **Template Alignment** | Form 102/103 field coordinates are approximate and may need printer calibration. | Use the Template Designer to visually fine-tune field positions. |
@@ -245,6 +246,12 @@ To achieve the highest OCR accuracy across multiple document layouts, CiviCORE i
 ## 🔭 Future Development Plans
 
 The following items have been identified and documented for upcoming development cycles:
+
+### 📱 Mobile UI Layout Refinement (Problem 3 Deferral)
+- Optimize Dashboard stats grids and cards to use a 2x2 grid layout on mobile viewports.
+- Scale down welcome banners, headers, and motto text size dynamically on smaller viewports.
+- Fix scroll lock issues by changing `overflow-hidden` to `overflow-x-hidden` in layout wrappers to allow vertical swipe.
+- Redesign `Accounts.jsx` grid layouts (`lg:grid-cols-12`) to stack gracefully on mobile screens.
 
 ### 🔧 Fix: Death Certificate Stats / Counting Accuracy
 - Normalize `type` field detection across `issuances` and `documents` tables (e.g., `"Death"` vs `"death certificate"` vs `"Death Certificate (LCR Form 103)"` all resolve to the same type).
@@ -319,3 +326,76 @@ The following features were implemented in the morning session of **May 26, 2026
 
 ## License
 Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
+
+---
+
+## 📝 Development Log — May 26, 2026 (Afternoon Session)
+
+The following features were implemented in the afternoon session of **May 26, 2026**:
+
+### 📊 Issuance Dashboard — 3-Tab Analytics Panel
+- Replaced the static 4 stat cards in `Issuances.jsx` with a **3-tab unified dashboard panel**:
+  - **Tab 1 – Overview**: Upgraded stat cards (Master DB dark card + Birth/Death/Marriage with hover scale animations).
+  - **Tab 2 – Per Category**: SVG donut chart + progress bars per type + status breakdown grid (Issued / Approved / Active / Pending).
+  - **Tab 3 – Top Issued**: Top 5 barangays with gold/silver/bronze badges + Most Active Type badge + recently issued records list.
+
+### 🗺️ Mapping Section — Tabbed Stat Panel
+- Replaced the 5 static stat cards at the top of `Mapping.jsx` with a **2-tab clickable panel**:
+  - **Tab 1 – Records Overview**: Uploaded Docs / Birth Certs / Death Certs / Marriage Certs / Most Active Barangay (same as before, with upgraded card design and hover animations).
+  - **Tab 2 – Issued Per Category**: Shows how many Birth, Death, and Marriage records have been **formally issued** from the issuances table, with mini progress bars, percentage-of-total labels, Total Issued count, and Top Barangay by issuances. Respects the active time filter.
+
+### 🗺️ Mapping Section — "By Barangay" Right Panel Tab
+- Added a **3rd tab** ("By Barangay") to the right analytics panel in `Mapping.jsx`.
+- Shows ranked barangay list with:
+  - Gold/silver/bronze rank badges for top 3.
+  - Mini gradient progress bars relative to the highest-ranked barangay.
+  - Birth (B) / Death (D) / Marriage (M) breakdown per row.
+  - **Top 10 by default** with a **"↓ Show All X Barangays"** toggle button (only visible when >10 have records).
+  - Clicking any row pans the map and opens the barangay popup via `locateBarangay()`.
+
+### ✅ Input Validation — Unknown Document Type Guard
+- Added a **type detection banner** to `OcrFormPanel.jsx`: when OCR cannot auto-detect the document type, an amber warning banner appears at the top of the form.
+- Staff selects Birth / Death / Marriage manually via 3 pill buttons.
+- Banner turns **red** if the user attempts to save without selecting a type.
+- Save is blocked until a valid type is chosen.
+
+### ✍️ Signature Fields — Initial Implementation
+- Created `SignaturePad.jsx` — a canvas-based signature drawing component with:
+  - Draw with mouse or touch, Undo last stroke, Clear (resets to `n/a`), Done.
+  - Saves as **base64 PNG data URL** in the field value.
+  - Shows `n/a` badge when blank; shows existing signature as a preview image.
+- Updated `BirthCertificateConfig.js`: all 5 signature fields now use `type: 'signature'` so the form renders the pad instead of a plain text box.
+- Signature fields are **optional** — left blank automatically saves as `n/a`.
+
+---
+
+## ⏳ Pending Tasks (Next Session)
+
+The following items are planned for the **next development session**:
+
+### ✍️ Signature Extraction from Scanned Documents
+**Goal**: When a civil registry document is uploaded and processed by OCR, automatically crop the signature regions from the scanned image and pre-populate the signature fields — instead of leaving them blank/`n/a`.
+
+**Approach**:
+- The `BirthTemplateOverlayFields` array in `BirthCertificateConfig.js` already contains the `x, y, w, h` coordinates (as fractions of image size) for every signature field position on LCR Form 102.
+- On the **backend** (`DocumentController.php` or the Python OCR server), after the image is uploaded:
+  1. Load the scanned image using **Intervention Image** (PHP) or **Pillow** (Python).
+  2. For each signature field, compute the pixel crop box: `px = x * imgWidth`, `py = y * imgHeight`, etc.
+  3. Apply a **threshold/binarize** filter to isolate the ink from the paper background (grayscale → adaptive threshold → invert).
+  4. Save each cropped region as a base64 PNG string.
+  5. Return the base64 strings alongside `extracted_fields` in the OCR API response.
+- On the **frontend** (`OcrFormPanel.jsx`), initialize signature field values from the returned base64 strings instead of `n/a`.
+- The `SignaturePad` component already supports displaying a base64 image as an existing signature — no changes needed there.
+
+**Files to modify**:
+- `ocr_server.py` — add signature region cropping in the extraction pipeline.
+- `app/Http/Controllers/DocumentController.php` — forward cropped signature data in the response.
+- `OcrFormPanel.jsx` — read signature base64 values from `ocrResult.extracted_fields` on init (already handled by the existing `ef[f.key]` fallback).
+- `BirthCertificateConfig.js` — coordinates already defined; may need slight calibration per scan DPI.
+
+**Open question**: Should signature extraction happen server-side (Python/PHP) or client-side (Canvas API using the already-loaded document image)? Client-side avoids a backend change but depends on CORS/image accessibility. Server-side is more reliable for skewed/low-DPI scans.
+
+---
+
+### 🗺️ Mapping — Barangay Involvement (Advanced)
+- Consider adding barangay drill-down in the Mapping right panel: clicking a barangay row shows a breakdown panel with a mini chart of its Birth/Death/Marriage trend over time.

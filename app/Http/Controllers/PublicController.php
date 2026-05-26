@@ -40,23 +40,20 @@ class PublicController extends Controller
     public function stats()
     {
         try {
-            // 1. Processed documents/issuances count
-            $docCount = DB::table('documents')->count();
-            $issueCount = DB::table('issuances')->count();
-            $totalProcessed = $docCount + $issueCount;
+            // Count only officially issued issuances (matching the Dashboard's TOTAL ISSUED FILES count)
+            $totalIssued = DB::table('issuances')
+                ->whereNull('deleted_at')
+                ->where(DB::raw('LOWER(status)'), 'issued')
+                ->count();
 
-            // 2. Average Response simulation over actual DB records.
-            // We'll calculate a simple mock based on total records to make it interesting,
-            // or a default value of 0.8s if the DB is empty.
-            $baseLatencyMs = 800; // 0.8 seconds default
-            $factor = log(max($totalProcessed, 1) + 1) * 15; // Logarithmic scaling 
+            // Average response simulation based on total issued records
+            $baseLatencyMs = 800;
+            $factor = log(max($totalIssued, 1) + 1) * 15;
             $avgResponse = round(($baseLatencyMs - $factor) / 1000, 2);
-
-            // Keep a minimum floor of 0.2s 
             $avgResponse = max($avgResponse, 0.21);
 
             return response()->json([
-                'processed' => $totalProcessed,
+                'processed'  => $totalIssued,   // finalized/issued files only
                 'response_s' => $avgResponse,
             ]);
         } catch (\Exception $e) {

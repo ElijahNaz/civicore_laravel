@@ -28,8 +28,8 @@ const NAIC_BARANGAYS = [
 
 // ── Issuance Preview Modal ──────────────────────────────────────────────────
 const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload }) => {
-    const viewUrl = cert.source === 'issuance' 
-        ? `/api/issuances/view/${cert.realId}` 
+    const viewUrl = cert.source === 'issuance'
+        ? `/api/issuances/view/${cert.realId}`
         : `/api/documents/view/${cert.realId}`;
 
     return createPortal(
@@ -47,16 +47,16 @@ const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload }) => {
                         </p>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                    <button 
+                    <button
                         onClick={onPrint}
                         className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
                     >
                         <PrinterIcon className="w-4 h-4" />
                         Print Record
                     </button>
-                    <button 
+                    <button
                         onClick={onDownload}
                         className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 rounded-xl transition-all border border-blue-500/30 active:scale-95 cursor-pointer shadow-lg shadow-blue-500/5"
                     >
@@ -111,6 +111,7 @@ const Issuances = () => {
     const [selectedEncoder, setSelectedEncoder] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('database');
+    const [dashboardTab, setDashboardTab] = useState('overview');
 
     // Unified state
     const [certificates, setCertificates] = useState([]);
@@ -178,11 +179,12 @@ const Issuances = () => {
     const [orNumber, setOrNumber] = useState('');
     const [printRemarks, setPrintRemarks] = useState('');
     const [isSubmittingPrintRequest, setIsSubmittingPrintRequest] = useState(false);
-    
+
     // Tickets and approvals
     const [tickets, setTickets] = useState([]);
     const [ticketsLoading, setTicketsLoading] = useState(false);
     const [approvalsSearch, setApprovalsSearch] = useState('');
+    const [readySearch, setReadySearch] = useState('');
 
     // Scan Search workflow state
     const [isScanSearchOpen, setIsScanSearchOpen] = useState(false);
@@ -218,14 +220,14 @@ const Issuances = () => {
     const capturePhoto = () => {
         const videoElement = document.getElementById('scan-video');
         if (!videoElement) return;
-        
+
         const canvas = document.createElement('canvas');
         canvas.width = videoElement.videoWidth || 640;
         canvas.height = videoElement.videoHeight || 480;
-        
+
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-        
+
         canvas.toBlob((blob) => {
             if (blob) {
                 const file = new File([blob], "captured_doc.jpg", { type: "image/jpeg" });
@@ -237,36 +239,36 @@ const Issuances = () => {
     const handleOcrSearchUpload = async (file) => {
         setIsScanning(true);
         setOcrError('');
-        
+
         const formData = new FormData();
         formData.append('file', file);
-        
+
         try {
             stopCamera();
             const res = await axios.post('/api/issuances/ocr-search', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            
+
             if (res.data.success && res.data.extracted) {
                 const { name, certNumber, barangay, type } = res.data.extracted;
-                
+
                 const searchVal = certNumber || name || '';
                 setSearchTerm(searchVal);
-                
+
                 if (type && ['birth', 'death', 'marriage'].includes(type.toLowerCase())) {
                     setSelectedType(type.toLowerCase());
                 }
-                
+
                 if (barangay && NAIC_BARANGAYS.includes(barangay)) {
                     setSelectedBarangay(barangay);
                 }
-                
+
                 showAlert({
                     title: 'Scan Successful',
                     message: `OCR Extracted:\nName: ${name || '—'}\nCert No: ${certNumber || '—'}\nType: ${type || '—'}\nBarangay: ${barangay || '—'}`,
                     type: 'success'
                 });
-                
+
                 setIsScanSearchOpen(false);
             } else {
                 setOcrError(res.data.error || 'Failed to extract text from scan.');
@@ -312,7 +314,7 @@ const Issuances = () => {
                 const linkedDoc = rawDocuments.find(d => Number(d.id) === Number(i.document_id));
                 const rawType = (i.type || 'birth').toLowerCase();
                 const type = rawType === 'unknown' ? 'birth' : rawType;
-                
+
                 return {
                     id: `iss-${i.id}`,
                     realId: i.id,
@@ -355,10 +357,10 @@ const Issuances = () => {
             try {
                 const token = localStorage.getItem('token');
                 const res = await axios.get('/api/users', {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
                 // The API returns paginated data: { data: [...], meta: {...} }
                 setAllUsers(res.data.data || []);
             } catch (e) {
@@ -497,7 +499,7 @@ const Issuances = () => {
         const fileId = editingCert.realId;
         const personName = fields.full_name || fields.husbands_name || fields.wifes_name || '';
         const barangay = fields.barangay || '';
-        
+
         const certToClear = editingCert;
         setEditingCert(null);
 
@@ -537,9 +539,9 @@ const Issuances = () => {
                         return { success: true, type: 'delete' };
                     }
                     throw new Error('Delete failed');
-                }, { 
-                    type: 'delete', 
-                    undoFn: () => axios.post(`/api/documents/${cert.realId}/undo`) 
+                }, {
+                    type: 'delete',
+                    undoFn: () => axios.post(`/api/documents/${cert.realId}/undo`)
                 });
             }
         });
@@ -602,7 +604,7 @@ const Issuances = () => {
                 setPasswordModal(prev => ({ ...prev, isOpen: false }));
                 const idsToDelete = [...selectedIds];
                 setSelectedIds([]);
-                
+
                 runBackgroundTask(`Bulk Delete: ${idsToDelete.length} Records`, async () => {
                     let ok = 0;
                     let failed = 0;
@@ -624,10 +626,10 @@ const Issuances = () => {
                         }
                     }
                     refreshAll();
-                    return { 
-                        success: true, 
-                        message: `Successfully removed ${ok} records.${failed > 0 ? ` Failed to remove ${failed} records.` : ''}`, 
-                        type: 'bulk-delete' 
+                    return {
+                        success: true,
+                        message: `Successfully removed ${ok} records.${failed > 0 ? ` Failed to remove ${failed} records.` : ''}`,
+                        type: 'bulk-delete'
                     };
                 }, {
                     type: 'bulk-delete',
@@ -713,20 +715,20 @@ const Issuances = () => {
     });
 
     const filteredLogs = activityLogs.filter(log => {
-        const matchesSearch = !historySearch || 
+        const matchesSearch = !historySearch ||
             (log.details || '').toLowerCase().includes(historySearch.toLowerCase()) ||
             (log.user_name || '').toLowerCase().includes(historySearch.toLowerCase()) ||
             (log.action || '').toLowerCase().includes(historySearch.toLowerCase());
-        
+
         const matchesAction = historyActionFilter === 'all' || log.action === historyActionFilter;
         const matchesUser = historyUserFilter === 'all' || log.user_name === historyUserFilter;
 
         // Date Range filtering
-        const logDate = new Date(log.created_at).setHours(0,0,0,0);
-        const start = historyStartDate ? new Date(historyStartDate).setHours(0,0,0,0) : null;
-        const end = historyEndDate ? new Date(historyEndDate).setHours(0,0,0,0) : null;
+        const logDate = new Date(log.created_at).setHours(0, 0, 0, 0);
+        const start = historyStartDate ? new Date(historyStartDate).setHours(0, 0, 0, 0) : null;
+        const end = historyEndDate ? new Date(historyEndDate).setHours(0, 0, 0, 0) : null;
         const matchesDate = (!start || logDate >= start) && (!end || logDate <= end);
-        
+
         return matchesSearch && matchesAction && matchesUser && matchesDate;
     });
 
@@ -787,7 +789,7 @@ const Issuances = () => {
                 )}
                 {requestingPrintCert && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -798,7 +800,7 @@ const Issuances = () => {
                                 <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-6 mx-auto border border-amber-100">
                                     <PrinterIcon className="w-8 h-8" />
                                 </div>
-                                
+
                                 <h3 className="text-2xl font-black text-slate-800 text-center tracking-tight mb-2">Request Print Approval</h3>
                                 <p className="text-slate-500 text-center text-sm font-medium leading-relaxed mb-6">
                                     An Official Receipt (OR) Number is required to request print authorization for <strong className="text-slate-800">{requestingPrintCert.name}</strong>.
@@ -827,7 +829,7 @@ const Issuances = () => {
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Official Receipt (OR) Number</label>
-                                        <input 
+                                        <input
                                             type="text"
                                             placeholder="Enter receipt number (e.g. OR-8888)..."
                                             value={orNumber}
@@ -837,7 +839,7 @@ const Issuances = () => {
                                     </div>
                                     <div>
                                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Remarks / Purpose (Optional)</label>
-                                        <textarea 
+                                        <textarea
                                             placeholder="Enter any notes or remarks..."
                                             value={printRemarks}
                                             onChange={(e) => setPrintRemarks(e.target.value)}
@@ -849,14 +851,14 @@ const Issuances = () => {
                             </div>
 
                             <div className="p-4 bg-slate-50 flex gap-3">
-                                <button 
+                                <button
                                     onClick={() => setRequestingPrintCert(null)}
                                     disabled={isSubmittingPrintRequest}
                                     className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={submitPrintRequest}
                                     disabled={!orNumber || isSubmittingPrintRequest}
                                     className="flex-1 px-6 py-3.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
@@ -987,49 +989,326 @@ const Issuances = () => {
                 )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {isLoading ? (
-                    <div className="col-span-4"><SkeletonLoader type="cards" rows={1} /></div>
-                ) : (
-                    <>
-                        <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
-                            <div>
-                                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Master Database</p>
-                                <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.length}</h3>
-                            </div>
-                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm"><DocumentMinusIcon className="w-6 h-6" /></div>
-                        </motion.div>
+            {/* ── Issuance Dashboard Panel (3 Tabs) ────────────────────────────────── */}
+            <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden">
+                {/* Dashboard Tab Header */}
+                <div className="flex items-center justify-between px-6 pt-5 pb-0 border-b border-slate-100">
+                    <div className="flex space-x-1">
+                        {[
+                            { key: 'overview', label: 'Overview', emoji: '📊' },
+                            { key: 'categories', label: 'Per Category', emoji: '📈' },
+                            { key: 'top', label: 'Top Issued', emoji: '🏆' },
+                        ].map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setDashboardTab(tab.key)}
+                                className={`flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all cursor-pointer ${
+                                    dashboardTab === tab.key
+                                        ? 'border-[#d4a574] text-[#d4a574]'
+                                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                                }`}
+                            >
+                                <span>{tab.emoji}</span>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pr-2">Issuance Analytics</p>
+                </div>
 
-                        <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
-                            <div>
-                                <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Records</p>
-                                <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length}</h3>
+                {/* Tab 1: Overview */}
+                {dashboardTab === 'overview' && (
+                    <div className="p-6">
+                        {isLoading ? (
+                            <SkeletonLoader type="cards" rows={1} />
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {/* Master Database */}
+                                <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl shadow-lg overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
+                                    <div className="absolute right-[-10%] top-[-10%] w-20 h-20 bg-white/5 rounded-full" />
+                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Master Database</p>
+                                    <h3 className="text-4xl font-black text-white tracking-tighter">{certificates.length}</h3>
+                                    <p className="text-slate-500 text-[10px] font-bold mt-2 uppercase tracking-wider">Total Issuances</p>
+                                    <div className="absolute bottom-4 right-4 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                                        <DocumentMinusIcon className="w-5 h-5 text-slate-400" />
+                                    </div>
+                                </div>
+                                {/* Birth Records */}
+                                <div className="relative bg-white border border-[#d4a574]/20 p-6 rounded-2xl shadow-sm overflow-hidden group hover:scale-[1.02] hover:shadow-md transition-all duration-300">
+                                    <div className="absolute right-[-10%] top-[-10%] w-20 h-20 bg-[#d4a574]/5 rounded-full" />
+                                    <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Records</p>
+                                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length}</h3>
+                                    <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Live Birth Certs</p>
+                                    <div className="absolute bottom-4 right-4 text-2xl">👶</div>
+                                </div>
+                                {/* Death Records */}
+                                <div className="relative bg-white border border-rose-100 p-6 rounded-2xl shadow-sm overflow-hidden group hover:scale-[1.02] hover:shadow-md transition-all duration-300">
+                                    <div className="absolute right-[-10%] top-[-10%] w-20 h-20 bg-rose-50/50 rounded-full" />
+                                    <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mb-1">Death Records</p>
+                                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'death').length}</h3>
+                                    <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Death Certificates</p>
+                                    <div className="absolute bottom-4 right-4 text-2xl">📋</div>
+                                </div>
+                                {/* Marriage Records */}
+                                <div className="relative bg-white border border-indigo-100 p-6 rounded-2xl shadow-sm overflow-hidden group hover:scale-[1.02] hover:shadow-md transition-all duration-300">
+                                    <div className="absolute right-[-10%] top-[-10%] w-20 h-20 bg-indigo-50/50 rounded-full" />
+                                    <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Records</p>
+                                    <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length}</h3>
+                                    <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Marriage Certificates</p>
+                                    <div className="absolute bottom-4 right-4 text-2xl">💍</div>
+                                </div>
                             </div>
-                            <div className="w-12 h-12 bg-[#d4a574]/10 rounded-2xl flex items-center justify-center text-[#d4a574] border border-[#d4a574]/20 shadow-sm">👶</div>
-                        </motion.div>
-
-                        <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
-                            <div>
-                                <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mb-1">Death Records</p>
-                                <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'death').length}</h3>
-                            </div>
-                            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 border border-rose-100 shadow-sm">📋</div>
-                        </motion.div>
-
-                        <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
-                            <div>
-                                <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Records</p>
-                                <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length}</h3>
-                            </div>
-                            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 border border-indigo-100 shadow-sm">💍</div>
-                        </motion.div>
-                    </>
+                        )}
+                    </div>
                 )}
-            </div>
 
+                {/* Tab 2: Per Category */}
+                {dashboardTab === 'categories' && (() => {
+                    const birthCount = certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length;
+                    const deathCount = certificates.filter(c => (c.type || '').toLowerCase() === 'death').length;
+                    const marriageCount = certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length;
+                    const total = certificates.length || 1;
+                    const issuedCount = certificates.filter(c => c.status === 'Issued').length;
+                    const approvedCount = certificates.filter(c => c.status === 'Approved').length;
+                    const pendingCount = certificates.filter(c => c.status === 'Active').length;
+                    const pendingApprovalCount = certificates.filter(c => c.status === 'Pending Approval').length;
+
+                    const categories = [
+                        { label: 'Birth Certificates', count: birthCount, color: '#d4a574', bg: 'bg-[#d4a574]/10', bar: 'bg-[#d4a574]', emoji: '👶' },
+                        { label: 'Death Certificates', count: deathCount, color: '#f43f5e', bg: 'bg-rose-50', bar: 'bg-rose-500', emoji: '📋' },
+                        { label: 'Marriage Certificates', count: marriageCount, color: '#6366f1', bg: 'bg-indigo-50', bar: 'bg-indigo-500', emoji: '💍' },
+                    ];
+
+                    // SVG Donut Chart calculations
+                    const radius = 50;
+                    const circumference = 2 * Math.PI * radius;
+                    let offset = 0;
+                    const donutSegments = categories.map(cat => {
+                        const pct = cat.count / total;
+                        const dash = pct * circumference;
+                        const seg = { ...cat, dash, gap: circumference - dash, offset };
+                        offset += dash;
+                        return seg;
+                    });
+
+                    return (
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left: Progress bars */}
+                            <div className="space-y-5">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Certificate Type Breakdown</h4>
+                                {categories.map(cat => (
+                                    <div key={cat.label}>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg">{cat.emoji}</span>
+                                                <span className="text-sm font-bold text-slate-700">{cat.label}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl font-black text-slate-800">{cat.count}</span>
+                                                <span className="text-[10px] text-slate-400 font-bold">{total > 0 ? Math.round((cat.count / total) * 100) : 0}%</span>
+                                            </div>
+                                        </div>
+                                        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full ${cat.bar} rounded-full transition-all duration-700`}
+                                                style={{ width: `${total > 0 ? (cat.count / total) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <div className="pt-4 border-t border-slate-100 mt-4">
+                                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Issuance Status Breakdown</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            { label: 'Issued', count: issuedCount, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
+                                            { label: 'Approved', count: approvedCount, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+                                            { label: 'Active', count: pendingCount, color: 'text-slate-600', bg: 'bg-slate-50 border-slate-100' },
+                                            { label: 'Pending Approval', count: pendingApprovalCount, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
+                                        ].map(s => (
+                                            <div key={s.label} className={`p-3 rounded-xl border ${s.bg} flex items-center justify-between`}>
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{s.label}</span>
+                                                <span className={`text-lg font-black ${s.color}`}>{s.count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right: SVG Donut Chart */}
+                            <div className="flex flex-col items-center justify-center">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Distribution</h4>
+                                <div className="relative w-48 h-48">
+                                    <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+                                        {total === 0 ? (
+                                            <circle cx="60" cy="60" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="16" />
+                                        ) : (
+                                            donutSegments.map((seg, i) => (
+                                                <circle
+                                                    key={i}
+                                                    cx="60" cy="60" r={radius}
+                                                    fill="none"
+                                                    stroke={seg.color}
+                                                    strokeWidth="16"
+                                                    strokeDasharray={`${seg.dash} ${seg.gap}`}
+                                                    strokeDashoffset={-seg.offset}
+                                                    className="transition-all duration-700"
+                                                />
+                                            ))
+                                        )}
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                        <span className="text-3xl font-black text-slate-800">{total - 1}</span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap justify-center gap-3 mt-4">
+                                    {categories.map(cat => (
+                                        <div key={cat.label} className="flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
+                                            <span className="text-[10px] font-bold text-slate-600">{cat.label.replace(' Certificates', '')}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Tab 3: Top Issued */}
+                {dashboardTab === 'top' && (() => {
+                    // Compute barangay rankings
+                    const brgyCounts = {};
+                    certificates.forEach(cert => {
+                        const brgy = cert.barangay && cert.barangay !== '—' ? cert.barangay : null;
+                        if (!brgy) return;
+                        if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
+                        const t = (cert.type || '').toLowerCase();
+                        if (t === 'birth') brgyCounts[brgy].births++;
+                        else if (t === 'death') brgyCounts[brgy].deaths++;
+                        else if (t.includes('marriage')) brgyCounts[brgy].marriages++;
+                        brgyCounts[brgy].total++;
+                    });
+                    const rankList = Object.entries(brgyCounts)
+                        .map(([name, d]) => ({ name, ...d }))
+                        .sort((a, b) => b.total - a.total);
+                    const top5 = rankList.slice(0, 5);
+                    const maxBrgyTotal = top5[0]?.total || 1;
+
+                    // Most active type
+                    const birthCount = certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length;
+                    const deathCount = certificates.filter(c => (c.type || '').toLowerCase() === 'death').length;
+                    const marriageCount = certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length;
+                    const mostActiveType = birthCount >= deathCount && birthCount >= marriageCount ? 'Birth'
+                        : deathCount >= marriageCount ? 'Death' : 'Marriage';
+                    const mostActiveTypeColor = mostActiveType === 'Birth' ? 'text-[#d4a574] bg-[#d4a574]/10 border-[#d4a574]/20'
+                        : mostActiveType === 'Death' ? 'text-rose-500 bg-rose-50 border-rose-100'
+                        : 'text-indigo-500 bg-indigo-50 border-indigo-100';
+                    const mostActiveTypeEmoji = mostActiveType === 'Birth' ? '👶' : mostActiveType === 'Death' ? '📋' : '💍';
+
+                    // Most recently issued
+                    const recentIssued = [...certificates]
+                        .filter(c => c.status === 'Issued')
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 3);
+
+                    return (
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left: Top 5 Barangays */}
+                            <div>
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Top 5 Barangays by Issuances</h4>
+                                {top5.length === 0 ? (
+                                    <div className="text-center text-slate-400 py-8">
+                                        <p className="text-sm font-semibold">No barangay data available</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {top5.map((brgy, idx) => (
+                                            <div key={brgy.name} className="flex items-center gap-3 group">
+                                                <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                                                    idx === 0 ? 'bg-amber-400 text-white shadow-md shadow-amber-200'
+                                                    : idx === 1 ? 'bg-slate-300 text-slate-700'
+                                                    : idx === 2 ? 'bg-orange-300 text-white'
+                                                    : 'bg-slate-100 text-slate-500'
+                                                }`}>
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-sm font-bold text-slate-700 truncate pr-2">{brgy.name}</span>
+                                                        <span className="text-sm font-black text-slate-800 shrink-0">{brgy.total}</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-[#d4a574] to-[#c49060] rounded-full transition-all duration-700"
+                                                            style={{ width: `${(brgy.total / maxBrgyTotal) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[9px] text-[#d4a574] font-bold">{brgy.births}B</span>
+                                                        <span className="text-[9px] text-rose-400 font-bold">{brgy.deaths}D</span>
+                                                        <span className="text-[9px] text-indigo-400 font-bold">{brgy.marriages}M</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right: Most Active Type + Recent Issued */}
+                            <div className="space-y-5">
+                                <div>
+                                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Most Active Document Type</h4>
+                                    <div className={`inline-flex items-center gap-3 px-5 py-3 rounded-2xl border font-black text-sm ${mostActiveTypeColor}`}>
+                                        <span className="text-2xl">{mostActiveTypeEmoji}</span>
+                                        {mostActiveType} Certificates
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-100">
+                                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Recently Issued</h4>
+                                    {recentIssued.length === 0 ? (
+                                        <p className="text-sm text-slate-400 font-medium">No issued records yet.</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {recentIssued.map(cert => (
+                                                <div key={cert.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 ${
+                                                        (cert.type || '').toLowerCase() === 'birth' ? 'bg-[#d4a574]/10 text-[#d4a574]'
+                                                        : (cert.type || '').toLowerCase() === 'death' ? 'bg-rose-50 text-rose-500'
+                                                        : 'bg-indigo-50 text-indigo-500'
+                                                    }`}>
+                                                        {(cert.type || '').toLowerCase() === 'birth' ? '👶' : (cert.type || '').toLowerCase() === 'death' ? '📋' : '💍'}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-slate-800 truncate">{cert.name}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{cert.number} · {cert.barangay}</p>
+                                                    </div>
+                                                    <span className="ml-auto text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">Issued</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-100">
+                                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Coverage</h4>
+                                    <p className="text-sm text-slate-600 font-medium">
+                                        <span className="font-black text-slate-800">{rankList.length}</span> of <span className="font-black text-slate-800">30</span> barangays have records
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </motion.div>
+
+            {/* ── Main Section Tab Bar ──────────────────────────────────────────────── */}
             <motion.div variants={itemVariants} className="flex space-x-1 bg-slate-100 p-1.5 rounded-xl w-fit">
                 <button onClick={() => setActiveTab('database')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'database' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Master Database</button>
                 <button onClick={() => setActiveTab('approvals')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'approvals' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Print Approvals Queue</button>
+                <button onClick={() => setActiveTab('ready')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'ready' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ready to Print</button>
                 <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'history' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Activity Log History</button>
             </motion.div>
 
@@ -1146,19 +1425,18 @@ const Issuances = () => {
                                                 <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
                                                 <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
                                                 <td className="p-4">
-                                                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
-                                                        cert.status === 'Pending Approval' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                                                        cert.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                                                        cert.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
-                                                        'bg-slate-100 text-slate-500 border-slate-200'
-                                                    }`}>{cert.status}</span>
+                                                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase border ${cert.status === 'Pending Approval' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                                                            cert.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                                                                cert.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+                                                                    'bg-slate-100 text-slate-500 border-slate-200'
+                                                        }`}>{cert.status}</span>
                                                 </td>
                                                 <td className="p-4 text-slate-400 text-xs">{cert.encoded_by || 'System'}</td>
                                                 <td className="p-4 pr-6 text-right">
                                                     <div className="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                                                         <button onClick={() => handleAction('View', cert)} title="View Document" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><EyeIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => handleEdit(cert)} title="Edit Record" className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg transition-all border border-amber-100 cursor-pointer"><PencilSquareIcon className="w-4 h-4" /></button>
-                                                        
+
                                                         {cert.status === 'Pending Approval' ? (
                                                             <button disabled title="Awaiting Print Approval" className="p-2 text-amber-500 bg-amber-50 rounded-lg border border-amber-100 opacity-60 cursor-not-allowed"><ClockIcon className="w-4 h-4" /></button>
                                                         ) : cert.status === 'Approved' ? (
@@ -1202,7 +1480,7 @@ const Issuances = () => {
                                             {certificates.filter(c => c.status === 'Pending Approval').length} Pending Requests
                                         </span>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => { refreshAll(); fetchTickets(); }}
                                         className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
                                     >
@@ -1215,12 +1493,12 @@ const Issuances = () => {
                             {/* Search Field */}
                             <div className="relative max-w-md w-full pt-2">
                                 <MagnifyingGlassIcon className="absolute left-3 top-[calc(50%+4px)] -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Search by Cert No, Name or Barangay..." 
-                                    value={approvalsSearch} 
-                                    onChange={(e) => setApprovalsSearch(e.target.value)} 
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm" 
+                                <input
+                                    type="text"
+                                    placeholder="Search by Cert No, Name or Barangay..."
+                                    value={approvalsSearch}
+                                    onChange={(e) => setApprovalsSearch(e.target.value)}
+                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm"
                                 />
                             </div>
                         </div>
@@ -1295,14 +1573,14 @@ const Issuances = () => {
                                                     <td className="p-4 pr-6 text-right">
                                                         {user.role === 'SuperAdmin' ? (
                                                             <div className="flex items-center justify-end gap-1.5">
-                                                                <button 
+                                                                <button
                                                                     onClick={() => handleApprovePrint(cert)}
                                                                     title="Approve Print Request"
                                                                     className="p-2 text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center border border-emerald-400/20 active:scale-95"
                                                                 >
                                                                     <CheckCircleIcon className="w-4 h-4" />
                                                                 </button>
-                                                                <button 
+                                                                <button
                                                                     onClick={() => handleRejectPrint(cert)}
                                                                     title="Reject & Deny Request"
                                                                     className="p-2 text-white bg-rose-500 hover:bg-rose-600 rounded-xl transition-all shadow-md shadow-rose-200 cursor-pointer flex items-center justify-center border border-rose-400/20 active:scale-95"
@@ -1315,6 +1593,137 @@ const Issuances = () => {
                                                                 Awaiting SuperAdmin
                                                             </span>
                                                         )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : activeTab === 'ready' ? (
+                    <div className="p-0">
+                        <div className="p-6 border-b border-slate-100 bg-slate-50/10">
+                            {/* Top Row: Title & Action */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-100">
+                                            <PrinterIcon className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">Ready to Print</h3>
+                                            <p className="text-[11px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Approved document requests authorized for physical printing</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-200/50">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest tabular-nums italic">
+                                            {certificates.filter(c => c.status === 'Approved').length} Approved Requests
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => { refreshAll(); fetchTickets(); }}
+                                        className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
+                                    >
+                                        <ArrowPathIcon className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                                        Refresh List
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Search Field */}
+                            <div className="relative max-w-md w-full pt-2">
+                                <MagnifyingGlassIcon className="absolute left-3 top-[calc(50%+4px)] -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by Cert No, Name or Barangay..."
+                                    value={readySearch}
+                                    onChange={(e) => setReadySearch(e.target.value)}
+                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-black border-b border-slate-200">
+                                        <th className="p-4 pl-6">Ref/Cert No.</th>
+                                        <th className="p-4">Recipient Name</th>
+                                        <th className="p-4">Type</th>
+                                        <th className="p-4">Barangay</th>
+                                        <th className="p-4">OR Number</th>
+                                        <th className="p-4">Approved By</th>
+                                        <th className="p-4 pr-6 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {certificates.filter(c => c.status === 'Approved').filter(cert => {
+                                        const term = readySearch.toLowerCase();
+                                        return cert.number.toLowerCase().includes(term) ||
+                                            cert.name.toLowerCase().includes(term) ||
+                                            cert.barangay.toLowerCase().includes(term);
+                                    }).length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="p-12 text-center text-slate-400">
+                                                <PrinterIcon className="w-12 h-12 mx-auto mb-2 opacity-20 text-slate-400" />
+                                                <p className="font-semibold text-slate-600">No documents ready to print</p>
+                                                <p className="text-xs text-slate-400 mt-1">Once print requests are approved, they will appear here.</p>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        certificates.filter(c => c.status === 'Approved').filter(cert => {
+                                            const term = readySearch.toLowerCase();
+                                            return cert.number.toLowerCase().includes(term) ||
+                                                cert.name.toLowerCase().includes(term) ||
+                                                cert.barangay.toLowerCase().includes(term);
+                                        }).map((cert) => {
+                                            return (
+                                                <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="p-4 pl-6">
+                                                        <span className="font-bold text-slate-800 text-sm tracking-tight">{cert.number}</span>
+                                                    </td>
+                                                    <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
+                                                    <td className="p-4">
+                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                                            {cert.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
+                                                    <td className="p-4">
+                                                        <span className="text-slate-700 font-bold text-xs bg-slate-100/80 px-2 py-1 rounded border border-slate-200">
+                                                            {cert.raw?.or_number || '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-slate-500 text-xs font-semibold">{cert.raw?.approved_by || '—'}</td>
+                                                    <td className="p-4 pr-6 text-right">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                                onClick={() => handleAction('View', cert)}
+                                                                title="View/Preview Document"
+                                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"
+                                                            >
+                                                                <EyeIcon className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction('Print', cert)}
+                                                                title="Print Now"
+                                                                className="p-2 text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center border border-emerald-400/20 active:scale-95"
+                                                            >
+                                                                <PrinterIcon className="w-4 h-4 text-white" />
+                                                                <span className="ml-1.5 text-xs font-bold whitespace-nowrap">Print Now</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleAction('Download', cert)}
+                                                                title="Download PDF"
+                                                                className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-all border border-blue-100 cursor-pointer"
+                                                            >
+                                                                <ArrowDownTrayIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1346,8 +1755,8 @@ const Issuances = () => {
                                             {filteredLogs.length} of {activityLogs.length} Entries
                                         </span>
                                     </div>
-                                    <button 
-                                        onClick={fetchActivityLogs} 
+                                    <button
+                                        onClick={fetchActivityLogs}
                                         disabled={logsLoading}
                                         className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
                                     >
@@ -1412,18 +1821,18 @@ const Issuances = () => {
                                     <div className="lg:col-span-4 grid grid-cols-2 gap-2 space-y-0">
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">From Date</label>
-                                            <input 
-                                                type="date" 
-                                                value={historyStartDate} 
+                                            <input
+                                                type="date"
+                                                value={historyStartDate}
                                                 onChange={(e) => setHistoryStartDate(e.target.value)}
                                                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl p-2.5 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">To Date</label>
-                                            <input 
-                                                type="date" 
-                                                value={historyEndDate} 
+                                            <input
+                                                type="date"
+                                                value={historyEndDate}
                                                 onChange={(e) => setHistoryEndDate(e.target.value)}
                                                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl p-2.5 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
                                             />
@@ -1436,9 +1845,9 @@ const Issuances = () => {
                                     <div className="flex items-center justify-between bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/50 animate-in fade-in slide-in-from-top-1">
                                         <p className="text-[10px] font-bold text-indigo-600 pl-2">Filtering results...</p>
                                         <button
-                                            onClick={() => { 
-                                                setHistorySearch(''); 
-                                                setHistoryActionFilter('all'); 
+                                            onClick={() => {
+                                                setHistorySearch('');
+                                                setHistoryActionFilter('all');
                                                 setHistoryUserFilter('all');
                                                 setHistoryStartDate('');
                                                 setHistoryEndDate('');
@@ -1485,13 +1894,13 @@ const Issuances = () => {
                                                 </td>
                                                 <td className="p-4">
                                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${log.action?.includes('Edit') ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                                            log.action?.includes('Delete') ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                                                log.action?.includes('Print') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                                    'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                                        log.action?.includes('Delete') ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                                            log.action?.includes('Print') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
                                                         }`}>
                                                         <span className={`w-1.5 h-1.5 rounded-full ${log.action?.includes('Edit') ? 'bg-amber-500' :
-                                                                log.action?.includes('Delete') ? 'bg-rose-500' :
-                                                                    log.action?.includes('Print') ? 'bg-emerald-500' : 'bg-indigo-500'
+                                                            log.action?.includes('Delete') ? 'bg-rose-500' :
+                                                                log.action?.includes('Print') ? 'bg-emerald-500' : 'bg-indigo-500'
                                                             }`}></span>
                                                         {log.action}
                                                     </span>
@@ -1517,10 +1926,10 @@ const Issuances = () => {
             {/* Floating Bulk Action Bar */}
             <AnimatePresence>
                 {selectedIds.length > 0 && (
-            <motion.div
+                    <motion.div
                         initial={{ y: 100, opacity: 0 }}
-                        animate={{ 
-                            y: isBarMinimized ? 80 : 0, 
+                        animate={{
+                            y: isBarMinimized ? 80 : 0,
                             opacity: 1,
                             scale: isBarMinimized ? 0.95 : 1
                         }}
@@ -1530,7 +1939,7 @@ const Issuances = () => {
                     >
                         <div className={`bg-slate-900 border border-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] p-4 flex items-center justify-between relative transition-all ${isBarMinimized ? 'opacity-50 hover:opacity-100' : ''}`}>
                             {/* Toggle Button */}
-                            <button 
+                            <button
                                 onClick={() => setIsBarMinimized(!isBarMinimized)}
                                 className="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-slate-400 hover:text-white p-1.5 rounded-full shadow-lg transition-all cursor-pointer z-10"
                                 title={isBarMinimized ? "Expand Toolbar" : "Minimize Toolbar"}

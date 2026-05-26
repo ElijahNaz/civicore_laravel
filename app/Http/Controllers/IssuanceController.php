@@ -117,10 +117,19 @@ class IssuanceController extends Controller
             return response()->json(['success' => false, 'error' => 'Issuance not found'], 404);
         }
 
-        DB::table('issuances')->where('id', $id)->update([
-            'deleted_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($id, $issuance) {
+            DB::table('issuances')->where('id', $id)->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($issuance->document_id) {
+                DB::table('documents')->where('id', $issuance->document_id)->update([
+                    'deleted_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
         
         return response()->json(['success' => true]);
     }

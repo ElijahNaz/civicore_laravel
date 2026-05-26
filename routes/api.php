@@ -109,12 +109,14 @@ Route::middleware('web')->group(function () {
         Route::put('/tickets/{id}/status',         [TicketController::class, 'updateStatus']);
         Route::post('/tickets/{id}/link-document', [TicketController::class, 'linkDocument']);
 
+        // Document Archive/Undo (Restore) accessible to all authenticated users
+        Route::get('/documents/archived',           [DocumentController::class, 'archived']);
+        Route::post('/documents/{id}/undo',         [DocumentController::class, 'undo']);
+
         // ── Admin-Only Routes (Require Admin/SuperAdmin Role) ────────────────
         Route::middleware('admin')->group(function () {
             // Document Archive/Purge
-            Route::get('/documents/archived',           [DocumentController::class, 'archived']);
             Route::delete('/documents/{id}/purge',      [DocumentController::class, 'purge']);
-            Route::post('/documents/{id}/undo',         [DocumentController::class, 'undo']);
 
             // Template Configuration
             Route::post('/templates/upload',            [TemplateController::class, 'upload']);

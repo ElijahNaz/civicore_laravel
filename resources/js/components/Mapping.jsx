@@ -39,6 +39,8 @@ const Mapping = () => {
     const [showHeatmap, setShowHeatmap] = useState(false);
     const [showRatioMode, setShowRatioMode] = useState(false);
     const [rightPanelTab, setRightPanelTab] = useState('charts');
+    const [showAllBarangays, setShowAllBarangays] = useState(false);
+    const [statsMode, setStatsMode] = useState('records'); // 'records' | 'issued'
     const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
     const [quickFilter, setQuickFilter] = useState('all'); // 'all','today','week','month','year','custom'
     const [dateFrom, setDateFrom] = useState('');
@@ -639,37 +641,126 @@ const Mapping = () => {
                 </AnimatePresence>
             </motion.div>
 
-            {/* Top Stat Cards Grid */}
-            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {isLoading ? (
-                    <div className="col-span-4">
+            {/* Top Stat Cards – Tabbed Panel */}
+            <motion.div variants={itemVariants} className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden">
+                {/* Tab switcher */}
+                <div className="flex items-center border-b border-slate-100 px-4 pt-3">
+                    {[
+                        { key: 'records', label: 'Records Overview', icon: '📂' },
+                        { key: 'issued', label: 'Issued Per Category', icon: '📋' },
+                    ].map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setStatsMode(tab.key)}
+                            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest border-b-2 transition-all cursor-pointer mr-1 ${
+                                statsMode === tab.key
+                                    ? 'border-[#d4a574] text-[#d4a574]'
+                                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            <span>{tab.icon}</span>
+                            {tab.label}
+                        </button>
+                    ))}
+                    <span className="ml-auto text-[9px] text-slate-400 font-bold uppercase tracking-widest pr-2 pb-2">
+                        {quickFilter !== 'all' ? `Filtered · ${filteredApiData.length} records` : `All Time · ${filteredApiData.length} records`}
+                    </span>
+                </div>
+
+                <div className="p-4">
+                    {isLoading ? (
                         <SkeletonLoader type="cards" rows={1} />
-                    </div>
-                ) : (
-                    <>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Uploaded Docs</p>
-                            <h3 className="text-3xl font-black text-emerald-500">{stats.totalDocs}</h3>
+                    ) : statsMode === 'records' ? (
+                        /* ── Tab 1: Records Overview ── */
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex flex-col justify-center hover:scale-[1.02] transition-transform">
+                                <p className="text-emerald-600 text-[10px] font-black uppercase tracking-wider mb-1">Uploaded Docs</p>
+                                <h3 className="text-3xl font-black text-emerald-600">{stats.totalDocs}</h3>
+                                <p className="text-[9px] text-emerald-400 font-bold mt-1">Total in database</p>
+                            </div>
+                            <div className="bg-[#d4a574]/10 border border-[#d4a574]/20 p-4 rounded-2xl flex flex-col justify-center hover:scale-[1.02] transition-transform">
+                                <p className="text-[#c49060] text-[10px] font-black uppercase tracking-wider mb-1">Birth Certs</p>
+                                <h3 className="text-3xl font-black text-[#d4a574]">{stats.birthCount}</h3>
+                                <p className="text-[9px] text-[#d4a574]/60 font-bold mt-1">Live birth records</p>
+                            </div>
+                            <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex flex-col justify-center hover:scale-[1.02] transition-transform">
+                                <p className="text-rose-500 text-[10px] font-black uppercase tracking-wider mb-1">Death Certs</p>
+                                <h3 className="text-3xl font-black text-rose-500">{stats.deathCount}</h3>
+                                <p className="text-[9px] text-rose-300 font-bold mt-1">Death certificates</p>
+                            </div>
+                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col justify-center hover:scale-[1.02] transition-transform">
+                                <p className="text-indigo-500 text-[10px] font-black uppercase tracking-wider mb-1">Marriage Certs</p>
+                                <h3 className="text-3xl font-black text-indigo-500">{stats.marriageCount}</h3>
+                                <p className="text-[9px] text-indigo-300 font-bold mt-1">Marriage records</p>
+                            </div>
+                            <div className="bg-gradient-to-br from-[#0f172a] to-slate-800 p-4 rounded-2xl shadow-lg flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform">
+                                <div className="absolute right-[-10%] top-[-10%] w-24 h-24 bg-[#d4a574]/10 rounded-full blur-xl"></div>
+                                <p className="text-slate-400 text-[10px] font-black uppercase tracking-wider mb-1">Most Active</p>
+                                <h3 className="text-lg font-black text-white truncate">{stats.mostActiveBrgy}</h3>
+                                <p className="text-[9px] text-slate-500 font-bold mt-1">Top barangay</p>
+                            </div>
                         </div>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Birth Certs</p>
-                            <h3 className="text-3xl font-black text-[#d4a574]">{stats.birthCount}</h3>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Death Certs</p>
-                            <h3 className="text-3xl font-black text-rose-500">{stats.deathCount}</h3>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Marriage Certs</p>
-                            <h3 className="text-3xl font-black text-indigo-500">{stats.marriageCount}</h3>
-                        </div>
-                        <div className="bg-gradient-to-br from-[#0f172a] to-slate-800 p-5 rounded-2xl shadow-lg shadow-slate-800/20 flex flex-col justify-center relative overflow-hidden">
-                            <div className="absolute right-[-10%] top-[-10%] w-24 h-24 bg-[#d4a574]/10 rounded-full blur-xl"></div>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Most Active</p>
-                            <h3 className="text-xl font-black text-white truncate">{stats.mostActiveBrgy}</h3>
-                        </div>
-                    </>
-                )}
+                    ) : (() => {
+                        /* ── Tab 2: Issued Per Category ── */
+                        const issuedBirth    = filteredApiData.filter(i => (i.type || '').toLowerCase() === 'birth').length;
+                        const issuedDeath    = filteredApiData.filter(i => (i.type || '').toLowerCase() === 'death').length;
+                        const issuedMarriage = filteredApiData.filter(i => (i.type || '').toLowerCase().includes('marriage')).length;
+                        const totalIssued    = filteredApiData.length;
+                        const maxCount       = Math.max(issuedBirth, issuedDeath, issuedMarriage, 1);
+
+                        // Most issued barangay (from issuances only)
+                        const brgyIssuedCounts = {};
+                        filteredApiData.forEach(i => {
+                            if (i.barangay) brgyIssuedCounts[i.barangay] = (brgyIssuedCounts[i.barangay] || 0) + 1;
+                        });
+                        const mostIssuedBrgy = Object.entries(brgyIssuedCounts).sort((a,b) => b[1]-a[1])[0];
+
+                        const categories = [
+                            { label: 'Birth Issued',    count: issuedBirth,    color: 'text-[#d4a574]', barColor: 'bg-[#d4a574]',     bg: 'bg-[#d4a574]/10  border-[#d4a574]/20',  emoji: '👶' },
+                            { label: 'Death Issued',    count: issuedDeath,    color: 'text-rose-500',  barColor: 'bg-rose-500',       bg: 'bg-rose-50 border-rose-100',            emoji: '📋' },
+                            { label: 'Marriage Issued', count: issuedMarriage, color: 'text-indigo-500', barColor: 'bg-indigo-500',    bg: 'bg-indigo-50 border-indigo-100',         emoji: '💍' },
+                        ];
+
+                        return (
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-stretch">
+                                {/* Category cards with mini bars */}
+                                {categories.map(cat => (
+                                    <div key={cat.label} className={`border p-4 rounded-2xl flex flex-col gap-2 hover:scale-[1.02] transition-transform ${cat.bg}`}>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{cat.label}</span>
+                                            <span className="text-lg">{cat.emoji}</span>
+                                        </div>
+                                        <h3 className={`text-4xl font-black tracking-tighter ${cat.color}`}>{cat.count}</h3>
+                                        {/* Progress bar relative to highest category */}
+                                        <div className="h-1.5 bg-white/60 rounded-full overflow-hidden mt-auto">
+                                            <div
+                                                className={`h-full ${cat.barColor} rounded-full transition-all duration-700`}
+                                                style={{ width: `${(cat.count / maxCount) * 100}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-[9px] font-bold text-slate-400">
+                                            {totalIssued > 0 ? Math.round((cat.count / totalIssued) * 100) : 0}% of total issued
+                                        </p>
+                                    </div>
+                                ))}
+
+                                {/* Total + Most Issued Barangay */}
+                                <div className="flex flex-col gap-3">
+                                    <div className="bg-gradient-to-br from-[#0f172a] to-slate-800 p-4 rounded-2xl flex flex-col justify-center relative overflow-hidden flex-1 hover:scale-[1.02] transition-transform">
+                                        <div className="absolute right-[-10%] top-[-10%] w-16 h-16 bg-[#d4a574]/10 rounded-full blur-xl"></div>
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-wider mb-0.5">Total Issued</p>
+                                        <h3 className="text-3xl font-black text-white">{totalIssued}</h3>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col justify-center flex-1 hover:scale-[1.02] transition-transform">
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-wider mb-0.5">Top Barangay</p>
+                                        <p className="text-sm font-black text-slate-800 truncate">{mostIssuedBrgy ? mostIssuedBrgy[0] : 'N/A'}</p>
+                                        {mostIssuedBrgy && <p className="text-[9px] text-slate-400 font-bold">{mostIssuedBrgy[1]} issued</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
             </motion.div>
 
             {/* Active Filter Summary Badge */}
@@ -799,13 +890,19 @@ const Mapping = () => {
                             onClick={() => setRightPanelTab('charts')}
                             className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rightPanelTab === 'charts' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            Monthly Trajectory
+                            Monthly
                         </button>
                         <button
                             onClick={() => setRightPanelTab('demographics')}
                             className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rightPanelTab === 'demographics' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            Demographics & Velocity
+                            Velocity
+                        </button>
+                        <button
+                            onClick={() => setRightPanelTab('barangay')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rightPanelTab === 'barangay' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            By Barangay
                         </button>
                     </div>
 
@@ -828,6 +925,87 @@ const Mapping = () => {
                                 )}
                             </div>
                         </>
+                    ) : rightPanelTab === 'barangay' ? (
+                        <div className="flex flex-col flex-1 overflow-hidden">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                                        <MapPinIcon className="w-4 h-4 text-[#d4a574]" />
+                                        By Barangay
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-medium">Click any row to locate on map</p>
+                                </div>
+                                {getBarangayRankings().length > 10 && (
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded-lg">
+                                        {showAllBarangays ? getBarangayRankings().length : Math.min(10, getBarangayRankings().length)} of {getBarangayRankings().length}
+                                    </span>
+                                )}
+                            </div>
+
+                            {isLoading ? (
+                                <div className="space-y-1.5">
+                                    {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse" />)}
+                                </div>
+                            ) : getBarangayRankings().length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+                                    <MapPinIcon className="w-8 h-8 text-slate-200 mb-2" />
+                                    <p className="text-xs text-slate-400 font-semibold">No barangay records yet</p>
+                                </div>
+                            ) : (() => {
+                                const rankings = getBarangayRankings();
+                                const maxTotal = rankings[0]?.total || 1;
+                                const displayed = showAllBarangays ? rankings : rankings.slice(0, 10);
+                                return (
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-1.5 pr-1">
+                                        {displayed.map((brgy, idx) => (
+                                            <button
+                                                key={brgy.name}
+                                                onClick={() => locateBarangay(brgy.name)}
+                                                className="w-full text-left p-2.5 rounded-xl bg-slate-50/60 border border-slate-100 hover:bg-white hover:border-[#d4a574]/30 hover:shadow-sm transition-all cursor-pointer group/brgy shrink-0"
+                                            >
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black shrink-0 ${
+                                                            idx === 0 ? 'bg-amber-400 text-white'
+                                                            : idx === 1 ? 'bg-slate-300 text-slate-700'
+                                                            : idx === 2 ? 'bg-orange-300 text-white'
+                                                            : 'bg-slate-100 text-slate-500'
+                                                        }`}>{idx + 1}</span>
+                                                        <span className="text-xs font-bold text-slate-700 group-hover/brgy:text-[#d4a574] transition-colors truncate">{brgy.name}</span>
+                                                    </div>
+                                                    <span className="text-xs font-black text-slate-800 shrink-0 ml-1">{brgy.total}</span>
+                                                </div>
+                                                <div className="h-1 bg-slate-100 rounded-full overflow-hidden mb-1.5">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-[#d4a574] to-[#c49060] rounded-full transition-all duration-500"
+                                                        style={{ width: `${(brgy.total / maxTotal) * 100}%` }}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[9px] font-bold text-[#d4a574]">{brgy.births}B</span>
+                                                    <span className="text-[9px] font-bold text-rose-400">{brgy.deaths}D</span>
+                                                    <span className="text-[9px] font-bold text-indigo-400">{brgy.marriages}M</span>
+                                                    <span className="ml-auto text-[9px] font-bold text-slate-400 group-hover/brgy:text-[#d4a574] transition-colors">📍 Locate</span>
+                                                </div>
+                                            </button>
+                                        ))}
+
+                                        {/* Show All / Collapse toggle */}
+                                        {rankings.length > 10 && (
+                                            <button
+                                                onClick={() => setShowAllBarangays(v => !v)}
+                                                className="w-full mt-1 py-2 rounded-xl border border-dashed border-slate-200 text-[10px] font-black text-slate-400 hover:border-[#d4a574]/40 hover:text-[#d4a574] hover:bg-[#d4a574]/5 transition-all cursor-pointer uppercase tracking-widest shrink-0"
+                                            >
+                                                {showAllBarangays
+                                                    ? `↑ Show Top 10 Only`
+                                                    : `↓ Show All ${rankings.length} Barangays`
+                                                }
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
                     ) : (
                         <div className="flex flex-col flex-1 overflow-hidden">
                             {/* Velocities Header */}

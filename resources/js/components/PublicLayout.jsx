@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 export default function PublicLayout({ children }) {
     const location = useLocation();
-    
+
     const navLinks = [
         { name: 'Home', path: '/' },
         { name: 'About', path: '/about' },
@@ -22,9 +22,9 @@ export default function PublicLayout({ children }) {
                     backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%23d4a574' fill-opacity='0.2' fill-rule='evenodd'/%3E%3C/svg%3E")`
                 }}
             />
-            
+
             {/* Header */}
-            <motion.header 
+            <motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="px-6 md:px-12 py-8 flex justify-between items-center z-50 relative"
@@ -43,10 +43,10 @@ export default function PublicLayout({ children }) {
                         </div>
                     </div>
                 </Link>
-                
+
                 <nav className="hidden lg:flex items-center gap-10 text-sm font-semibold text-slate-300">
                     {navLinks.map((link) => (
-                        <Link 
+                        <Link
                             key={link.path}
                             to={link.path}
                             className={`transition-colors relative after:absolute after:-bottom-2 after:left-0 after:h-0.5 after:bg-[#d4a574] after:transition-all after:duration-300 

@@ -932,7 +932,7 @@ class DocumentController extends Controller
         $whereClause = " WHERE deleted_at IS NOT NULL";
         $params = [];
 
-        if (!empty($type)) {
+        if (!empty($type) && $type !== 'all') {
             $whereClause .= " AND type = ?";
             $params[] = $type;
         }

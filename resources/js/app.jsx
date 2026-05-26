@@ -9,6 +9,7 @@ import Landing          from './components/Landing.jsx';
 import Login            from './components/Login.jsx';
 import Dashboard        from './components/Dashboard.jsx';
 import Documents        from './components/Documents.jsx';
+import ArchiveManager   from './components/ArchiveManager.jsx';
 import Issuances        from './components/Issuances.jsx';
 import Mapping          from './components/Mapping.jsx';
 import Accounts         from './components/Accounts.jsx';
@@ -98,6 +99,13 @@ function App() {
                         <Route path="/issuances" element={
                             <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
                                 <Layout><Issuances /></Layout>
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Archive Manager — Admin + SuperAdmin */}
+                        <Route path="/archive" element={
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
+                                <Layout><ArchiveManager /></Layout>
                             </ProtectedRoute>
                         } />
 

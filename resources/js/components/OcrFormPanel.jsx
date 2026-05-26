@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,6 +7,7 @@ import {
     CloudArrowUpIcon, SparklesIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
+import SignaturePad from './SignaturePad.jsx';
 
 // ── Helper: compute age from a date string ───────────────────────────────────
 export function computeAge(dobString) {
@@ -89,9 +90,11 @@ const FIELD_CONFIG = {
 
 const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = false, hideBoxes = false }) => {
     const [isSaving, setIsSaving] = useState(false);
-    
-    const effectiveType = ocrResult?.detected_type !== 'unknown' ? ocrResult.detected_type : (docType || file.type || 'unknown');
-    
+
+    const detectedType = ocrResult?.detected_type !== 'unknown' ? ocrResult?.detected_type : (docType || file.type || 'unknown');
+    const [manualType, setManualType] = useState(detectedType === 'unknown' ? '' : detectedType);
+    const effectiveType = manualType || detectedType;
+
     // Normalize and parse extracted fields
     const [formData, setFormData] = useState(() => {
         let ef = ocrResult?.extracted_fields || file.extracted_fields || {};
@@ -101,15 +104,23 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
 
         const init = {};
         const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
-        
+
         configSections.forEach(section => {
             section.fields.forEach(f => {
-                let val = ef[f.key] || '';
+                let val = ef[f.key] === undefined || ef[f.key] === null ? '' : String(ef[f.key]).trim();
                 if (f.type === 'date' && val) {
                     const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
                     if (!isNaN(d.getTime())) {
                         val = d.toISOString().split('T')[0];
                     }
+                }
+                // All optional fields: if empty, default to "n/a" so every field always has output
+                if (!f.required && val === '') {
+                    val = 'n/a';
+                }
+                // Signature fields that are empty also default to 'n/a'
+                if (f.type === 'signature' && val === '') {
+                    val = 'n/a';
                 }
                 init[f.key] = val;
             });
@@ -174,7 +185,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
     const templateOverlay = ocrResult?.template_overlay || null;
 
     const { templates } = useData();
-    
+
     // Find a matching professional template for this document type
     const matchedTemplate = templates.find(t => {
         const tType = (t.type || '').toLowerCase();
@@ -196,26 +207,30 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
             if (typeof rawFields === 'string') {
                 try { parsed = JSON.parse(rawFields); } catch (e) { console.error("Parse error", e); }
             }
-            
+
             if (parsed && typeof parsed === 'object') {
                 setFormData(prev => {
                     const next = { ...prev };
                     let changed = false;
-                    
+
                     // We loop through our known field configuration to map the incoming data
                     const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
                     configSections.forEach(section => {
                         section.fields.forEach(f => {
                             // Only fill if current value is empty OR if this is a fresh OCR result
                             const newValue = parsed[f.key];
-                            if (newValue && newValue !== prev[f.key]) {
-                                let val = newValue;
+                            if (newValue !== undefined && newValue !== null && newValue !== prev[f.key]) {
+                                let val = String(newValue).trim();
                                 // Basic date normalization
                                 if (f.type === 'date' && val) {
                                     const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
                                     if (!isNaN(d.getTime())) {
                                         val = d.toISOString().split('T')[0];
                                     }
+                                }
+                                // Optional fields: if empty, default to "n/a"
+                                if (!f.required && val === '') {
+                                    val = 'n/a';
                                 }
                                 next[f.key] = val;
                                 changed = true;
@@ -250,7 +265,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
 
     const handleSubmit = (e, minimize = false) => {
         if (e) e.preventDefault();
-        
+
         // --- Strict Validation ---
         const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
         const newErrors = {};
@@ -258,7 +273,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
 
         configSections.forEach(section => {
             section.fields.forEach(f => {
-                if (f.required && !formData[f.key]) {
+                if (f.required && (!formData[f.key] || String(formData[f.key]).trim() === '')) {
                     newErrors[f.key] = true;
                     if (!firstErrorField) firstErrorField = f.label;
                 }
@@ -275,15 +290,39 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
             return;
         }
 
+        // Block save if document type is still unknown
+        if (!effectiveType || effectiveType === 'unknown') {
+            setErrors(prev => ({ ...prev, _type: true }));
+            return;
+        }
+
+        // Sanitize: ALL empty/null/undefined optional fields → 'n/a' before saving
+        const sanitizedFields = { ...formData };
+        configSections.forEach(section => {
+            section.fields.forEach(f => {
+                const val = sanitizedFields[f.key];
+                const strVal = val === undefined || val === null ? '' : String(val).trim();
+                if (!f.required) {
+                    if (strVal === '' || strVal === 'n/a') {
+                        sanitizedFields[f.key] = 'n/a';
+                    }
+                }
+                // Signature fields always sanitize to 'n/a' if empty
+                if (f.type === 'signature' && (strVal === '' || strVal === undefined || strVal === null)) {
+                    sanitizedFields[f.key] = 'n/a';
+                }
+            });
+        });
+
         if (isMinor && !consentGiven) {
             setShowConsent(true);
             return;
         }
         setIsSaving(true);
-        onSave({ 
-            fields: formData, 
-            ocr_text: ocrText, 
-            parentalConsent: consentGiven, 
+        onSave({
+            fields: sanitizedFields,
+            ocr_text: ocrText,
+            parentalConsent: consentGiven,
             detectedType: effectiveType,
             minimizeRequested: minimize
         });
@@ -293,10 +332,28 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
         if (savePending && consentGiven) {
             setSavePending(false);
             setIsSaving(true);
-            onSave({ 
-                fields: formData, 
-                ocr_text: ocrText, 
-                parentalConsent: true, 
+
+            const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
+            const sanitizedFields = { ...formData };
+            configSections.forEach(section => {
+                section.fields.forEach(f => {
+                    const val = sanitizedFields[f.key];
+                    const strVal = val === undefined || val === null ? '' : String(val).trim();
+                    if (!f.required) {
+                        if (strVal === '' || strVal === 'n/a') {
+                            sanitizedFields[f.key] = 'n/a';
+                        }
+                    }
+                    if (f.type === 'signature' && (strVal === '' || strVal === undefined || strVal === null)) {
+                        sanitizedFields[f.key] = 'n/a';
+                    }
+                });
+            });
+
+            onSave({
+                fields: sanitizedFields,
+                ocr_text: ocrText,
+                parentalConsent: true,
                 detectedType: effectiveType,
                 minimizeRequested: false
             });
@@ -324,7 +381,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                 {/* Saving Overlay */}
                 <AnimatePresence>
                     {isSaving && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                             className="absolute inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center"
                         >
@@ -334,9 +391,9 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                             </div>
                             <h3 className="mt-6 text-xl font-black text-slate-900 tracking-tight">Securing Data to Registry...</h3>
                             <p className="text-sm text-slate-400 mt-2">Almost there! We're syncing your changes now.</p>
-                            
+
                             {!isViewOnly && (
-                                <button 
+                                <button
                                     onClick={(e) => handleSubmit(e, true)}
                                     className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
                                 >
@@ -362,7 +419,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                     </div>
                     <div className="flex items-center gap-2">
                         {!isViewOnly && (
-                            <button 
+                            <button
                                 onClick={(e) => handleSubmit(e, true)}
                                 title="Minimize to Tray"
                                 className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
@@ -375,6 +432,40 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                         </button>
                     </div>
                 </div>
+
+                {/* Unknown Type Warning Banner */}
+                {(detectedType === 'unknown' || !manualType) && !isViewOnly && (
+                    <div className={`px-8 py-4 border-b flex items-center gap-4 ${errors._type ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${errors._type ? 'bg-rose-100' : 'bg-amber-100'}`}>
+                            <ExclamationTriangleIcon className={`w-5 h-5 ${errors._type ? 'text-rose-600' : 'text-amber-600'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-black ${errors._type ? 'text-rose-700' : 'text-amber-800'}`}>
+                                {errors._type ? 'Document type required before saving' : 'Document type could not be auto-detected'}
+                            </p>
+                            <p className={`text-xs font-medium mt-0.5 ${errors._type ? 'text-rose-500' : 'text-amber-600'}`}>
+                                Please select the correct document type to continue.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {['birth', 'death', 'marriage'].map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => { setManualType(t); setErrors(p => ({ ...p, _type: false })); }}
+                                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all cursor-pointer ${
+                                        manualType === t
+                                            ? t === 'birth' ? 'bg-[#d4a574] text-white border-[#d4a574] shadow-md'
+                                              : t === 'death' ? 'bg-rose-500 text-white border-rose-500 shadow-md'
+                                              : 'bg-indigo-500 text-white border-indigo-500 shadow-md'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {t === 'birth' ? '👶' : t === 'death' ? '📋' : '💍'} {t}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-[35%] border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
@@ -470,7 +561,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                                         <label className={`block text-[11px] font-black uppercase tracking-widest mb-2.5 transition-colors ${errors[field.key] ? 'text-rose-500' : 'text-slate-500'}`}>
                                                             {field.label} {field.required && <span className="text-rose-400">*</span>}
                                                         </label>
-                                                         {field.type === 'select' ? (
+                                                        {field.type === 'select' ? (
                                                             <select
                                                                 value={formData[field.key] || ''}
                                                                 onChange={e => {
@@ -482,6 +573,15 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                                                 <option value="">Select…</option>
                                                                 {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                                                             </select>
+                                                        ) : field.type === 'signature' ? (
+                                                            <SignaturePad
+                                                                fieldKey={field.key}
+                                                                value={formData[field.key] || 'n/a'}
+                                                                onChange={val => {
+                                                                    setFormData(p => ({ ...p, [field.key]: val }));
+                                                                }}
+                                                                disabled={isViewOnly}
+                                                            />
                                                         ) : (
                                                             <div className="relative">
                                                                 <input
@@ -526,13 +626,13 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-xl">
-                                        <button 
+                                        <button
                                             onClick={() => setShowDiagnosticBoxes(false)}
                                             className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${!showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                         >
                                             Clean View
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => setShowDiagnosticBoxes(true)}
                                             className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                                         >
@@ -610,11 +710,11 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                                 templateOverlay.fields.map((item) => {
                                                     const roi = item.roi || [];
                                                     const [x1, y1, x2, y2] = roi;
-                                                    
+
                                                     // Map backend overlay keys to our structured form data so the preview updates live
                                                     let derivedValue = '';
                                                     const k = item.key?.toLowerCase() || '';
-                                                    
+
                                                     if (k.includes('child name')) {
                                                         derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
                                                     } else if (k.includes('mother name')) {
@@ -634,28 +734,28 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                                     const value = derivedValue || item.value || '';
                                                     const label = fieldLabelMap[item.key] || item.key;
                                                     return (
-                                                    <div
-                                                        key={item.key}
-                                                        className={`absolute rounded-lg transition-all ${!showDiagnosticBoxes ? '' : 'border-2 border-emerald-400 bg-emerald-100/50 p-1 backdrop-blur-[1px]'}`}
-                                                        style={{
-                                                            left: `${(x1 || 0) * 100}%`,
-                                                            top: `${(y1 || 0) * 100}%`,
-                                                            width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
-                                                            minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
-                                                        }}
-                                                        title={`${label}`}
-                                                    >
-                                                        {showDiagnosticBoxes && (
-                                                            <div className="font-bold uppercase tracking-wide text-[9px]">
-                                                                {label}
+                                                        <div
+                                                            key={item.key}
+                                                            className={`absolute rounded-lg transition-all ${!showDiagnosticBoxes ? '' : 'border-2 border-emerald-400 bg-emerald-100/50 p-1 backdrop-blur-[1px]'}`}
+                                                            style={{
+                                                                left: `${(x1 || 0) * 100}%`,
+                                                                top: `${(y1 || 0) * 100}%`,
+                                                                width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
+                                                                minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
+                                                            }}
+                                                            title={`${label}`}
+                                                        >
+                                                            {showDiagnosticBoxes && (
+                                                                <div className="font-bold uppercase tracking-wide text-[9px]">
+                                                                    {label}
+                                                                </div>
+                                                            )}
+                                                            <div className={`font-black text-slate-950 truncate leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px] font-semibold'}`}>
+                                                                {value || (!showDiagnosticBoxes ? '' : '—')}
                                                             </div>
-                                                        )}
-                                                        <div className={`font-black text-slate-950 truncate leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px] font-semibold'}`}>
-                                                            {value || (!showDiagnosticBoxes ? '' : '—')}
                                                         </div>
-                                                    </div>
-                                                );
-                                            })
+                                                    );
+                                                })
                                             )}
                                         </div>
                                     </div>
@@ -688,33 +788,33 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                         )}
 
                         <div className="pt-6 border-t border-slate-100">
-                                {isViewOnly ? (
-                                    <button
-                                        onClick={onClose}
-                                        className="w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer bg-slate-900 hover:bg-slate-800 text-white shadow-slate-200"
-                                    >
-                                        <XMarkIcon className="w-6 h-6" />
-                                        Close Professional Preview
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleSubmit}
-                                        disabled={isSaving}
-                                        className={`w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer ${isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-slate-200'}`}
-                                    >
-                                        {isSaving ? (
-                                            <>
-                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                Uploading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
-                                                Save & Sync Changes
-                                            </>
-                                        )}
-                                    </button>
-                                )}
+                            {isViewOnly ? (
+                                <button
+                                    onClick={onClose}
+                                    className="w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer bg-slate-900 hover:bg-slate-800 text-white shadow-slate-200"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                    Close Professional Preview
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={isSaving}
+                                    className={`w-full py-4 rounded-xl font-extrabold text-base shadow-lg transition-all flex items-center justify-center gap-3 cursor-pointer ${isSaving ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0f172a] hover:bg-slate-800 text-white shadow-slate-200'}`}
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Uploading...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
+                                            Save & Sync Changes
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

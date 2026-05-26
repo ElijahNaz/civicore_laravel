@@ -186,7 +186,7 @@ export const BirthConfig = [
         fields: [
             { key: 'attendant_type', label: '21a. Attendant', type: 'select', options: ['Physician', 'Nurse', 'Midwife', 'Hilot (Traditional Birth Attendant)', 'Others'], required: false, width: 'sm:col-span-1' },
             { key: 'attendant_time', label: '21b. Time of birth (am/pm)', type: 'text', required: false, width: 'sm:col-span-1' },
-            { key: 'attendant_signature', label: '21b. Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'attendant_signature', label: '21b. Signature', type: 'signature', required: false, width: 'sm:col-span-1' },
             { key: 'attendant_name', label: '21b. Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'attendant_title', label: '21b. Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'attendant_address', label: '21b. Address', type: 'text', required: false, width: 'sm:col-span-2' },
@@ -196,7 +196,7 @@ export const BirthConfig = [
     {
         section: '22. Informant',
         fields: [
-            { key: 'informant_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'informant_signature', label: 'Signature', type: 'signature', required: false, width: 'sm:col-span-1' },
             { key: 'informant_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'informant_relationship', label: 'Relationship to Child', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'informant_address', label: 'Address', type: 'text', required: false, width: 'sm:col-span-2' },
@@ -206,7 +206,7 @@ export const BirthConfig = [
     {
         section: '23. Prepared By',
         fields: [
-            { key: 'prepared_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'prepared_by_signature', label: 'Signature', type: 'signature', required: false, width: 'sm:col-span-1' },
             { key: 'prepared_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'prepared_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'prepared_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
@@ -215,7 +215,7 @@ export const BirthConfig = [
     {
         section: '24. Received By',
         fields: [
-            { key: 'received_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'received_by_signature', label: 'Signature', type: 'signature', required: false, width: 'sm:col-span-1' },
             { key: 'received_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'received_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'received_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },
@@ -224,7 +224,7 @@ export const BirthConfig = [
     {
         section: '25. Registered at the Office of the Civil Registrar',
         fields: [
-            { key: 'registered_by_signature', label: 'Signature', type: 'text', required: false, width: 'sm:col-span-1' },
+            { key: 'registered_by_signature', label: 'Signature', type: 'signature', required: false, width: 'sm:col-span-1' },
             { key: 'registered_by_name', label: 'Name in Print', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'registered_by_title', label: 'Title or Position', type: 'text', required: false, width: 'sm:col-span-1' },
             { key: 'registered_by_date', label: 'Date', type: 'date', required: false, width: 'sm:col-span-1' },

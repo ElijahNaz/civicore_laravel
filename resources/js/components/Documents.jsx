@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     CloudArrowUpIcon, DocumentIcon, TrashIcon, CheckCircleIcon,
     ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon,
-    PencilSquareIcon, ShieldExclamationIcon, DocumentCheckIcon,
+    PencilSquareIcon, ShieldExclamationIcon, ShieldCheckIcon, DocumentCheckIcon,
     EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon, StopIcon, PlayIcon
 } from '@heroicons/react/24/outline';
 import OcrFormPanel from './OcrFormPanel.jsx';
@@ -118,6 +118,8 @@ const Documents = () => {
         refreshAll
     } = useData();
     const isLoadingData = dataLoading.documents;
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+    const canPurge = ['SuperAdmin', 'Admin'].includes(user.role);
 
     const [files, setFiles] = useState([]);
     const [archivedIds, setArchivedIds] = useState([]);
@@ -127,13 +129,13 @@ const Documents = () => {
         setFiles(prev => {
             // Keep files that are currently uploading
             const uploading = prev.filter(f => f.status === 'uploading');
-            
+
             // Filter fetched files
             const fetched = globalFiles.filter(f => !archivedIds.includes(f.id));
-            
+
             // Remove uploading files that have appeared in fetched files (by name)
             const uploadingFiltered = uploading.filter(u => !fetched.some(f => f.name === u.name));
-            
+
             return [...uploadingFiltered, ...fetched];
         });
     }, [globalFiles, archivedIds]);
@@ -176,43 +178,14 @@ const Documents = () => {
         dateRange: 'all' // all, today, yesterday, week, month
     });
 
-    // ── Archive Manager State & Fetch ──────────────────────────────────────────
-    const [archivedFiles, setArchivedFiles] = useState([]);
-    const [isLoadingArchived, setIsLoadingArchived] = useState(false);
-    const [archiveSearch, setArchiveSearch] = useState('');
-    const [archiveTypeFilter, setArchiveTypeFilter] = useState('all');
-    const [selectedArchiveIds, setSelectedArchiveIds] = useState([]);
 
-    const fetchArchivedFiles = useCallback(async () => {
-        setIsLoadingArchived(true);
-        try {
-            const params = new URLSearchParams({
-                search: archiveSearch,
-                type: archiveTypeFilter
-            });
-            const res = await fetch(`/api/documents/archived?${params.toString()}`, { credentials: 'include' });
-            if (res.ok) {
-                const data = await res.json();
-                setArchivedFiles(data.data || []);
-            }
-        } catch (e) {
-            console.error('Failed to fetch archived files:', e);
-        } finally {
-            setIsLoadingArchived(false);
-        }
-    }, [archiveSearch, archiveTypeFilter]);
-
-    useEffect(() => {
-        // Trigger fetch whenever active tab is archive, or whenever documents context changes
-        fetchArchivedFiles();
-    }, [globalFiles, activeTab, fetchArchivedFiles]);
 
     const [previewFile, setPreviewFile] = useState(null); // file to preview
     const [isCameraOpen, setIsCameraOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '', type: 'info' });
 
     const toggleSelect = (id) => {
-        setSelectedIds(prev => 
+        setSelectedIds(prev =>
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
@@ -239,7 +212,7 @@ const Documents = () => {
     const onDrop = useCallback(async (acceptedFiles) => {
         setDragging(false);
         if (!acceptedFiles.length) return;
-        
+
         // Optimistically add files to queue
         const optimisticFiles = acceptedFiles.map((item, index) => {
             const f = item.file || item;
@@ -253,7 +226,7 @@ const Documents = () => {
                 created_at: new Date().toISOString()
             };
         });
-        
+
         setFiles(prev => [...optimisticFiles, ...prev]);
 
         const isBulk = acceptedFiles.length > 1;
@@ -289,7 +262,7 @@ const Documents = () => {
                 fd.append('file', file);
                 fd.append('docType', selectedDocType);
                 if (qualityMetadata) fd.append('quality_metadata', JSON.stringify(qualityMetadata));
-                
+
                 try {
                     const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
                     const data = await res.json();
@@ -304,8 +277,8 @@ const Documents = () => {
 
             if (successCount > 0) {
                 refreshAll();
-                const message = isBulk 
-                    ? `Successfully uploaded ${successCount} of ${acceptedFiles.length} files` 
+                const message = isBulk
+                    ? `Successfully uploaded ${successCount} of ${acceptedFiles.length} files`
                     : 'Document uploaded successfully';
                 return { success: true, message, id: lastId };
             }
@@ -331,15 +304,15 @@ const Documents = () => {
     const toggleOcrStatus = async (fileId, currentStatus) => {
         const isStopping = ['pending', 'processing'].includes(currentStatus?.toLowerCase());
         const tempStatus = isStopping ? 'stopped' : 'pending';
-        
+
         // Instant local feedback
         setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: tempStatus } : f));
-        
+
         try {
-            const res = await fetch(`/api/documents/${fileId}/toggle-ocr`, { 
-                method: 'POST', 
+            const res = await fetch(`/api/documents/${fileId}/toggle-ocr`, {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                credentials: 'include' 
+                credentials: 'include'
             });
             const data = await res.json();
             if (!data.success) {
@@ -378,17 +351,17 @@ const Documents = () => {
             }
 
             const data = await response.json();
-            return { 
-                success: true, 
-                message: `Sent ${data.queued_count} documents to the OCR queue!` 
+            return {
+                success: true,
+                message: `Sent ${data.queued_count} documents to the OCR queue!`
             };
         });
 
         if (result && result.success) {
-            showAlert({ 
-                title: 'Action Successful', 
-                message: result.message, 
-                type: 'success' 
+            showAlert({
+                title: 'Action Successful',
+                message: result.message,
+                type: 'success'
             });
             setFiles(prev => prev.map(f => documentIds.includes(f.id) ? { ...f, status: 'processing' } : f));
             refreshDocuments(true);
@@ -556,9 +529,9 @@ const Documents = () => {
                     // Revert on failure
                     refreshAll();
                     throw new Error('Deletion failed');
-                }, { 
-                    type: 'delete', 
-                    undoFn: () => fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' }) 
+                }, {
+                    type: 'delete',
+                    undoFn: () => fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' })
                 });
             },
             onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -600,124 +573,7 @@ const Documents = () => {
         });
     };
 
-    // ── Archive Manager Actions ──────────────────────────────────────────────
-    const restoreArchived = async (fileId) => {
-        const file = archivedFiles.find(f => f.id === fileId);
-        setConfirmModal({
-            isOpen: true,
-            title: 'Restore Document',
-            message: `Restore "${file?.name || 'document'}" to the active queue?`,
-            type: 'success',
-            onConfirm: async () => {
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                runBackgroundTask(`Restoring: ${file?.name}`, async () => {
-                    const res = await fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' });
-                    if (res.ok) {
-                        refreshAll();
-                        fetchArchivedFiles();
-                        return { success: true, message: 'Document restored successfully' };
-                    }
-                    throw new Error('Restore failed');
-                });
-            },
-            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-        });
-    };
 
-    const purgeArchived = async (fileId) => {
-        const file = archivedFiles.find(f => f.id === fileId);
-        setConfirmModal({
-            isOpen: true,
-            title: 'PERMANENTLY Delete',
-            message: `Are you sure you want to permanently delete "${file?.name || 'document'}"? This action is IRREVERSIBLE and will delete the record and its file from storage.`,
-            type: 'danger',
-            onConfirm: async () => {
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                runBackgroundTask(`Purging: ${file?.name}`, async () => {
-                    const res = await fetch(`/api/documents/${fileId}/purge`, { method: 'DELETE', credentials: 'include' });
-                    if (res.ok) {
-                        refreshAll();
-                        fetchArchivedFiles();
-                        return { success: true, message: 'Document permanently deleted' };
-                    }
-                    throw new Error('Purge failed');
-                });
-            },
-            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-        });
-    };
-
-    const toggleSelectArchive = (id) => {
-        setSelectedArchiveIds(prev =>
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        );
-    };
-
-    const toggleSelectAllArchive = (filteredArchive) => {
-        if (selectedArchiveIds.length === filteredArchive.length && filteredArchive.length > 0) {
-            setSelectedArchiveIds([]);
-        } else {
-            setSelectedArchiveIds(filteredArchive.map(f => f.id));
-        }
-    };
-
-    const bulkRestoreArchived = () => {
-        if (!selectedArchiveIds.length) return;
-        setConfirmModal({
-            isOpen: true,
-            title: 'Restore Selected Documents',
-            message: `Are you sure you want to restore all ${selectedArchiveIds.length} selected documents to the active queue?`,
-            type: 'success',
-            onConfirm: () => {
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                runBackgroundTask(`Restoring ${selectedArchiveIds.length} files`, async () => {
-                    let successCount = 0;
-                    for (const id of selectedArchiveIds) {
-                        try {
-                            const res = await fetch(`/api/documents/${id}/undo`, { method: 'POST', credentials: 'include' });
-                            if (res.ok) successCount++;
-                        } catch (err) {
-                            console.error(`Failed to restore ${id}`, err);
-                        }
-                    }
-                    setSelectedArchiveIds([]);
-                    refreshAll();
-                    fetchArchivedFiles();
-                    return { success: true, message: `Successfully restored ${successCount} files.` };
-                });
-            },
-            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-        });
-    };
-
-    const bulkPurgeArchived = () => {
-        if (!selectedArchiveIds.length) return;
-        setConfirmModal({
-            isOpen: true,
-            title: 'PERMANENTLY Delete Selected',
-            message: `Are you sure you want to permanently delete all ${selectedArchiveIds.length} selected documents? This action is IRREVERSIBLE and cannot be undone.`,
-            type: 'danger',
-            onConfirm: () => {
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                runBackgroundTask(`Purging ${selectedArchiveIds.length} files`, async () => {
-                    let successCount = 0;
-                    for (const id of selectedArchiveIds) {
-                        try {
-                            const res = await fetch(`/api/documents/${id}/purge`, { method: 'DELETE', credentials: 'include' });
-                            if (res.ok) successCount++;
-                        } catch (err) {
-                            console.error(`Failed to purge ${id}`, err);
-                        }
-                    }
-                    setSelectedArchiveIds([]);
-                    refreshAll();
-                    fetchArchivedFiles();
-                    return { success: true, message: `Successfully permanently deleted ${successCount} files.` };
-                });
-            },
-            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
-        });
-    };
 
     const docTypes = [
         { type: 'birth', icon: '👶', name: 'Birth Certificate', desc: 'Live birth records' },
@@ -741,12 +597,12 @@ const Documents = () => {
 
         // ── Active states: real progress bar pill ───────────────────────────
         if (s === 'processing' || s === 'uploading' || s === 'pending') {
-            const isPending    = s === 'pending';
+            const isPending = s === 'pending';
             const isProcessing = s === 'processing';
 
             const label = isPending ? 'In Queue'
-                        : isProcessing ? (file.batch_total > 1 ? `OCR Working ${file.batch_processed ?? 1}/${file.batch_total}` : 'OCR Working…')
-                        : 'Uploading…';
+                : isProcessing ? (file.batch_total > 1 ? `OCR Working ${file.batch_processed ?? 1}/${file.batch_total}` : 'OCR Working…')
+                    : 'Uploading…';
 
             // Solid fill colors
             const fillGradient = isPending
@@ -755,17 +611,17 @@ const Documents = () => {
                     ? 'linear-gradient(90deg, #6366f1, #818cf8, #a5b4fc)' // indigo
                     : 'linear-gradient(90deg, #94a3b8, #cbd5e1)';
 
-            const trackBg = isPending  ? '#fff7ed'
-                          : isProcessing ? '#eef2ff'
-                          : '#f8fafc';
+            const trackBg = isPending ? '#fff7ed'
+                : isProcessing ? '#eef2ff'
+                    : '#f8fafc';
 
-            const borderColor = isPending  ? '#fed7aa'
-                              : isProcessing ? '#c7d2fe'
-                              : '#e2e8f0';
+            const borderColor = isPending ? '#fed7aa'
+                : isProcessing ? '#c7d2fe'
+                    : '#e2e8f0';
 
-            const textColor = isPending  ? '#9a3412'
-                            : isProcessing ? '#3730a3'
-                            : '#475569';
+            const textColor = isPending ? '#9a3412'
+                : isProcessing ? '#3730a3'
+                    : '#475569';
 
             const animName = isPending ? 'ocr-pending-fill' : 'ocr-active-fill';
 
@@ -804,8 +660,8 @@ const Documents = () => {
         const terminalCls = {
             processed: 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]',
             extracted: 'bg-blue-50 text-blue-700 border-blue-100 shadow-[0_0_12px_-4px_rgba(59,130,246,0.3)]',
-            failed:    'bg-rose-50 text-rose-700 border-rose-100',
-            stopped:   'bg-slate-100 text-slate-500 border-slate-300',
+            failed: 'bg-rose-50 text-rose-700 border-rose-100',
+            stopped: 'bg-slate-100 text-slate-500 border-slate-300',
         }[s] || 'bg-slate-100 text-slate-500 border-slate-200';
 
         return (
@@ -819,11 +675,11 @@ const Documents = () => {
     };
 
     // ── Data Splitting & Filtering ──────────────────────────────────────────
-    const queueFiles = files.filter(f => 
-        f.status?.toLowerCase() !== 'processed' && 
+    const queueFiles = files.filter(f =>
+        f.status?.toLowerCase() !== 'processed' &&
         f.status?.toLowerCase() !== 'issued'
     );
-    
+
     // Map history logs for the UI (using log fields but keeping logic compatible)
     const historyFiles = historyLogs.map(log => ({
         ...log,
@@ -838,16 +694,18 @@ const Documents = () => {
         isLog: true // flag to indicate this is a log record
     }));
 
+
+
     const filteredQueue = queueFiles.filter(f =>
         !queueSearch || f.name.toLowerCase().includes(queueSearch.toLowerCase())
     );
 
     const filteredHistory = historyFiles.filter(f => {
         // Search filter
-        const matchesSearch = !historySearch || 
+        const matchesSearch = !historySearch ||
             f.name.toLowerCase().includes(historySearch.toLowerCase()) ||
             f.personName?.toLowerCase().includes(historySearch.toLowerCase());
-        
+
         if (!matchesSearch) return false;
 
         // Type filter
@@ -864,7 +722,7 @@ const Documents = () => {
             const docDate = new Date(f.created_at);
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            
+
             if (historyFilters.dateRange === 'today') {
                 if (docDate < today) return false;
             } else if (historyFilters.dateRange === 'yesterday') {
@@ -966,9 +824,9 @@ const Documents = () => {
                                     death: 'border-rose-500 bg-rose-50 text-rose-500 ring-rose-500/30',
                                     marriage: 'border-indigo-500 bg-indigo-50 text-indigo-500 ring-indigo-500/30'
                                 }[doc.type] || 'border-slate-500 bg-slate-50 text-slate-500 ring-slate-500/30';
-                                
+
                                 const isSelected = selectedDocType === doc.type;
-                                
+
                                 return (
                                     <div key={doc.type} onClick={() => setSelectedDocType(doc.type)}
                                         className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border-2 ${isSelected
@@ -1028,15 +886,14 @@ const Documents = () => {
                         <div className="flex bg-slate-100/50 p-1.5 gap-1 border-b border-slate-100">
                             {[
                                 { id: 'queue', label: 'Document Queue', count: queueFiles.length, icon: BoltIcon, show: true },
-                                { id: 'history', label: 'Submission History', count: historyFiles.length, icon: CheckCircleIcon, show: true },
-                                { id: 'archive', label: 'Archive Manager', count: archivedFiles.length, icon: TrashIcon, show: ['SuperAdmin', 'Admin'].includes(JSON.parse(sessionStorage.getItem('user') || '{}').role) }
+                                { id: 'history', label: 'Submission History', count: historyFiles.length, icon: CheckCircleIcon, show: true }
                             ].filter(t => t.show).map(tab => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === tab.id
-                                            ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
-                                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
+                                        ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
                                         }`}
                                 >
                                     <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-indigo-500' : 'text-slate-400'}`} />
@@ -1099,24 +956,24 @@ const Documents = () => {
                                         <p className="text-xs mt-1 max-w-[200px]">{queueSearch ? 'Adjust your search query' : 'Upload documents to begin processing'}</p>
                                     </div>
                                 ) : (
-                                <div className="overflow-x-auto custom-scrollbar flex-1 w-full">
-                                    <table className="w-full text-left border-collapse table-auto">
-                                        <thead>
-                                            <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
-                                                <th className="px-3 py-2.5 font-black text-slate-500 w-10">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
-                                                        checked={selectedIds.length === filteredQueue.length && filteredQueue.length > 0}
-                                                        onChange={() => toggleSelectAll(filteredQueue)}
-                                                    />
-                                                </th>
-                                                <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
-                                                <th className="px-2 py-2.5 text-center font-black text-slate-500">Status</th>
-                                                <th className="px-3 py-2.5 text-right font-black text-slate-500 w-28">Actions</th>
-                                            </tr>
-                                        </thead>
+                                    <div className="overflow-x-auto custom-scrollbar flex-1 w-full">
+                                        <table className="w-full text-left border-collapse table-auto">
+                                            <thead>
+                                                <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                    <th className="px-3 py-2.5 font-black text-slate-500 w-10">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
+                                                            checked={selectedIds.length === filteredQueue.length && filteredQueue.length > 0}
+                                                            onChange={() => toggleSelectAll(filteredQueue)}
+                                                        />
+                                                    </th>
+                                                    <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
+                                                    <th className="px-2 py-2.5 text-center font-black text-slate-500">Status</th>
+                                                    <th className="px-3 py-2.5 text-right font-black text-slate-500 w-28">Actions</th>
+                                                </tr>
+                                            </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {filteredQueue.map(file => (
                                                     <tr key={file.id} className="hover:bg-slate-50/60 transition-colors">
@@ -1128,8 +985,8 @@ const Documents = () => {
                                                         ) : (
                                                             <>
                                                                 <td className="px-3 py-2.5">
-                                                                    <input 
-                                                                        type="checkbox" 
+                                                                    <input
+                                                                        type="checkbox"
                                                                         className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
                                                                         checked={selectedIds.includes(file.id)}
                                                                         onChange={() => toggleSelect(file.id)}
@@ -1207,7 +1064,7 @@ const Documents = () => {
                                     </div>
                                 )}
                             </>
-                        ) : (
+                        ) : activeTab === 'history' ? (
                             <>
                                 {/* History Filters */}
                                 <div className="p-4 bg-slate-50/80 border-b border-slate-100 space-y-3">
@@ -1321,13 +1178,13 @@ const Documents = () => {
                                     <div className="overflow-x-auto flex-1">
                                         <table className="w-full text-left border-collapse">
                                             <thead>
-                                            <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
-                                                <th className="px-3 py-2.5 font-black text-slate-500">Person / Document</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500">Barangay</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500">Process Date</th>
-                                                <th className="px-2 py-2.5 font-black text-slate-500">Staff / Admin</th>
-                                                <th className="px-3 py-2.5 text-right font-black text-slate-500">Record</th>
-                                            </tr>
+                                                <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                    <th className="px-3 py-2.5 font-black text-slate-500">Person / Document</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500">Barangay</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500">Process Date</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500">Staff / Admin</th>
+                                                    <th className="px-3 py-2.5 text-right font-black text-slate-500">Record</th>
+                                                </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {filteredHistory.map(file => {
@@ -1336,11 +1193,10 @@ const Documents = () => {
                                                         <tr key={file.id} className="hover:bg-slate-50/60 transition-colors group">
                                                             <td className="px-3 py-3">
                                                                 <div className="flex items-center gap-2">
-                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${
-                                                                        file.type === 'birth' ? 'bg-blue-50 text-blue-500' :
-                                                                        file.type === 'death' ? 'bg-slate-100 text-slate-600' :
-                                                                        'bg-rose-50 text-rose-500'
-                                                                    }`}>
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110 ${file.type === 'birth' ? 'bg-blue-50 text-blue-500' :
+                                                                            file.type === 'death' ? 'bg-slate-100 text-slate-600' :
+                                                                                'bg-rose-50 text-rose-500'
+                                                                        }`}>
                                                                         <DocumentIcon className="w-5 h-5" />
                                                                     </div>
                                                                     <div className="min-w-0">
@@ -1387,9 +1243,9 @@ const Documents = () => {
                                                                         </span>
                                                                     ) : (
                                                                         <button
-    onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
-    className="px-3 py-1.5 text-[10px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-lg shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-1.5"
->
+                                                                            onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
+                                                                            className="px-3 py-1.5 text-[10px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-lg shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-1.5"
+                                                                        >
                                                                             <DocumentCheckIcon className="w-4 h-4" />
                                                                             View Details
                                                                         </button>
@@ -1404,129 +1260,9 @@ const Documents = () => {
                                     </div>
                                 )}
                             </>
-                        )}
+                        ) : null}
 
-                        {activeTab === 'archive' && (
-                            <>
-                                {/* Archive Header */}
-                                <div className="p-5 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-800">Archive Manager</h3>
-                                        <p className="text-xs text-slate-400 mt-0.5">Restore soft-deleted records or purge them permanently</p>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="relative">
-                                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                                            <input value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
-                                                placeholder="Search Archive…"
-                                                className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 w-36"
-                                            />
-                                        </div>
-                                        <select
-                                            value={archiveTypeFilter}
-                                            onChange={e => setArchiveTypeFilter(e.target.value)}
-                                            className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 cursor-pointer"
-                                        >
-                                            <option value="all">📂 All Types</option>
-                                            <option value="birth">Birth Certificate</option>
-                                            <option value="death">Death Certificate</option>
-                                            <option value="marriage">Marriage License</option>
-                                        </select>
-                                        {selectedArchiveIds.length > 0 && (
-                                            <>
-                                                <button onClick={bulkRestoreArchived}
-                                                    className="text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white px-3 py-2 rounded-lg border border-emerald-100 transition-all flex items-center gap-1.5 shadow-sm">
-                                                    <ArrowPathIcon className="w-3.5 h-3.5" />
-                                                    Restore Selected ({selectedArchiveIds.length})
-                                                </button>
-                                                <button onClick={bulkPurgeArchived}
-                                                    className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white px-3 py-2 rounded-lg border border-rose-100 transition-all flex items-center gap-1.5 shadow-sm">
-                                                    <TrashIcon className="w-3.5 h-3.5" />
-                                                    Purge Selected ({selectedArchiveIds.length})
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {isLoadingArchived ? (
-                                    <div className="p-4"><SkeletonLoader type="table" rows={5} /></div>
-                                ) : archivedFiles.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center flex-1 p-12 text-slate-400 text-center">
-                                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
-                                            <TrashIcon className="w-8 h-8 opacity-20" />
-                                        </div>
-                                        <p className="text-sm font-medium text-slate-600">{archiveSearch ? 'No matching archived items' : 'Archive is empty'}</p>
-                                        <p className="text-xs mt-1 max-w-[200px]">{archiveSearch ? 'Adjust search or filters' : 'Deleted records will appear here'}</p>
-                                    </div>
-                                ) : (
-                                    <div className="overflow-x-auto custom-scrollbar flex-1 w-full">
-                                        <table className="w-full text-left border-collapse table-auto">
-                                            <thead>
-                                                <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
-                                                    <th className="px-3 py-2.5 font-black text-slate-500 w-10">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
-                                                            checked={selectedArchiveIds.length === archivedFiles.length && archivedFiles.length > 0}
-                                                            onChange={() => toggleSelectAllArchive(archivedFiles)}
-                                                        />
-                                                    </th>
-                                                    <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
-                                                    <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
-                                                    <th className="px-2 py-2.5 font-black text-slate-500">Deleted At</th>
-                                                    <th className="px-3 py-2.5 text-right font-black text-slate-500 w-28">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-50">
-                                                {archivedFiles.map(file => (
-                                                    <tr key={file.id} className="hover:bg-slate-50/60 transition-colors">
-                                                        <td className="px-3 py-2.5">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
-                                                                checked={selectedArchiveIds.includes(file.id)}
-                                                                onChange={() => toggleSelectArchive(file.id)}
-                                                            />
-                                                        </td>
-                                                        <td className="px-3 py-2.5">
-                                                            <div className="min-w-0">
-                                                                <p className="text-[11px] font-bold text-slate-800 truncate max-w-[25ch]">{file.name}</p>
-                                                                <p className="text-[9px] text-slate-400 font-medium truncate uppercase tracking-tighter">
-                                                                    {file.personName || `${file.size || ''} · ${file.encoded_by || 'Unknown'}`}
-                                                                </p>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-2 py-2.5">
-                                                            <span className="text-[9.5px] font-black px-1.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-100 rounded-md uppercase tracking-tighter">
-                                                                {file.type}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-2 py-2.5 text-xs text-slate-500 font-mono tabular-nums">
-                                                            {new Date(file.deleted_at).toLocaleString()}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-right">
-                                                            <div className="flex items-center justify-end gap-1 px-1">
-                                                                <button onClick={() => restoreArchived(file.id)}
-                                                                    className="p-2 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl transition-all cursor-pointer"
-                                                                    title="Restore to Queue">
-                                                                    <ArrowPathIcon className="w-4 h-4" />
-                                                                </button>
-                                                                <button onClick={() => purgeArchived(file.id)}
-                                                                    className="p-2 text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-600 hover:text-white rounded-xl transition-all cursor-pointer"
-                                                                    title="Permanently Delete">
-                                                                    <TrashIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </>
-                        )}
                     </motion.div>
                 </div>
             </motion.div>
@@ -1535,4 +1271,3 @@ const Documents = () => {
 };
 
 export default Documents;
-/** System Stabilized: Ghost-Sync & Precision Tracing Engine Active **/

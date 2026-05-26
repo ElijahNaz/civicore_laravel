@@ -150,7 +150,19 @@ export const DataProvider = ({ children }) => {
 
     // ── Fetching Logic ────────────────────────────────────────────────────────
     
+    const isAuthenticated = () => {
+        const userJson = sessionStorage.getItem('user');
+        if (!userJson) return false;
+        try {
+            const user = JSON.parse(userJson);
+            return !!user.role;
+        } catch (e) {
+            return false;
+        }
+    };
+
     const refreshStats = useCallback(async (force = false) => {
+        if (!isAuthenticated()) return;
         const now = Date.now();
         if (!force && now - lastFetch.current.stats < 5000) return; // Debounce fetches
         
@@ -175,6 +187,7 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const refreshDocuments = useCallback(async (force = false) => {
+        if (!isAuthenticated()) return;
         const now = Date.now();
         if (!force && now - lastFetch.current.documents < 5000) return;
 
@@ -228,6 +241,7 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const refreshIssuances = useCallback(async (force = false) => {
+        if (!isAuthenticated()) return;
         const now = Date.now();
         if (!force && now - lastFetch.current.issuances < 5000) return;
 
@@ -265,6 +279,7 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const refreshHistory = useCallback(async (force = false) => {
+        if (!isAuthenticated()) return;
         const now = Date.now();
         if (!force && now - lastFetch.current.history < 5000) return;
 
@@ -286,6 +301,7 @@ export const DataProvider = ({ children }) => {
     }, []);
 
     const refreshTemplates = useCallback(async (force = false) => {
+        if (!isAuthenticated()) return;
         const now = Date.now();
         if (!force && now - lastFetch.current.templates < 5000) return;
 
