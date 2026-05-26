@@ -15,10 +15,8 @@ class DashboardController extends Controller
         $activeDocuments = DB::table('documents')->whereNull('deleted_at');
         $activeIssuances = DB::table('issuances')->whereNull('deleted_at');
 
-        // Master count of finalized/approved documents only
-        $totalDocuments = (clone $activeDocuments)
-            ->whereIn(DB::raw('LOWER(status)'), ['processed', 'issued', 'active'])
-            ->count();
+        // Master count of finalized/approved documents (issuances)
+        $totalDocuments = DB::table('issuances')->whereNull('deleted_at')->count();
 
         $totalIssuances = (clone $activeIssuances)
             ->where(DB::raw('LOWER(status)'), 'issued')

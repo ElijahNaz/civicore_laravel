@@ -67,6 +67,7 @@ Route::middleware('web')->group(function () {
         Route::get('/documents',                    [DocumentController::class, 'index']);
         Route::get('/documents/history',            [DocumentController::class, 'history']);
         Route::post('/documents',                   [DocumentController::class, 'store']);
+        Route::post('/documents/manual',            [DocumentController::class, 'storeManual']);
         Route::put('/documents/{id}',               [DocumentController::class, 'update']);
         Route::delete('/documents/{id}',            [DocumentController::class, 'destroy']);
         Route::post('/documents/upload',            [DocumentController::class, 'upload']);
@@ -75,6 +76,7 @@ Route::middleware('web')->group(function () {
         Route::get('/documents/download/{id}',      [DocumentController::class, 'download']);
         Route::get('/documents/view/{id}',          [DocumentController::class, 'view']);
         Route::get('/documents/download-txt/{id}',  [DocumentController::class, 'downloadTxt']);
+        Route::post('/documents/{id}/check-duplicate', [DocumentController::class, 'checkDuplicate']);
 
         // OCR
         Route::post('/ocr/process', [OcrController::class, 'process']);

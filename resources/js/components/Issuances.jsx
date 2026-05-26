@@ -27,10 +27,13 @@ const NAIC_BARANGAYS = [
 ].sort();
 
 // ── Issuance Preview Modal ──────────────────────────────────────────────────
-const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload }) => {
+const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload, openRequestModal }) => {
     const viewUrl = cert.source === 'issuance'
         ? `/api/issuances/view/${cert.realId}`
         : `/api/documents/view/${cert.realId}`;
+
+    const isPendingApproval = cert.status === 'Pending Approval';
+    const isApprovedOrIssued = cert.status === 'Approved' || cert.status === 'Issued';
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300">
@@ -49,13 +52,34 @@ const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={onPrint}
-                        className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
-                    >
-                        <PrinterIcon className="w-4 h-4" />
-                        Print Record
-                    </button>
+                    {isPendingApproval ? (
+                        <button
+                            disabled
+                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 rounded-xl border border-amber-500/20 opacity-60 cursor-not-allowed"
+                        >
+                            <ClockIcon className="w-4 h-4" />
+                            Awaiting Approval
+                        </button>
+                    ) : isApprovedOrIssued ? (
+                        <button
+                            onClick={onPrint}
+                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
+                        >
+                            <PrinterIcon className="w-4 h-4" />
+                            Print Record
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => {
+                                onClose();
+                                openRequestModal(cert);
+                            }}
+                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500 rounded-xl transition-all border border-amber-500/30 active:scale-95 cursor-pointer shadow-lg shadow-amber-500/5"
+                        >
+                            <PrinterIcon className="w-4 h-4" />
+                            Request Print Approval
+                        </button>
+                    )}
                     <button
                         onClick={onDownload}
                         className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 rounded-xl transition-all border border-blue-500/30 active:scale-95 cursor-pointer shadow-lg shadow-blue-500/5"
@@ -785,6 +809,7 @@ const Issuances = () => {
                         onClose={() => setViewingCert(null)}
                         onPrint={() => handleAction('Print', viewingCert)}
                         onDownload={() => handleAction('Download', viewingCert)}
+                        openRequestModal={openRequestModal}
                     />
                 )}
                 {requestingPrintCert && (

@@ -199,7 +199,7 @@ const Documents = () => {
     };
 
     useEffect(() => {
-        const hasProcessing = files.some(f => f.status === 'processing' || f.status === 'uploading');
+        const hasProcessing = files.some(f => f.status === 'processing' || f.status === 'uploading' || f.status === 'checking' || f.status === 'pending');
         if (!hasProcessing) return;
 
         const interval = setInterval(() => {
@@ -368,6 +368,13 @@ const Documents = () => {
         }
     };
 
+    const handleManualRegistration = () => {
+        setActiveOcr({
+            file: { id: 'manual', name: 'Manual Entry', status: 'extracted', extracted_fields: {}, type: selectedDocType, file_path: null },
+            ocrResult: { text: '', detected_type: selectedDocType }
+        });
+    };
+
     const approveRecord = async (fileId) => {
         const file = files.find(f => f.id === fileId);
         // Show immediate local status update
@@ -442,6 +449,19 @@ const Documents = () => {
         });
     };
 
+    const handleDuplicateStatusChange = (fileId, hasDuplicate) => {
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, has_duplicate: hasDuplicate } : f));
+        setActiveOcr(prev => {
+            if (prev && prev.file.id === fileId) {
+                return {
+                    ...prev,
+                    file: { ...prev.file, has_duplicate: hasDuplicate }
+                };
+            }
+            return prev;
+        });
+    };
+
     const saveRecord = async ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {
         if (!activeOcr) return;
         const file = activeOcr.file;
@@ -457,15 +477,20 @@ const Documents = () => {
         }
 
         // Immediate local status update in the main table
-        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
+        if (fileId !== 'manual') {
+            setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
+        }
 
         runBackgroundTask(`Saving: ${personName}`, async () => {
             try {
-                const res = await fetch(`/api/documents/${fileId}`, {
-                    method: 'PUT',
+                const url = fileId === 'manual' ? '/api/documents/manual' : `/api/documents/${fileId}`;
+                const method = fileId === 'manual' ? 'POST' : 'PUT';
+                const res = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
+                        type: detectedType,
                         extracted_fields: fields,
                         ocr_text: ocr_text,
                         personName,
@@ -482,6 +507,7 @@ const Documents = () => {
                         const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
                         if (prefillStr) {
                             const prefill = JSON.parse(prefillStr);
+                            const finalDocId = fileId === 'manual' ? data.id : fileId;
                             await fetch(`/api/tickets/${prefill.ticket_id}/link-document`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -595,6 +621,22 @@ const Documents = () => {
 
         const s = status?.toLowerCase();
 
+        if (s === 'checking') {
+            return (
+                <span
+                    className="relative inline-flex items-center overflow-hidden rounded-full border text-[10px] font-extrabold uppercase tracking-tight bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
+                    style={{
+                        minWidth: '96px',
+                        height: '24px',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <ArrowPathIcon className="w-3 h-3 mr-1 animate-spin text-indigo-500" />
+                    Checking…
+                </span>
+            );
+        }
+
         // ── Active states: real progress bar pill ───────────────────────────
         if (s === 'processing' || s === 'uploading' || s === 'pending') {
             const isPending = s === 'pending';
@@ -651,6 +693,18 @@ const Documents = () => {
         }
 
         // ── Terminal states: original plain pill ─────────────────────────────
+        if (file.has_duplicate && s === 'extracted') {
+            return (
+                <motion.span
+                    initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                    className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-tight bg-amber-50 text-amber-700 border-amber-200 shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)] animate-pulse"
+                    title="Potential duplicate in Master Registry"
+                >
+                    ⚠️ Duplicate
+                </motion.span>
+            );
+        }
+
         let labelStr = status;
         if (s === 'processed') labelStr = '✓ Saved';
         else if (s === 'extracted') labelStr = '⚡ Done';
@@ -776,7 +830,18 @@ const Documents = () => {
                         docType={activeOcr.file?.type || selectedDocType}
                         ocrResult={activeOcr.ocrResult}
                         onSave={saveRecord}
-                        onClose={() => setActiveOcr(null)}
+                        onClose={async () => {
+                            if (activeOcr.file && activeOcr.file.file_path === null && activeOcr.file.name === 'Manual Entry' && activeOcr.file.id !== 'manual') {
+                                try {
+                                    await fetch(`/api/documents/${activeOcr.file.id}`, { method: 'DELETE', credentials: 'include' });
+                                    refreshDocuments(true);
+                                } catch (e) {
+                                    console.error("Failed to delete manual draft", e);
+                                }
+                            }
+                            setActiveOcr(null);
+                        }}
+                        onDuplicateStatusChange={handleDuplicateStatusChange}
                     />
                 )}
             </AnimatePresence>
@@ -871,6 +936,15 @@ const Documents = () => {
                                     onClose={() => setIsCameraOpen(false)}
                                     onCapture={(capturePayload) => onDrop([capturePayload])}
                                 />
+                            </div>
+
+                            <div className="relative mt-3">
+                                <button
+                                    onClick={handleManualRegistration}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-[#0f172a] text-[#d4a574] rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors shadow-sm active:scale-95 transition-all"
+                                >
+                                    ✍️ Manual Registration
+                                </button>
                             </div>
                         </div>
 
@@ -1041,11 +1115,19 @@ const Documents = () => {
                                                                         )}
 
                                                                         {file.status?.toLowerCase() === 'extracted' && (
-                                                                            <button onClick={() => approveRecord(file.id)}
-                                                                                className="p-2.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg shadow-emerald-100 active:scale-95 group"
-                                                                                title="Direct Approve">
-                                                                                <CheckCircleIcon className="w-4 h-4" />
-                                                                            </button>
+                                                                            file.has_duplicate ? (
+                                                                                <button onClick={() => showAlert({ title: 'Duplicate Warning', message: 'This document has a potential duplicate in the Master Registry. Direct approval is blocked. Please click the Pencil icon to review side-by-side.', type: 'warning' })}
+                                                                                    className="p-2.5 text-slate-400 bg-slate-100 border border-slate-200 rounded-xl cursor-pointer"
+                                                                                    title="Direct Approve Blocked (Potential Duplicate)">
+                                                                                    <CheckCircleIcon className="w-4 h-4 text-slate-400" />
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button onClick={() => approveRecord(file.id)}
+                                                                                    className="p-2.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg shadow-emerald-100 active:scale-95 group"
+                                                                                    title="Direct Approve">
+                                                                                    <CheckCircleIcon className="w-4 h-4" />
+                                                                                </button>
+                                                                            )
                                                                         )}
 
                                                                         <button onClick={() => removeFile(file.id)}

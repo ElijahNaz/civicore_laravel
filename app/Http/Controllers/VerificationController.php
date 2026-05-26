@@ -18,9 +18,30 @@ class VerificationController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
+            'channel' => 'nullable|string|in:gmail,mailtrap',
         ]);
 
         $email = $request->input('email');
+        $channel = $request->input('channel', 'mailtrap');
+
+        // Dynamically change mailer configuration based on requested channel
+        if ($channel === 'gmail') {
+            config([
+                'mail.mailers.smtp.host'       => 'smtp.gmail.com',
+                'mail.mailers.smtp.port'       => 587,
+                'mail.mailers.smtp.username'   => env('GMAIL_USERNAME', 'louiedaverramilo@gmail.com'),
+                'mail.mailers.smtp.password'   => env('GMAIL_PASSWORD'),
+                'mail.mailers.smtp.encryption' => 'tls',
+            ]);
+        } else {
+            config([
+                'mail.mailers.smtp.host'       => 'sandbox.smtp.mailtrap.io',
+                'mail.mailers.smtp.port'       => 2525,
+                'mail.mailers.smtp.username'   => env('MAILTRAP_USERNAME', 'f745f255b9e1ac'),
+                'mail.mailers.smtp.password'   => env('MAILTRAP_PASSWORD', 'baf8f079338174'),
+                'mail.mailers.smtp.encryption' => 'tls',
+            ]);
+        }
 
         // Invalidate any previous unused codes for this email
         VerificationCode::where('email', $email)->where('used', false)->delete();

@@ -183,7 +183,16 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
             $metadata['template_family_detected'] = $templateFamilyDetected;
             $metadata['processed_pages_count'] = 1;
 
-            // 6. Update database record with final values and status = extracted
+            // 6. Update database record with temporary checking status phase
+            DB::table('documents')->where('id', $this->documentId)->update([
+                'status' => 'checking',
+                'updated_at' => now()
+            ]);
+
+            // 1.5 seconds delay to allow UI to render the validation step
+            usleep(1500000);
+
+            // Update database record with final values and status = extracted
             DB::update(
                 "UPDATE documents
                  SET ocr_text = ?, detected_type = ?, extracted_fields = ?, metadata = ?, status = 'extracted', updated_at = NOW()

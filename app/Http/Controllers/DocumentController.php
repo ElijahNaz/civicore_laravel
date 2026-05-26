@@ -50,15 +50,16 @@ class DocumentController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results without loading binary content.
-        $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, extracted_fields, detected_type, created_at, updated_at, encoded_by 
+        $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, extracted_fields, detected_type, created_at, updated_at, encoded_by, file_path 
                   FROM documents" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
         $documents = DB::select($query, $params);
         
-        // Enhance documents with real-time batch progress if processing
+        // Enhance documents with real-time batch progress and duplicate detection
         foreach ($documents as $doc) {
+            $doc->has_duplicate = false;
             $status = strtolower($doc->status ?? '');
             if ($status === 'processing' || $status === 'pending') {
                 $metadata = json_decode($doc->metadata, true);
@@ -70,6 +71,44 @@ class DocumentController extends Controller
                         $doc->batch_processed = $batch->processedJobs;
                         $doc->batch_failed = $batch->failedJobs;
                         $doc->batch_finished = $batch->finished();
+                    }
+                }
+            } elseif ($status === 'extracted') {
+                // Check if similar records already exist in the issuances table
+                $fields = json_decode($doc->extracted_fields, true) ?: [];
+                $type = $doc->detected_type ?: $doc->type;
+                if ($type === 'marriage_license') {
+                    $type = 'marriage';
+                }
+
+                $dupQuery = DB::table('issuances')
+                    ->where('type', $type)
+                    ->where('document_id', '!=', $doc->id)
+                    ->whereNull('deleted_at');
+
+                if ($type === 'birth' || $type === 'death') {
+                    $firstName = trim($fields['first_name'] ?? '');
+                    $lastName = trim($fields['last_name'] ?? '');
+                    if (!empty($firstName) && !empty($lastName)) {
+                        $dupQuery->where('name', 'like', "%{$lastName}%")
+                                 ->where('name', 'like', "%{$firstName}%");
+                        if ($dupQuery->exists()) {
+                            $doc->has_duplicate = true;
+                        }
+                    }
+                } elseif ($type === 'marriage') {
+                    $hLastName = trim($fields['husband_last_name'] ?? '');
+                    $wLastName = trim($fields['wife_last_name'] ?? '');
+                    if (!empty($hLastName) || !empty($wLastName)) {
+                        if (!empty($hLastName)) {
+                            $dupQuery->where('name', 'like', "%{$hLastName}%");
+                        }
+                        if (!empty($wLastName)) {
+                            $dupQuery->where('name', 'like', "%{$wLastName}%");
+                        }
+                        if ($dupQuery->exists()) {
+                            $doc->has_duplicate = true;
+                        }
                     }
                 }
             }
@@ -237,6 +276,21 @@ class DocumentController extends Controller
 
         $file = $request->file('file');
         $this->validateUploadedFile($file);
+
+        // Enforce Daily Scan Limit (Token budget manager check) on upload
+        $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 500);
+        $todayDate = date('Y-m-d');
+        $todayScans = DB::table('documents')
+            ->whereIn('status', ['extracted', 'Processed', 'Issued'])
+            ->whereDate('updated_at', $todayDate)
+            ->count();
+
+        if ($todayScans >= $dailyLimit) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Daily paid API scan limit reached (' . $dailyLimit . '). Please contact your administrator.'
+            ], 400);
+        }
 
         $docType = $request->input('docType', 'Uncategorized');
         $personName = $request->input('personName', '');
@@ -541,6 +595,42 @@ class DocumentController extends Controller
         $barangay = $fields['barangay'] ?? '';
         $detectedType = $docData->detected_type ?: $docData->type;
         
+        if ($detectedType === 'marriage_license') {
+            $detectedType = 'marriage';
+        }
+
+        // Duplicate registry validation check
+        $dupQuery = DB::table('issuances')
+            ->where('type', $detectedType)
+            ->where('document_id', '!=', $id)
+            ->whereNull('deleted_at');
+
+        $hasDuplicate = false;
+        if ($detectedType === 'birth' || $detectedType === 'death') {
+            $firstName = trim($fields['first_name'] ?? '');
+            $lastName = trim($fields['last_name'] ?? '');
+            if (!empty($firstName) && !empty($lastName)) {
+                $dupQuery->where('name', 'like', "%{$lastName}%")
+                         ->where('name', 'like', "%{$firstName}%");
+                if ($dupQuery->exists()) $hasDuplicate = true;
+            }
+        } elseif ($detectedType === 'marriage') {
+            $hLastName = trim($fields['husband_last_name'] ?? '');
+            $wLastName = trim($fields['wife_last_name'] ?? '');
+            if (!empty($hLastName) || !empty($wLastName)) {
+                if (!empty($hLastName)) $dupQuery->where('name', 'like', "%{$hLastName}%");
+                if (!empty($wLastName)) $dupQuery->where('name', 'like', "%{$wLastName}%");
+                if ($dupQuery->exists()) $hasDuplicate = true;
+            }
+        }
+
+        if ($hasDuplicate) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Direct approval is blocked. This record has a potential duplicate in the Master Registry.'
+            ], 422);
+        }
+
         // Build personName from split fields
         $personName = $this->buildFullName($fields, $detectedType) ?: $docData->name;
         
@@ -648,16 +738,10 @@ class DocumentController extends Controller
                         $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
                         $year = date('Y');
                         
-                        $pattern = $prefix . '-' . $year . '-%';
-                        $results = DB::select("SELECT certNumber FROM issuances WHERE certNumber LIKE ? ORDER BY certNumber DESC LIMIT 1", [$pattern]);
-                        
+                        $results = DB::select("SELECT MAX(id) as max_id FROM issuances");
                         $nextNum = 1;
-                        if (count($results) > 0) {
-                            $lastCertNum = $results[0]->certNumber;
-                            $parts = explode('-', $lastCertNum);
-                            if (count($parts) === 3) {
-                                $nextNum = intval($parts[2]) + 1;
-                            }
+                        if (count($results) > 0 && $results[0]->max_id !== null) {
+                            $nextNum = intval($results[0]->max_id) + 1;
                         }
                         
                         $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
@@ -1015,4 +1099,191 @@ class DocumentController extends Controller
             return response()->json(['success' => true]);
         });
     }
+
+    /**
+     * POST /api/documents/{id}/check-duplicate
+     * Check if similar fields exist in the Master Registry (issuances table).
+     */
+    public function checkDuplicate(Request $request, $id)
+    {
+        $type = $request->input('type');
+        $fields = $request->input('fields', []);
+
+        if (empty($type) || empty($fields)) {
+            return response()->json([
+                'success' => true,
+                'duplicate' => false,
+                'candidate' => null
+            ]);
+        }
+
+        // Normalize matching type to match standard issuances types
+        $normType = $type;
+        if ($type === 'marriage_license') {
+            $normType = 'marriage';
+        }
+
+        // We look for duplicate records in issuances table
+        $query = DB::table('issuances')
+            ->where('type', $normType)
+            ->whereNull('deleted_at');
+
+        // Let's filter candidates based on matching criteria depending on type:
+        if ($normType === 'birth') {
+            $firstName = trim($fields['first_name'] ?? '');
+            $lastName = trim($fields['last_name'] ?? '');
+            
+            if (empty($firstName) && empty($lastName)) {
+                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
+            }
+
+            $query->where(function ($q) use ($firstName, $lastName) {
+                if (!empty($firstName) && !empty($lastName)) {
+                    $q->where('name', 'like', "%{$lastName}%")
+                      ->where('name', 'like', "%{$firstName}%");
+                }
+            });
+        } elseif ($normType === 'death') {
+            $firstName = trim($fields['first_name'] ?? '');
+            $lastName = trim($fields['last_name'] ?? '');
+
+            if (empty($firstName) && empty($lastName)) {
+                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
+            }
+
+            $query->where(function ($q) use ($firstName, $lastName) {
+                if (!empty($firstName) && !empty($lastName)) {
+                    $q->where('name', 'like', "%{$lastName}%")
+                      ->where('name', 'like', "%{$firstName}%");
+                }
+            });
+        } elseif ($normType === 'marriage') {
+            $hFirstName = trim($fields['husband_first_name'] ?? '');
+            $hLastName = trim($fields['husband_last_name'] ?? '');
+            $wFirstName = trim($fields['wife_first_name'] ?? '');
+            $wLastName = trim($fields['wife_last_name'] ?? '');
+
+            if (empty($hFirstName) && empty($hLastName) && empty($wFirstName) && empty($wLastName)) {
+                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
+            }
+
+            $query->where(function ($q) use ($hFirstName, $hLastName, $wFirstName, $wLastName) {
+                if (!empty($hLastName)) {
+                    $q->where('name', 'like', "%{$hLastName}%");
+                }
+                if (!empty($wLastName)) {
+                    $q->where('name', 'like', "%{$wLastName}%");
+                }
+            });
+        }
+
+        // Get matching candidates (exclude the issuance representing this document itself if it exists)
+        $query->where('document_id', '!=', $id);
+
+        $candidate = $query->first();
+
+        if ($candidate) {
+            return response()->json([
+                'success' => true,
+                'duplicate' => true,
+                'candidate' => [
+                    'id' => $candidate->id,
+                    'certNumber' => $candidate->certNumber,
+                    'type' => $candidate->type,
+                    'name' => $candidate->name,
+                    'barangay' => $candidate->barangay,
+                    'issuanceDate' => $candidate->issuanceDate,
+                    'encoded_by' => $candidate->encoded_by,
+                    'extracted_fields' => json_decode($candidate->extracted_data, true) ?: []
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'duplicate' => false,
+            'candidate' => null
+        ]);
+    }
+
+    /**
+     * POST /api/documents/manual
+     * Create a manual document record without any file upload.
+     */
+    public function storeManual(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|string|in:birth,death,marriage,marriage_license',
+            'extracted_fields' => 'required|array',
+            'parental_consent' => 'nullable|boolean'
+        ]);
+
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $encodedBy = $user ? $user->name : 'System';
+
+        $docType = $request->input('type');
+        $extractedFields = $request->input('extracted_fields', []);
+        $parentalConsent = $request->input('parental_consent', false);
+        
+        $normType = $docType;
+        if ($docType === 'marriage_license') {
+            $normType = 'marriage';
+        }
+
+        // Duplicate Check
+        $dupQuery = DB::table('issuances')
+            ->where('type', $normType)
+            ->whereNull('deleted_at');
+
+        $hasDuplicate = false;
+        if ($normType === 'birth' || $normType === 'death') {
+            $firstName = trim($extractedFields['first_name'] ?? '');
+            $lastName = trim($extractedFields['last_name'] ?? '');
+            if (!empty($firstName) && !empty($lastName)) {
+                $dupQuery->where('name', 'like', "%{$lastName}%")
+                         ->where('name', 'like', "%{$firstName}%");
+                if ($dupQuery->exists()) $hasDuplicate = true;
+            }
+        } elseif ($normType === 'marriage') {
+            $hLastName = trim($extractedFields['husband_last_name'] ?? '');
+            $wLastName = trim($extractedFields['wife_last_name'] ?? '');
+            if (!empty($hLastName) || !empty($wLastName)) {
+                if (!empty($hLastName)) $dupQuery->where('name', 'like', "%{$hLastName}%");
+                if (!empty($wLastName)) $dupQuery->where('name', 'like', "%{$wLastName}%");
+                if ($dupQuery->exists()) $hasDuplicate = true;
+            }
+        }
+
+        if ($hasDuplicate) {
+            return response()->json([
+                'success' => false,
+                'error' => 'A record with this name already exists in the Master Registry. Direct creation is blocked.'
+            ], 422);
+        }
+
+        // Build personName
+        $personName = $this->buildFullName($extractedFields, $normType);
+        $barangay = $extractedFields['barangay'] ?? '';
+        $name = 'Manual Entry - ' . date('m/d/Y H:i');
+
+        // Create document record with Processed status directly (so it never appears in the queue)
+        $newId = DB::table('documents')->insertGetId([
+            'name' => $name,
+            'type' => $docType,
+            'date' => date('m/d/Y'),
+            'size' => '0 KB',
+            'status' => 'Processed',
+            'personName' => $personName,
+            'barangay' => $barangay,
+            'file_path' => null, 
+            'encoded_by' => $encodedBy,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // This method does dynamic template compilation and handles Master registry insert
+        return $this->performSave($request, $newId, $extractedFields, '', $personName, $barangay, 'Processed', $parentalConsent, $docType);
+    }
 }
+

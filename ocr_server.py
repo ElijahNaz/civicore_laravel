@@ -222,6 +222,12 @@ def _clean_ocr_field(field_name: str, raw_value: str) -> str:
         return raw_value
 
     text = raw_value.strip()
+    
+    # Normalize "Not Applicable" variants to "N/A"
+    norm_text = text.upper()
+    if norm_text in ("NOT APPLICABLE", "NOTAPPLICABLE", "N/A", "N / A") or "NOT APPLICABLE" in norm_text or "NOT APPL" in norm_text:
+        return "N/A"
+
     # Strip common leading/trailing OCR noise characters
     text = re.sub(r'^[|=\-–—.,;:!?]+|[|=\-–—.,;:!?]+$', '', text).strip()
     # Collapse internal whitespace
@@ -978,7 +984,7 @@ def split_pdf(data: SplitRequest):
                 f"max_dimension={max_dimension}"
             )
 
-            for i in range(len(doc)):
+            for i in range(min(1, len(doc))):
                 page = doc.load_page(i)
                 page_start = time.perf_counter()
                 mat = fitz.Matrix(zoom, zoom)
@@ -1071,6 +1077,82 @@ def split_pdf(data: SplitRequest):
         return {"success": True, "pages": image_paths, "total": len(image_paths)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+SIGNATURE_COORDS = {
+    "birth": {
+        "attendant_signature": {"x": 0.22, "y": 0.52, "w": 0.25, "h": 0.045},
+        "informant_signature": {"x": 0.23, "y": 0.60, "w": 0.25, "h": 0.045},
+        "prepared_by_signature": {"x": 0.58, "y": 0.60, "w": 0.25, "h": 0.045},
+        "received_by_signature": {"x": 0.23, "y": 0.70, "w": 0.25, "h": 0.045},
+        "registered_by_signature": {"x": 0.58, "y": 0.70, "w": 0.25, "h": 0.045},
+    }
+}
+
+import base64
+
+def crop_and_binarize_signatures(image_path: str, doc_type: str) -> dict:
+    """
+    Crops the signature regions from the scanned image according to defined coordinates,
+    applies adaptive threshold binarization to isolate the ink from the background paper,
+    renders the background transparent (RGBA alpha = 0), and returns base64 PNG data.
+    """
+    if doc_type not in SIGNATURE_COORDS:
+        return {}
+    
+    signatures = {}
+    try:
+        # Load the image using OpenCV
+        img = cv2.imread(image_path)
+        if img is None:
+            # Fallback to Pillow
+            pil_img = Image.open(image_path)
+            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        
+        height, width = img.shape[:2]
+        
+        for key, coord in SIGNATURE_COORDS[doc_type].items():
+            # Calculate pixel boundaries
+            x1 = int(coord["x"] * width)
+            y1 = int(coord["y"] * height)
+            w = int(coord["w"] * width)
+            h = int(coord["h"] * height)
+            x2 = min(width, x1 + w)
+            y2 = min(height, y1 + h)
+            
+            if x2 <= x1 or y2 <= y1:
+                continue
+                
+            crop = img[y1:y2, x1:x2]
+            
+            # Convert crop to grayscale
+            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+            # Denoise slightly
+            gray = cv2.GaussianBlur(gray, (3, 3), 0)
+            # Otsu's thresholding to separate background (255) and ink (0)
+            _, binarized = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+            
+            # Check ink density (prevent noise crops/blank signature frames)
+            total_pixels = binarized.size
+            black_pixels = np.sum(binarized == 0)
+            black_ratio = black_pixels / total_pixels if total_pixels > 0 else 0.0
+            
+            if black_ratio < 0.005:  # Less than 0.5% dark pixels means probably blank/no signature
+                signatures[key] = "n/a"
+                continue
+            
+            # Build RGBA image where background pixels (binarized == 255) are transparent
+            rgba = cv2.cvtColor(crop, cv2.COLOR_BGR2BGRA)
+            rgba[binarized == 255, 3] = 0  # Set alpha channel to 0 (fully transparent) for background paper
+            
+            # Encode transparent crop to PNG base64 data URL
+            _, buffer = cv2.imencode('.png', rgba)
+            base64_str = base64.b64encode(buffer).decode('utf-8')
+            signatures[key] = f"data:image/png;base64,{base64_str}"
+            
+    except Exception as e:
+        print(f"Error in crop_and_binarize_signatures: {e}")
+        
+    return signatures
 
 current_key_index = 0
 
@@ -1259,6 +1341,11 @@ def process_ocr_gemini(data: dict):
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse JSON from Gemini response: {str(e)}. Response was: {clean_text}")
     
+    # Extract signature crops
+    signatures = crop_and_binarize_signatures(file_path, doc_type)
+    for k, v in signatures.items():
+        extracted_data[k] = v
+
     return {
         "success": True,
         "text": response.text,
@@ -1267,6 +1354,7 @@ def process_ocr_gemini(data: dict):
         "engine_used": "gemini-2.5-flash",
         "quick_fill_used": True
     }
+
 
 @app.post('/ocr')
 @serialize_processing
@@ -1537,6 +1625,11 @@ def process_ocr(data: OCRRequest):
                 # Persist direct ROI value into extracted fields if parser misses it.
                 pass
     
+    # Extract signature crops
+    signatures = crop_and_binarize_signatures(file_path, extraction_type)
+    for k, v in signatures.items():
+        extracted_fields[k] = v
+
     type_mismatch = False
     mismatch_msg = ''
     if expected_type and expected_type not in ('unknown', '') and detected_type != 'unknown':

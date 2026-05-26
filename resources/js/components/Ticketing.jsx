@@ -53,14 +53,14 @@ export default function Ticketing({ mode = 'portal' }) {
         place_of_birth: '',
         father_name: '',
         mother_name: '',
-        
+
         // Death Certificate details
         deceased_first_name: '',
         deceased_middle_name: '',
         deceased_last_name: '',
         date_of_death: '',
         place_of_death: '',
-        
+
         // Marriage Certificate details
         husband_first_name: '',
         husband_middle_name: '',
@@ -139,6 +139,40 @@ export default function Ticketing({ mode = 'portal' }) {
     const [isLoadingQueue, setIsLoadingQueue] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [selectedDocId, setSelectedDocId] = useState('');
+
+    const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+    const [walkInName, setWalkInName] = useState('');
+    const [walkInPurpose, setWalkInPurpose] = useState('birth');
+    const [walkInPhone, setWalkInPhone] = useState('');
+    const [walkInEmail, setWalkInEmail] = useState('');
+
+    const handleCreateWalkIn = async (e) => {
+        if (e) e.preventDefault();
+        if (!walkInName.trim()) {
+            showAlert({ title: 'Validation Error', message: 'Please enter client name.', type: 'danger' });
+            return;
+        }
+        try {
+            const res = await axios.post('/api/public/tickets', {
+                client_name: walkInName,
+                email: walkInEmail,
+                phone: walkInPhone,
+                purpose: walkInPurpose,
+                details: {}
+            });
+            if (res.data.success) {
+                showAlert({ title: 'Ticket Created', message: `Ticket ${res.data.ticket.ticket_number} generated for walk-in.`, type: 'success' });
+                setIsWalkInModalOpen(false);
+                setWalkInName('Walk-In Client');
+                setWalkInPhone('');
+                setWalkInEmail('');
+                fetchQueue();
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert({ title: 'Error', message: 'Could not create walk-in ticket.', type: 'danger' });
+        }
+    };
 
     useEffect(() => {
         if (mode === 'staff') {
@@ -647,6 +681,89 @@ export default function Ticketing({ mode = 'portal' }) {
                     )}
                 </AnimatePresence>
 
+                {/* Walk-in Ticket Modal */}
+                <AnimatePresence>
+                    {isWalkInModalOpen && (
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-slate-900 leading-normal">
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100"
+                            >
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+                                    <h3 className="font-bold text-slate-800 text-lg">Create Walk-in Ticket</h3>
+                                    <button onClick={() => setIsWalkInModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                                </div>
+
+                                <form onSubmit={handleCreateWalkIn} className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Client Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={walkInName}
+                                            onChange={e => setWalkInName(e.target.value)}
+                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                            placeholder="Client Name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Purpose / Document Type</label>
+                                        <select
+                                            value={walkInPurpose}
+                                            onChange={e => setWalkInPurpose(e.target.value)}
+                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                        >
+                                            <option value="birth">Birth Certificate</option>
+                                            <option value="death">Death Certificate</option>
+                                            <option value="marriage">Marriage Certificate</option>
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Phone Number (Optional)</label>
+                                            <input
+                                                type="text"
+                                                value={walkInPhone}
+                                                onChange={e => setWalkInPhone(e.target.value)}
+                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                                placeholder="0912..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Email (Optional)</label>
+                                            <input
+                                                type="email"
+                                                value={walkInEmail}
+                                                onChange={e => setWalkInEmail(e.target.value)}
+                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                                placeholder="client@email.com"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsWalkInModalOpen(false)}
+                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer"
+                                        >
+                                            Generate Ticket
+                                        </button>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 {/* Queue Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                     <div className="bg-white/60 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex items-center justify-between">
@@ -708,13 +825,22 @@ export default function Ticketing({ mode = 'portal' }) {
                                     <ArrowPathIcon className={`w-4 h-4 ${isLoadingQueue ? 'animate-spin' : ''}`} />
                                 </button>
                             </div>
-                            <button
-                                onClick={handleCallNext}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#d4a574] text-[#0f172a] font-black text-xs uppercase tracking-widest hover:bg-[#c49a67] rounded-xl transition-all shadow-md active:scale-95"
-                            >
-                                <MegaphoneIcon className="w-4 h-4" />
-                                Call Next Ticket
-                            </button>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button
+                                    onClick={() => setIsWalkInModalOpen(true)}
+                                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+                                >
+                                    <PlusCircleIcon className="w-4 h-4 text-emerald-500" />
+                                    Walk-in Ticket
+                                </button>
+                                <button
+                                    onClick={handleCallNext}
+                                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#d4a574] text-[#0f172a] font-black text-xs uppercase tracking-widest hover:bg-[#c49a67] rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                                >
+                                    <MegaphoneIcon className="w-4 h-4" />
+                                    Call Next Ticket
+                                </button>
+                            </div>
                         </div>
 
                         {/* Queue Lists Split */}

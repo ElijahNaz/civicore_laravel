@@ -88,7 +88,7 @@ const FIELD_CONFIG = {
     marriage: MarriageConfig
 };
 
-const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = false, hideBoxes = false }) => {
+const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateStatusChange, isViewOnly = false, hideBoxes = false }) => {
     const [isSaving, setIsSaving] = useState(false);
 
     const detectedType = ocrResult?.detected_type !== 'unknown' ? ocrResult?.detected_type : (docType || file.type || 'unknown');
@@ -102,6 +102,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
             try { ef = JSON.parse(ef); } catch (e) { ef = {}; }
         }
 
+        const isManualEntry = !file.file_path || file.name === 'Manual Entry' || file.id === 'manual';
         const init = {};
         const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
 
@@ -114,13 +115,15 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                         val = d.toISOString().split('T')[0];
                     }
                 }
-                // All optional fields: if empty, default to "n/a" so every field always has output
-                if (!f.required && val === '') {
-                    val = 'n/a';
-                }
-                // Signature fields that are empty also default to 'n/a'
-                if (f.type === 'signature' && val === '') {
-                    val = 'n/a';
+                // All optional fields: if empty, default to "n/a" (only for OCR scan, not manual additions)
+                if (!isManualEntry) {
+                    if (!f.required && val === '') {
+                        val = 'n/a';
+                    }
+                    // Signature fields that are empty also default to 'n/a'
+                    if (f.type === 'signature' && val === '') {
+                        val = 'n/a';
+                    }
                 }
                 init[f.key] = val;
             });
@@ -153,6 +156,48 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
     const [consentGiven, setConsentGiven] = useState(false);
     const [savePending, setSavePending] = useState(false);
     const fieldConfidence = ocrResult?.field_confidence || {};
+
+    const [duplicateData, setDuplicateData] = useState(null);
+    const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+    useEffect(() => {
+        const docId = file.id || file.file_id || file.document_id || file.realId;
+        if (!docId) return;
+
+        const checkDuplicateRecord = async () => {
+            setIsCheckingDuplicate(true);
+            try {
+                const res = await fetch(`/api/documents/${docId}/check-duplicate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        type: effectiveType,
+                        fields: formData
+                    })
+                });
+                const data = await res.json();
+                const isDup = !!(data.success && data.duplicate);
+                if (isDup) {
+                    setDuplicateData(data.candidate);
+                } else {
+                    setDuplicateData(null);
+                }
+                if (onDuplicateStatusChange) {
+                    onDuplicateStatusChange(docId, isDup);
+                }
+            } catch (err) {
+                console.error("Error checking duplicate:", err);
+            } finally {
+                setIsCheckingDuplicate(false);
+            }
+        };
+
+        const delayDebounceFn = setTimeout(() => {
+            checkDuplicateRecord();
+        }, 1000);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [formData.first_name, formData.last_name, formData.husband_first_name, formData.wife_first_name, effectiveType]);
 
     /**
      * Returns Tailwind classes for field confidence:
@@ -229,7 +274,8 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                     }
                                 }
                                 // Optional fields: if empty, default to "n/a"
-                                if (!f.required && val === '') {
+                                const isManualEntry = !file.file_path || file.name === 'Manual Entry' || file.id === 'manual';
+                                if (!isManualEntry && !f.required && val === '') {
                                     val = 'n/a';
                                 }
                                 next[f.key] = val;
@@ -468,29 +514,31 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                 )}
 
                 <div className="flex-1 flex overflow-hidden">
-                    <div className="w-[35%] border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
-                        <div className="flex items-center justify-between mb-3 shrink-0">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
-                            <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
+                    {file.file_path && viewMode !== 'compare' && (
+                        <div className="w-[35%] border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
+                            <div className="flex items-center justify-between mb-3 shrink-0">
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
+                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Reference Only</span>
+                            </div>
+                            <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center">
+                                <img
+                                    src={`/api/documents/view/${file.id || file.file_id || file.document_id || file.realId}?raw=1&t=${new Date().getTime()}`}
+                                    className="w-full h-full object-contain"
+                                    alt="Original Scan"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        const iframe = document.createElement('iframe');
+                                        iframe.src = e.target.src;
+                                        iframe.className = "w-full h-full border-0";
+                                        e.target.parentNode.appendChild(iframe);
+                                    }}
+                                />
+                            </div>
                         </div>
-                        <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center">
-                            <img
-                                src={`/api/documents/view/${file.id || file.file_id || file.document_id || file.realId}?raw=1&t=${new Date().getTime()}`}
-                                className="w-full h-full object-contain"
-                                alt="Original Scan"
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    const iframe = document.createElement('iframe');
-                                    iframe.src = e.target.src;
-                                    iframe.className = "w-full h-full border-0";
-                                    e.target.parentNode.appendChild(iframe);
-                                }}
-                            />
-                        </div>
-                    </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                        <div className="flex p-1 bg-slate-100 rounded-xl w-fit">
+                        <div className="flex p-1 bg-slate-100 rounded-xl w-fit gap-1 flex-wrap">
                             <button
                                 onClick={() => setViewMode('text')}
                                 className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'text' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -509,7 +557,36 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                             >
                                 Template Preview
                             </button>
+                            {duplicateData && (
+                                <button
+                                    onClick={() => setViewMode('compare')}
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'compare' ? 'bg-amber-600 text-white shadow-sm font-black' : 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse'}`}
+                                >
+                                    ⚠️ Compare Side-by-Side
+                                </button>
+                            )}
                         </div>
+
+                        {duplicateData && viewMode !== 'compare' && (
+                            <div className="flex items-start gap-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                    <ExclamationTriangleIcon className="w-6 h-6 text-amber-600 animate-pulse" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold text-amber-800">Potential Duplicate Detected</p>
+                                    <p className="text-xs text-amber-600 mt-1">
+                                        A similar record exists in the Master Registry under Certificate #<strong>{duplicateData.certNumber}</strong> ({duplicateData.name}).
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('compare')}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-sm shrink-0"
+                                >
+                                    Compare Side-by-Side
+                                </button>
+                            </div>
+                        )}
 
                         {viewMode === 'text' && (
                             <div className="space-y-3">
@@ -784,6 +861,70 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {viewMode === 'compare' && duplicateData && (
+                            <div className="space-y-6">
+                                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-amber-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-amber-800 uppercase tracking-wide">Duplicate Registry Comparison</h4>
+                                        <p className="text-xs text-amber-700 mt-0.5">Please review side-by-side details carefully. Fields with differences are highlighted in amber.</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Left side: Uploaded/Current Record */}
+                                    <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 space-y-4">
+                                        <div className="flex items-center gap-2 pb-3 border-b border-slate-200/60">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                            <h5 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Current Extracted Data (Incoming)</h5>
+                                        </div>
+                                        <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {Object.keys(formData).map(key => {
+                                                const existingVal = duplicateData.extracted_fields[key] || 'n/a';
+                                                const currentVal = formData[key] || 'n/a';
+                                                const isDifferent = String(currentVal).toLowerCase().trim() !== String(existingVal).toLowerCase().trim();
+
+                                                return (
+                                                    <div key={key} className={`p-3 rounded-xl border transition-all ${isDifferent ? 'bg-amber-50/70 border-amber-300/60 shadow-sm' : 'bg-white border-slate-100'}`}>
+                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{fieldLabelMap[key] || key}</span>
+                                                        <span className={`block text-sm font-bold mt-1.5 ${isDifferent ? 'text-amber-900' : 'text-slate-800'}`}>
+                                                            {currentVal}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Right side: Existing Master Entry */}
+                                    <div className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 space-y-4">
+                                        <div className="flex items-center gap-2 pb-3 border-b border-slate-200/60">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                            <h5 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Master Registry Entry (Existing)</h5>
+                                        </div>
+                                        <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                                            {Object.keys(formData).map(key => {
+                                                const existingVal = duplicateData.extracted_fields[key] || 'n/a';
+                                                const currentVal = formData[key] || 'n/a';
+                                                const isDifferent = String(currentVal).toLowerCase().trim() !== String(existingVal).toLowerCase().trim();
+
+                                                return (
+                                                    <div key={key} className={`p-3 rounded-xl border transition-all ${isDifferent ? 'bg-amber-50/70 border-amber-300/60 shadow-sm' : 'bg-white border-slate-100'}`}>
+                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{fieldLabelMap[key] || key}</span>
+                                                        <span className={`block text-sm font-bold mt-1.5 ${isDifferent ? 'text-amber-900' : 'text-slate-800'}`}>
+                                                            {existingVal}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

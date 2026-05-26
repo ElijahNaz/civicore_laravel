@@ -399,3 +399,38 @@ The following items are planned for the **next development session**:
 
 ### 🗺️ Mapping — Barangay Involvement (Advanced)
 - Consider adding barangay drill-down in the Mapping right panel: clicking a barangay row shows a breakdown panel with a mini chart of its Birth/Death/Marriage trend over time.
+
+---
+
+## 📝 Development Log — May 26, 2026 (Night Session)
+
+The following features and updates were implemented during the night session of **May 26, 2026**:
+
+### 🎟️ Queue-Bypassing Manual Registration
+- **Direct Master Database Insertion:** Restructured manual registration to bypass the document processing queue entirely. It starts in local client state (`id = 'manual'`), and on save, POSTs directly to the backend to create the Master Registry issuance.
+- **Form Clean State:** Optional fields inside `OcrFormPanel.jsx` are kept completely empty `""` instead of being pre-filled with `"n/a"`, so users can type data without clearing placeholders.
+- **Cleanup Eliminator:** Exiting or closing the manual registration modal simply closes the view without leaving empty draft records/stubs in the database.
+
+### 🖼️ PDF Scan Reference Viewer & Route Restoration
+- Registered the missing `/api/documents/view/{id}` inline route in `routes/api.php` and mapped the document `file_path` field in `DataContext.jsx`. This displays original scan reference documents inline in the review panel instead of rendering the landing page layout.
+
+### ⚡ Real-Time Duplicate Validation Updates
+- Added real-time duplicate validation events from the OCR form panel to the document list component, updating the "⚠️ Duplicate" warning badge and blocking/unblocking direct approval controls dynamically.
+- Implemented backend checks on `quickApprove()` to throw clean validation errors on duplicate attempts.
+
+### 📧 SMTP Mailer Channel Switcher (Gmail & Mailtrap)
+- Configured dynamic SMTP mailer configuration switches within `VerificationController.php` allowing togglable account email verification routes (Mailtrap vs. Gmail credentials).
+
+### 📄 Optimized Single-Page PDF Splitting
+- Optimized the Python OCR server `/split` endpoint to only extract, convert, and process the first page (Page 1) of any PDF, preventing subsequent pages from using server resources or writing to disk.
+
+---
+
+## 🔭 Future Update Targets (Next session checklist)
+
+The following requirements have been logged for future updates:
+
+- **Real-Time Issuance Duplicate Status:** Make the status indicator in the Issuances section dynamically update in real-time when a duplicate record is detected.
+- **Manual Registration Input Types:** Review form schemas to determine whether date inputs (currently text) should remain text fields or be normalized/converted into integer formats if needed.
+- **Interactive Camera Edge & Light Scanner (GCash-style):** Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success) to guide users when to capture the document.
+- **Death & Marriage Certificate Templates:** Expand composite template layouts to support Death Certificates and Marriage Certificates.

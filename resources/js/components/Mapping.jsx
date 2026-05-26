@@ -41,7 +41,7 @@ const Mapping = () => {
     const [rightPanelTab, setRightPanelTab] = useState('charts');
     const [showAllBarangays, setShowAllBarangays] = useState(false);
     const [statsMode, setStatsMode] = useState('records'); // 'records' | 'issued'
-    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
+    const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0, maxTotal: 0 });
     const [quickFilter, setQuickFilter] = useState('all'); // 'all','today','week','month','year','custom'
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
@@ -75,6 +75,23 @@ const Mapping = () => {
 
     const filteredApiData = apiData.filter(i => isWithinTimeframe(i.issuanceDate || i.created_at));
     const filteredDocsData = docsData.filter(d => isWithinTimeframe(d.created_at));
+
+    const uniqueIssuances = React.useMemo(() => {
+        const seenDocIds = new Set();
+        const unique = [];
+        filteredApiData.forEach(i => {
+            if (i.document_id) {
+                const docId = Number(i.document_id);
+                if (!seenDocIds.has(docId)) {
+                    seenDocIds.add(docId);
+                    unique.push(i);
+                }
+            } else {
+                unique.push(i);
+            }
+        });
+        return unique;
+    }, [filteredApiData]);
 
     // Maintain references to markers for interactivity
     const markersRef = useRef({});
@@ -205,17 +222,8 @@ const Mapping = () => {
             }
         });
 
-        // Count everything: Finalized Issuances + Unlinked Documents (Only active/processed ones)
-        const combinedForStats = [
-            ...filteredApiData.map(i => ({ brgy: i.barangay, type: i.type || 'birth' })),
-            ...filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !filteredApiData.some(i => Number(i.document_id) === Number(d.id))).map(d => {
-                const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
-                return { brgy: ef.barangay || d.barangay, type: d.detected_type || d.type || 'birth' };
-            })
-        ];
-
-        combinedForStats.forEach(item => {
-            const brgy = item.brgy;
+        uniqueIssuances.forEach(item => {
+            const brgy = item.barangay;
             const type = (item.type || 'birth').toLowerCase();
             
             // Global counts
@@ -237,10 +245,7 @@ const Mapping = () => {
             }
         });
 
-        // Match TOTAL UPLOADED to the sum of all unique records (only processed/approved ones)
-        const issuedDocIds = new Set(filteredApiData.map(i => i.document_id ? Number(i.document_id) : null).filter(id => id !== null));
-        const unlinkedDocs = filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !issuedDocIds.has(Number(d.id)));
-        const totalDocs = filteredApiData.length + unlinkedDocs.length;
+        const totalDocs = uniqueIssuances.length;
 
         const barangaysForMap = staticBarangays.map(b => ({
             ...b,
@@ -346,7 +351,7 @@ const Mapping = () => {
 
         // Update Global Stats in UI (using state)
         const totalRecords = birthCount + deathCount + marriageCount;
-        setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords, totalDocs });
+        setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords, totalDocs, maxTotal });
 
         // --- CHART.JS ---
         if (canvasRef.current && window.Chart) {
@@ -438,25 +443,11 @@ const Mapping = () => {
     const getBarangayRankings = () => {
         const brgyCountsLocal = {};
         
-        filteredApiData.forEach(i => {
+        uniqueIssuances.forEach(i => {
             const brgy = i.barangay;
             if (brgy) {
                 if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
                 const type = (i.type || '').toLowerCase();
-                if (type.includes('birth')) brgyCountsLocal[brgy].births++;
-                else if (type.includes('death')) brgyCountsLocal[brgy].deaths++;
-                else if (type.includes('marriage')) brgyCountsLocal[brgy].marriages++;
-                brgyCountsLocal[brgy].total++;
-            }
-        });
-
-        // Add unlinked docs
-        filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !filteredApiData.some(i => Number(i.document_id) === Number(d.id))).forEach(d => {
-            const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
-            const brgy = ef.barangay || d.barangay;
-            if (brgy) {
-                if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
-                const type = (d.detected_type || d.type || '').toLowerCase();
                 if (type.includes('birth')) brgyCountsLocal[brgy].births++;
                 else if (type.includes('death')) brgyCountsLocal[brgy].deaths++;
                 else if (type.includes('marriage')) brgyCountsLocal[brgy].marriages++;
@@ -695,9 +686,11 @@ const Mapping = () => {
                             </div>
                             <div className="bg-gradient-to-br from-[#0f172a] to-slate-800 p-4 rounded-2xl shadow-lg flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform">
                                 <div className="absolute right-[-10%] top-[-10%] w-24 h-24 bg-[#d4a574]/10 rounded-full blur-xl"></div>
-                                <p className="text-slate-400 text-[10px] font-black uppercase tracking-wider mb-1">Most Active</p>
+                                <p className="text-slate-400 text-[10px] font-black uppercase tracking-wider mb-1">Top Barangay</p>
                                 <h3 className="text-lg font-black text-white truncate">{stats.mostActiveBrgy}</h3>
-                                <p className="text-[9px] text-slate-500 font-bold mt-1">Top barangay</p>
+                                <p className="text-[9px] text-slate-500 font-bold mt-1">
+                                    {stats.mostActiveBrgy !== 'N/A' ? `${stats.maxTotal} issued` : '0 issued'}
+                                </p>
                             </div>
                         </div>
                     ) : (() => {

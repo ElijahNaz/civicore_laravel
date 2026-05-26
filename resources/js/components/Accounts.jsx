@@ -21,6 +21,7 @@ const Accounts = () => {
     const [isAddingUser, setIsAddingUser] = useState(false);
     const [requireVerification, setRequireVerification] = useState(false);
     const [verificationStep, setVerificationStep] = useState('form'); // 'form' | 'otp'
+    const [verificationChannel, setVerificationChannel] = useState('mailtrap'); // 'mailtrap' | 'gmail'
     const [otpCode, setOtpCode] = useState('');
     const [isSendingCode, setIsSendingCode] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
@@ -129,7 +130,7 @@ const Accounts = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ email: newUserFormData.email })
+                    body: JSON.stringify({ email: newUserFormData.email, channel: verificationChannel })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -827,6 +828,28 @@ const Accounts = () => {
                                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${requireVerification ? 'left-7' : 'left-1'}`} />
                                         </div>
                                     </div>
+
+                                    {requireVerification && (
+                                        <div className="space-y-2.5 p-4 rounded-xl border border-indigo-100 bg-indigo-50/20 animate-in slide-in-from-top-2 duration-200">
+                                            <label className="block text-xs font-bold text-indigo-700 uppercase tracking-widest">Verification Mail Channel</label>
+                                            <div className="grid grid-cols-2 gap-2 mt-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVerificationChannel('mailtrap')}
+                                                    className={`py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${verificationChannel === 'mailtrap' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                                >
+                                                    📬 Mailtrap (Dev)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVerificationChannel('gmail')}
+                                                    className={`py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${verificationChannel === 'gmail' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                                >
+                                                    📧 Gmail (Prod)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="pt-2 flex gap-3">
                                         <button type="button" disabled={isAddingUser || isSendingCode} onClick={() => setIsAddUserModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm disabled:opacity-50">Cancel</button>
