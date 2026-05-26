@@ -22,6 +22,7 @@
         "framer-motion": "^12.35.2",
         "leaflet": "^1.9.4",
         "lodash": "^4.17.23",
+        "qrcode.react": "^4.2.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "react-dropzone": "^15.0.0",

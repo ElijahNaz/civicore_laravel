@@ -11,7 +11,8 @@ import {
     EyeIcon,
     MagnifyingGlassIcon,
     ArrowsPointingOutIcon,
-    FireIcon
+    FireIcon,
+    CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import SkeletonLoader from './SkeletonLoader.jsx';
 import Avatar from 'boring-avatars';
@@ -22,6 +23,7 @@ const Mapping = () => {
     const mapRef = useRef(null);
     const chartRef = useRef(null);
     const canvasRef = useRef(null);
+    const markersLayerRef = useRef(null);
     const {
         issuances: apiData,
         documents: docsData,
@@ -35,7 +37,42 @@ const Mapping = () => {
     const [activeFilter, setActiveFilter] = useState('all');
     const [hoveredBrgy, setHoveredBrgy] = useState(null);
     const [showHeatmap, setShowHeatmap] = useState(false);
+    const [showRatioMode, setShowRatioMode] = useState(false);
+    const [rightPanelTab, setRightPanelTab] = useState('charts');
     const [stats, setStats] = useState({ birthCount: 0, deathCount: 0, marriageCount: 0, mostActiveBrgy: 'N/A', totalRecords: 0, totalDocs: 0 });
+    const [quickFilter, setQuickFilter] = useState('all'); // 'all','today','week','month','year','custom'
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+
+    const isWithinTimeframe = (dateStr) => {
+        if (!dateStr) return false;
+        const recordDate = new Date(dateStr);
+        if (isNaN(recordDate.getTime())) return false;
+        const now = new Date();
+
+        if (quickFilter === 'today') {
+            return recordDate.toDateString() === now.toDateString();
+        } else if (quickFilter === 'week') {
+            const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+            return recordDate >= weekAgo && recordDate <= now;
+        } else if (quickFilter === 'month') {
+            return recordDate.getMonth() === now.getMonth() && recordDate.getFullYear() === now.getFullYear();
+        } else if (quickFilter === 'year') {
+            return recordDate.getFullYear() === now.getFullYear();
+        } else if (quickFilter === 'custom' && dateFrom && dateTo) {
+            const from = new Date(dateFrom);
+            const to = new Date(dateTo); to.setHours(23, 59, 59, 999);
+            return recordDate >= from && recordDate <= to;
+        }
+        return true; // 'all'
+    };
+
+    const clearFilter = () => { setQuickFilter('all'); setDateFrom(''); setDateTo(''); setShowDatePicker(false); };
+    const applyCustomRange = () => { if (dateFrom && dateTo) { setQuickFilter('custom'); setShowDatePicker(false); } };
+
+    const filteredApiData = apiData.filter(i => isWithinTimeframe(i.issuanceDate || i.created_at));
+    const filteredDocsData = docsData.filter(d => isWithinTimeframe(d.created_at));
 
     // Maintain references to markers for interactivity
     const markersRef = useRef({});
@@ -62,7 +99,7 @@ const Mapping = () => {
     useEffect(() => {
         if (isLoading) return;
 
-        // --- LEAFLET MAP ---
+        // --- LEAFLET MAP CONTAINER INITIALIZATION ---
         if (!mapRef.current) {
             // Define Naic Municipality limits (Approximate bounding box)
             const naicBounds = L.latLngBounds(
@@ -84,212 +121,249 @@ const Mapping = () => {
                 attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
             }).addTo(map);
 
-            const staticBarangays = [
-                { coords: [14.320, 120.7652], name: 'Gomez-Zamora (Pob.)' },
-                { coords: [14.3179, 120.76559], name: 'Capt. C. Nazareno (Pob.)' },
-                { coords: [14.3225, 120.7673], name: 'Ibayo Silangan' },
-                { coords: [14.32358, 120.76485], name: 'Ibayo Estacion' },
-                { coords: [14.31728, 120.76345], name: 'Kanluran' },
-                { coords: [14.31462, 120.7706], name: 'Makina' },
-                { coords: [14.32049, 120.75696], name: 'Sapa' },
-                { coords: [14.3251, 120.75574], name: 'Bucana Malaki' },
-                { coords: [14.3232, 120.7598], name: 'Bucana Sasahan' },
-                { coords: [14.3211, 120.7535], name: 'Bagong Karsada' },
-                { coords: [14.3198, 120.7627], name: 'Balsahan' },
-                { coords: [14.3175, 120.7512], name: 'Bancaan' },
-                { coords: [14.29245, 120.75202], name: 'Muzon' },
-                { coords: [14.3217999, 120.761], name: 'Latoria' },
-                { coords: [14.3126, 120.7373], name: 'Labac' },
-                { coords: [14.3148, 120.7476], name: 'Mabolo' },
-                { coords: [14.31058, 120.7709], name: 'San Roque' },
-                { coords: [14.3145, 120.7685], name: 'Santulan' },
-                { coords: [14.2795, 120.78071], name: 'Molino' },
-                { coords: [14.2976, 120.7909], name: 'Calubcob' },
-                { coords: [14.2939, 120.8007], name: 'Halang' },
-                { coords: [14.3078, 120.7683], name: 'Malainen Bago' },
-                { coords: [14.3000, 120.7700], name: 'Malainen Luma' },
-                { coords: [14.2850, 120.8097], name: 'Palangue 1' },
-                { coords: [14.2620, 120.8297], name: 'Palangue 2 & 3' },
-                { coords: [14.3166, 120.7689], name: 'Humbac' },
-                { coords: [14.3348, 120.7717], name: 'Munting Mapino' },
-                { coords: [14.3146, 120.7930], name: 'Sabang' },
-                { coords: [14.3438, 120.7808], name: 'Timalan Balsahan' },
-                { coords: [14.33699, 120.7790], name: 'Timalan Concepcion' }
-            ];
+            const markersLayer = L.layerGroup().addTo(map);
+            markersLayerRef.current = markersLayer;
+            mapRef.current = map;
+        }
 
-            const brgyCounts = {};
-            let birthCount = 0;
-            let deathCount = 0;
-            let marriageCount = 0;
-            let mostActiveBrgy = 'N/A';
-            let maxTotal = 0;
+        // --- RENDER DYNAMIC MARKERS & LAYERS ---
+        const map = mapRef.current;
+        if (!map) return;
 
-            const last6Months = [];
-            for (let i = 5; i >= 0; i--) {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                last6Months.push(d.toLocaleString('default', { month: 'short' }));
+        // Clear existing markers/heatmaps
+        if (markersLayerRef.current) {
+            markersLayerRef.current.clearLayers();
+        }
+        markersRef.current = {};
+
+        const staticBarangays = [
+            { coords: [14.320, 120.7652], name: 'Gomez-Zamora (Pob.)' },
+            { coords: [14.3179, 120.76559], name: 'Capt. C. Nazareno (Pob.)' },
+            { coords: [14.3225, 120.7673], name: 'Ibayo Silangan' },
+            { coords: [14.32358, 120.76485], name: 'Ibayo Estacion' },
+            { coords: [14.31728, 120.76345], name: 'Kanluran' },
+            { coords: [14.31462, 120.7706], name: 'Makina' },
+            { coords: [14.32049, 120.75696], name: 'Sapa' },
+            { coords: [14.3251, 120.75574], name: 'Bucana Malaki' },
+            { coords: [14.3232, 120.7598], name: 'Bucana Sasahan' },
+            { coords: [14.3211, 120.7535], name: 'Bagong Karsada' },
+            { coords: [14.3198, 120.7627], name: 'Balsahan' },
+            { coords: [14.3175, 120.7512], name: 'Bancaan' },
+            { coords: [14.29245, 120.75202], name: 'Muzon' },
+            { coords: [14.3217999, 120.761], name: 'Latoria' },
+            { coords: [14.3126, 120.7373], name: 'Labac' },
+            { coords: [14.3148, 120.7476], name: 'Mabolo' },
+            { coords: [14.31058, 120.7709], name: 'San Roque' },
+            { coords: [14.3145, 120.7685], name: 'Santulan' },
+            { coords: [14.2795, 120.78071], name: 'Molino' },
+            { coords: [14.2976, 120.7909], name: 'Calubcob' },
+            { coords: [14.2939, 120.8007], name: 'Halang' },
+            { coords: [14.3078, 120.7683], name: 'Malainen Bago' },
+            { coords: [14.3000, 120.7700], name: 'Malainen Luma' },
+            { coords: [14.2850, 120.8097], name: 'Palangue 1' },
+            { coords: [14.2620, 120.8297], name: 'Palangue 2 & 3' },
+            { coords: [14.3166, 120.7689], name: 'Humbac' },
+            { coords: [14.3348, 120.7717], name: 'Munting Mapino' },
+            { coords: [14.3146, 120.7930], name: 'Sabang' },
+            { coords: [14.3438, 120.7808], name: 'Timalan Balsahan' },
+            { coords: [14.33699, 120.7790], name: 'Timalan Concepcion' }
+        ];
+
+        const brgyCounts = {};
+        let birthCount = 0;
+        let deathCount = 0;
+        let marriageCount = 0;
+        let mostActiveBrgy = 'N/A';
+        let maxTotal = 0;
+
+        const last6Months = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            last6Months.push(d.toLocaleString('default', { month: 'short' }));
+        }
+
+        const monthData = {
+            births: [0, 0, 0, 0, 0, 0],
+            deaths: [0, 0, 0, 0, 0, 0],
+            marriages: [0, 0, 0, 0, 0, 0]
+        };
+
+        filteredApiData.forEach(issuance => {
+            const type = (issuance.type || '').toLowerCase();
+            const dateStr = issuance.issuanceDate || issuance.created_at;
+            const date = new Date(dateStr);
+            const month = date.toLocaleString('default', { month: 'short' });
+            const monthIdx = last6Months.indexOf(month);
+
+            if (monthIdx !== -1) {
+                if (type.includes('birth')) monthData.births[monthIdx]++;
+                else if (type.includes('death')) monthData.deaths[monthIdx]++;
+                else if (type.includes('marriage')) monthData.marriages[monthIdx]++;
             }
+        });
 
-            const monthData = {
-                births: [0, 0, 0, 0, 0, 0],
-                deaths: [0, 0, 0, 0, 0, 0],
-                marriages: [0, 0, 0, 0, 0, 0]
-            };
+        // Count everything: Finalized Issuances + Unlinked Documents (Only active/processed ones)
+        const combinedForStats = [
+            ...filteredApiData.map(i => ({ brgy: i.barangay, type: i.type || 'birth' })),
+            ...filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !filteredApiData.some(i => Number(i.document_id) === Number(d.id))).map(d => {
+                const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
+                return { brgy: ef.barangay || d.barangay, type: d.detected_type || d.type || 'birth' };
+            })
+        ];
 
-            apiData.forEach(issuance => {
-                const type = (issuance.type || '').toLowerCase();
-                const dateStr = issuance.issuanceDate || issuance.created_at;
-                const date = new Date(dateStr);
-                const month = date.toLocaleString('default', { month: 'short' });
-                const monthIdx = last6Months.indexOf(month);
+        combinedForStats.forEach(item => {
+            const brgy = item.brgy;
+            const type = (item.type || 'birth').toLowerCase();
+            
+            // Global counts
+            if (type.includes('birth')) birthCount++;
+            else if (type.includes('death')) deathCount++;
+            else if (type.includes('marriage')) marriageCount++;
 
-                if (monthIdx !== -1) {
-                    if (type.includes('birth')) monthData.births[monthIdx]++;
-                    else if (type.includes('death')) monthData.deaths[monthIdx]++;
-                    else if (type.includes('marriage')) monthData.marriages[monthIdx]++;
+            if (brgy) {
+                if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
+                if (type.includes('birth')) brgyCounts[brgy].births++;
+                else if (type.includes('death')) brgyCounts[brgy].deaths++;
+                else if (type.includes('marriage')) brgyCounts[brgy].marriages++;
+                brgyCounts[brgy].total++;
+
+                if (brgyCounts[brgy].total > maxTotal) {
+                    maxTotal = brgyCounts[brgy].total;
+                    mostActiveBrgy = brgy;
                 }
-            });
+            }
+        });
 
-            // Count everything: Finalized Issuances + Unlinked Documents
-            const combinedForStats = [
-                ...apiData.map(i => ({ brgy: i.barangay, type: i.type || 'birth' })),
-                ...docsData.filter(d => !apiData.some(i => Number(i.document_id) === Number(d.id))).map(d => {
-                    const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
-                    return { brgy: ef.barangay || d.barangay, type: d.detected_type || d.type || 'birth' };
-                })
-            ];
+        // Match TOTAL UPLOADED to the sum of all unique records (only processed/approved ones)
+        const issuedDocIds = new Set(filteredApiData.map(i => i.document_id ? Number(i.document_id) : null).filter(id => id !== null));
+        const unlinkedDocs = filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !issuedDocIds.has(Number(d.id)));
+        const totalDocs = filteredApiData.length + unlinkedDocs.length;
 
-            combinedForStats.forEach(item => {
-                const brgy = item.brgy;
-                const type = (item.type || 'birth').toLowerCase();
+        const barangaysForMap = staticBarangays.map(b => ({
+            ...b,
+            births: brgyCounts[b.name]?.births || 0,
+            deaths: brgyCounts[b.name]?.deaths || 0,
+            marriages: brgyCounts[b.name]?.marriages || 0
+        }));
+
+        barangaysForMap.forEach(barangay => {
+            const total = barangay.births + barangay.deaths + barangay.marriages;
+
+            if (showHeatmap) {
+                // Heatmap mode: Large soft circles
+                if (total > 0) {
+                    const intensity = Math.min(total / 10, 1); // Scale intensity
+                    const circle = L.circle(barangay.coords, {
+                        color: '#f43f5e',
+                        fillColor: '#f43f5e',
+                        fillOpacity: 0.1 + (intensity * 0.4),
+                        radius: 300 + (intensity * 500),
+                        stroke: false,
+                        interactive: false
+                    }).addTo(markersLayerRef.current);
+                    markersRef.current[barangay.name] = circle;
+                }
+            } else {
+                // Pin mode
+                let pinColor = '#0f172a'; // Default dark
+                let ratio = 0;
                 
-                // Global counts
-                if (type.includes('birth')) birthCount++;
-                else if (type.includes('death')) deathCount++;
-                else if (type.includes('marriage')) marriageCount++;
-
-                if (brgy) {
-                    if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
-                    if (type.includes('birth')) brgyCounts[brgy].births++;
-                    else if (type.includes('death')) brgyCounts[brgy].deaths++;
-                    else if (type.includes('marriage')) brgyCounts[brgy].marriages++;
-                    brgyCounts[brgy].total++;
-
-                    if (brgyCounts[brgy].total > maxTotal) {
-                        maxTotal = brgyCounts[brgy].total;
-                        mostActiveBrgy = brgy;
-                    }
-                }
-            });
-
-            // Match TOTAL UPLOADED to the sum of all unique records
-            const issuedDocIds = new Set(apiData.map(i => i.document_id ? Number(i.document_id) : null).filter(id => id !== null));
-            const unlinkedDocs = docsData.filter(d => !issuedDocIds.has(Number(d.id)));
-            const totalDocs = backendStats?.totalDocs || (apiData.length + unlinkedDocs.length);
-
-            const barangaysForMap = staticBarangays.map(b => ({
-                ...b,
-                births: brgyCounts[b.name]?.births || 0,
-                deaths: brgyCounts[b.name]?.deaths || 0,
-                marriages: brgyCounts[b.name]?.marriages || 0
-            }));
-
-            // Store markers in ref for interactivity
-            markersRef.current = {};
-
-            barangaysForMap.forEach(barangay => {
-                const total = barangay.births + barangay.deaths + barangay.marriages;
-
-                if (showHeatmap) {
-                    // Heatmap mode: Large soft circles
-                    if (total > 0) {
-                        const intensity = Math.min(total / 10, 1); // Scale intensity
-                        const circle = L.circle(barangay.coords, {
-                            color: '#f43f5e',
-                            fillColor: '#f43f5e',
-                            fillOpacity: 0.1 + (intensity * 0.4),
-                            radius: 300 + (intensity * 500),
-                            stroke: false,
-                            interactive: false
-                        }).addTo(map);
-                        markersRef.current[barangay.name] = circle;
+                if (showRatioMode) {
+                    if (barangay.births === 0 && barangay.deaths === 0) {
+                        pinColor = '#0f172a'; // No records
+                    } else {
+                        ratio = barangay.deaths > 0 ? (barangay.births / barangay.deaths) : barangay.births;
+                        if (ratio > 1.2) pinColor = '#10b981'; // High birth-to-death ratio (Emerald)
+                        else if (ratio < 0.8) pinColor = '#f43f5e'; // High death-to-birth ratio (Rose)
+                        else pinColor = '#6366f1'; // Balanced ratio (Indigo)
                     }
                 } else {
-                    // Pin mode
-                    let pinColor = '#0f172a'; // Default dark
                     if (total > 0) {
                         if (barangay.births >= barangay.deaths && barangay.births >= barangay.marriages) pinColor = '#d4a574';
                         else if (barangay.deaths >= barangay.births && barangay.deaths >= barangay.marriages) pinColor = '#f43f5e';
                         else pinColor = '#6366f1';
                     }
-
-                    const isHovered = hoveredBrgy === barangay.name;
-
-                    const pinIcon = L.divIcon({
-                        className: 'bg-transparent border-none',
-                        html: `<div class="relative ${isHovered ? 'scale-125 z-[1000]' : ''} transition-all duration-300">
-                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${pinColor}" stroke="${total > 0 ? '#ffffff' : '#d4a574'}" stroke-width="1.5" class="w-8 h-8 drop-shadow-md hover:scale-110 transition-transform origin-bottom cursor-pointer opacity-${total > 0 ? '100' : '40'}">
-                                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                   <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                 </svg>
-                                 ${isHovered ? '<div class="absolute inset-0 bg-white/40 rounded-full animate-ping pointer-events-none"></div>' : ''}
-                               </div>`,
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 32],
-                        popupAnchor: [0, -32]
-                    });
-
-                    const marker = L.marker(barangay.coords, { icon: pinIcon }).addTo(map);
-                    marker.bindTooltip(`
-                        <div style="text-align: center; line-height: 1.2;">
-                            <span class="font-bold text-slate-800 text-xs block">${barangay.name}</span>
-                            <span class="text-[10px] text-slate-500 font-medium">Total Issued: ${total}</span>
-                        </div>
-                    `, { direction: 'top', offset: [0, -32], opacity: 0.95 });
-
-                    marker.bindPopup(`
-                        <div class="p-3 min-w-[160px]">
-                            <h4 class="font-bold text-[#0f172a] text-sm mb-2 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                                ${barangay.name}
-                            </h4>
-                            <div class="space-y-1.5 text-xs mt-3">
-                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Births:</span> <span class="font-bold text-[#d4a574] bg-[#d4a574]/10 px-1.5 rounded">${barangay.births}</span></div>
-                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Deaths:</span> <span class="font-bold text-rose-500 bg-rose-50 px-1.5 rounded">${barangay.deaths}</span></div>
-                                <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Marriages:</span> <span class="font-bold text-indigo-500 bg-indigo-50 px-1.5 rounded">${barangay.marriages}</span></div>
-                            </div>
-                        </div>
-                    `, { closeButton: false });
-
-                    markersRef.current[barangay.name] = marker;
                 }
-            });
 
-            // Update Global Stats in UI (using state)
-            const totalRecords = birthCount + deathCount + marriageCount;
-            setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords, totalDocs });
+                const isHovered = hoveredBrgy === barangay.name;
+                const isPinActive = showRatioMode ? (barangay.births > 0 || barangay.deaths > 0) : (total > 0);
 
-            mapRef.current = map;
-
-            // --- CHART.JS ---
-            if (canvasRef.current && window.Chart) {
-                if (chartRef.current) chartRef.current.destroy();
-                const ctx = canvasRef.current.getContext('2d');
-                chartRef.current = new window.Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: last6Months,
-                        datasets: [
-                            { label: 'Births', data: monthData.births, backgroundColor: '#d4a574', borderRadius: 4 },
-                            { label: 'Deaths', data: monthData.deaths, backgroundColor: '#f43f5e', borderRadius: 4 },
-                            { label: 'Marriages', data: monthData.marriages, backgroundColor: '#6366f1', borderRadius: 4 }
-                        ]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false }
+                const pinIcon = L.divIcon({
+                    className: 'bg-transparent border-none',
+                    html: `<div class="relative ${isHovered ? 'scale-125 z-[1000]' : ''} transition-all duration-300">
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${pinColor}" stroke="${isPinActive ? '#ffffff' : '#d4a574'}" stroke-width="1.5" class="w-8 h-8 drop-shadow-md hover:scale-110 transition-transform origin-bottom cursor-pointer opacity-${isPinActive ? '100' : '40'}">
+                               <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                               <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                             </svg>
+                             ${isHovered ? '<div class="absolute inset-0 bg-white/40 rounded-full animate-ping pointer-events-none"></div>' : ''}
+                           </div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32],
+                    popupAnchor: [0, -32]
                 });
+
+                const marker = L.marker(barangay.coords, { icon: pinIcon }).addTo(markersLayerRef.current);
+
+                marker.bindTooltip(`
+                    <div style="text-align: center; line-height: 1.2;">
+                        <span class="font-bold text-slate-800 text-xs block">${barangay.name}</span>
+                        <span class="text-[10px] text-slate-500 font-medium">${showRatioMode ? `Ratio: ${ratio.toFixed(2)}` : `Total Issued: ${total}`}</span>
+                    </div>
+                `, { direction: 'top', offset: [0, -32], opacity: 0.95 });
+
+                const popupContent = showRatioMode ? `
+                    <div class="p-3 min-w-[160px]">
+                        <h4 class="font-bold text-[#0f172a] text-sm mb-2 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                            ${barangay.name}
+                        </h4>
+                        <div class="space-y-1.5 text-xs mt-3">
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Births:</span> <span class="font-bold text-[#d4a574] bg-[#d4a574]/10 px-1.5 rounded">${barangay.births}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Deaths:</span> <span class="font-bold text-rose-500 bg-rose-50 px-1.5 rounded">${barangay.deaths}</span></div>
+                            <div class="flex justify-between items-center border-t border-slate-100 pt-1.5"><span class="text-slate-500 font-medium font-bold">Birth/Death Ratio:</span> <span class="font-black text-slate-800">${ratio.toFixed(2)}</span></div>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="p-3 min-w-[160px]">
+                        <h4 class="font-bold text-[#0f172a] text-sm mb-2 uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                            ${barangay.name}
+                        </h4>
+                        <div class="space-y-1.5 text-xs mt-3">
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Births:</span> <span class="font-bold text-[#d4a574] bg-[#d4a574]/10 px-1.5 rounded">${barangay.births}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Deaths:</span> <span class="font-bold text-rose-500 bg-rose-50 px-1.5 rounded">${barangay.deaths}</span></div>
+                            <div class="flex justify-between items-center"><span class="text-slate-500 font-medium">Marriages:</span> <span class="font-bold text-indigo-500 bg-indigo-50 px-1.5 rounded">${barangay.marriages}</span></div>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent, { closeButton: false });
+
+                markersRef.current[barangay.name] = marker;
             }
+        });
+
+        // Update Global Stats in UI (using state)
+        const totalRecords = birthCount + deathCount + marriageCount;
+        setStats({ birthCount, deathCount, marriageCount, mostActiveBrgy, totalRecords, totalDocs });
+
+        // --- CHART.JS ---
+        if (canvasRef.current && window.Chart) {
+            if (chartRef.current) chartRef.current.destroy();
+            const ctx = canvasRef.current.getContext('2d');
+            chartRef.current = new window.Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: last6Months,
+                    datasets: [
+                        { label: 'Births', data: monthData.births, backgroundColor: '#d4a574', borderRadius: 4 },
+                        { label: 'Deaths', data: monthData.deaths, backgroundColor: '#f43f5e', borderRadius: 4 },
+                        { label: 'Marriages', data: monthData.marriages, backgroundColor: '#6366f1', borderRadius: 4 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
         }
-    }, [isLoading, apiData, docsData, showHeatmap, hoveredBrgy]);
+    }, [isLoading, apiData, docsData, showHeatmap, showRatioMode, hoveredBrgy, quickFilter, dateFrom, dateTo]);
 
     const exportToCSV = () => {
         const headers = ["Certificate No.", "Type", "Subject Name", "Barangay", "Print Date", "Status", "Encoded By"];
@@ -335,11 +409,74 @@ const Mapping = () => {
     };
 
 
-    const filteredPrints = apiData.filter(print =>
+    const filteredPrints = filteredApiData.filter(print =>
         activeFilter === 'all' || (print.type || '').toLowerCase().includes(activeFilter)
     );
 
 
+
+    const getTransactionVelocity = () => {
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const dailyCount = apiData.filter(i => {
+            const date = new Date(i.issuanceDate || i.created_at);
+            return date >= oneDayAgo;
+        }).length;
+
+        const weeklyCount = apiData.filter(i => {
+            const date = new Date(i.issuanceDate || i.created_at);
+            return date >= oneWeekAgo;
+        }).length;
+
+        return { dailyCount, weeklyCount };
+    };
+
+    const getBarangayRankings = () => {
+        const brgyCountsLocal = {};
+        
+        filteredApiData.forEach(i => {
+            const brgy = i.barangay;
+            if (brgy) {
+                if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
+                const type = (i.type || '').toLowerCase();
+                if (type.includes('birth')) brgyCountsLocal[brgy].births++;
+                else if (type.includes('death')) brgyCountsLocal[brgy].deaths++;
+                else if (type.includes('marriage')) brgyCountsLocal[brgy].marriages++;
+                brgyCountsLocal[brgy].total++;
+            }
+        });
+
+        // Add unlinked docs
+        filteredDocsData.filter(d => ['processed', 'issued', 'active'].includes(d.status) && !filteredApiData.some(i => Number(i.document_id) === Number(d.id))).forEach(d => {
+            const ef = typeof d.extracted_fields === 'string' ? JSON.parse(d.extracted_fields) : (d.extracted_fields || {});
+            const brgy = ef.barangay || d.barangay;
+            if (brgy) {
+                if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
+                const type = (d.detected_type || d.type || '').toLowerCase();
+                if (type.includes('birth')) brgyCountsLocal[brgy].births++;
+                else if (type.includes('death')) brgyCountsLocal[brgy].deaths++;
+                else if (type.includes('marriage')) brgyCountsLocal[brgy].marriages++;
+                brgyCountsLocal[brgy].total++;
+            }
+        });
+
+        const list = Object.keys(brgyCountsLocal).map(name => {
+            const item = brgyCountsLocal[name];
+            const ratio = item.deaths > 0 ? (item.births / item.deaths) : item.births;
+            return {
+                name,
+                births: item.births,
+                deaths: item.deaths,
+                marriages: item.marriages,
+                total: item.total,
+                ratio
+            };
+        }).sort((a, b) => b.total - a.total);
+
+        return list;
+    };
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -360,31 +497,146 @@ const Mapping = () => {
             className="space-y-6 max-w-7xl mx-auto"
         >
             {/* Header */}
-            <motion.div variants={itemVariants} className="flex justify-between items-center mb-2">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                        <MapPinIcon className="w-8 h-8 text-[#d4a574]" />
-                        Geospatial Analytics
-                    </h2>
-                    <p className="text-slate-500 font-medium text-sm mt-1">Live distribution of civil documents across Naic barangays.</p>
+            <motion.div variants={itemVariants} className="flex flex-col gap-4 mb-2">
+                {/* Title Row */}
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                            <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#d4a574] to-[#c49060] flex items-center justify-center shadow-lg shadow-[#d4a574]/20">
+                                <MapPinIcon className="w-5 h-5 text-white" />
+                            </span>
+                            Geospatial Analytics
+                        </h2>
+                        <p className="text-slate-500 font-medium text-sm mt-1 ml-[52px]">Live distribution of civil records across Naic barangays.</p>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                        <button
+                            onClick={exportToCSV}
+                            disabled={isLoading || filteredPrints.length === 0}
+                            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            <ArrowDownTrayIcon className="w-4 h-4 text-emerald-500" />
+                            Export CSV
+                        </button>
+                        <button
+                            onClick={() => fetchData()}
+                            className="flex items-center gap-2 bg-[#0f172a] text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-slate-800/20 hover:bg-slate-800 transition-all cursor-pointer active:scale-95"
+                        >
+                            <ArrowPathIcon className={`w-4 h-4 transition-transform duration-500 ${isLoading ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+                            Refresh
+                        </button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={exportToCSV}
-                        disabled={isLoading || filteredPrints.length === 0}
-                        className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all cursor-pointer active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <ArrowDownTrayIcon className="w-4 h-4 text-emerald-500" />
-                        Export CSV
-                    </button>
-                    <button
-                        onClick={() => fetchData()}
-                        className="flex items-center gap-2 bg-[#0f172a] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all cursor-pointer active:scale-95 group"
-                    >
-                        <ArrowPathIcon className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${isLoading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </button>
+
+                {/* Filter Bar */}
+                <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-3 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-slate-400 uppercase tracking-widest mr-1">
+                        <CalendarDaysIcon className="w-3.5 h-3.5 text-[#d4a574]" />
+                        Period
+                    </div>
+
+                    {/* Quick Filter Pills */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {[
+                            { key: 'all', label: 'All Time' },
+                            { key: 'today', label: 'Today' },
+                            { key: 'week', label: 'This Week' },
+                            { key: 'month', label: 'This Month' },
+                            { key: 'year', label: 'This Year' },
+                        ].map(({ key, label }) => (
+                            <button
+                                key={key}
+                                onClick={() => { setQuickFilter(key); setShowDatePicker(false); }}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                                    quickFilter === key
+                                        ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-md shadow-slate-800/15'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+
+                        {/* Divider */}
+                        <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                        {/* Custom Range Toggle */}
+                        <button
+                            onClick={() => { setShowDatePicker(!showDatePicker); }}
+                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                                quickFilter === 'custom'
+                                    ? 'bg-[#d4a574] text-white border-[#d4a574] shadow-md shadow-[#d4a574]/20'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-[#d4a574]/10 hover:border-[#d4a574]/30 hover:text-[#d4a574]'
+                            }`}
+                        >
+                            <CalendarDaysIcon className="w-3.5 h-3.5" />
+                            {quickFilter === 'custom' && dateFrom && dateTo
+                                ? `${dateFrom} → ${dateTo}`
+                                : 'Custom Range'
+                            }
+                        </button>
+                    </div>
+
+                    {/* Clear button — only when filter is active */}
+                    {quickFilter !== 'all' && (
+                        <button
+                            onClick={clearFilter}
+                            className="ml-auto flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                        >
+                            <span className="w-4 h-4 rounded-full bg-slate-100 hover:bg-rose-50 flex items-center justify-center text-[10px] font-black transition-colors">×</span>
+                            Clear
+                        </button>
+                    )}
                 </div>
+
+                {/* Custom Date Range Picker Panel */}
+                <AnimatePresence>
+                    {showDatePicker && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.18 }}
+                            className="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/60 p-4 flex flex-wrap items-end gap-4"
+                        >
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">From</label>
+                                <input
+                                    type="date"
+                                    id="date-from"
+                                    value={dateFrom}
+                                    onChange={e => setDateFrom(e.target.value)}
+                                    max={dateTo || undefined}
+                                    className="border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/40 focus:border-[#d4a574] transition-all cursor-pointer"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">To</label>
+                                <input
+                                    type="date"
+                                    id="date-to"
+                                    value={dateTo}
+                                    onChange={e => setDateTo(e.target.value)}
+                                    min={dateFrom || undefined}
+                                    className="border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/40 focus:border-[#d4a574] transition-all cursor-pointer"
+                                />
+                            </div>
+                            <button
+                                onClick={applyCustomRange}
+                                disabled={!dateFrom || !dateTo}
+                                className="flex items-center gap-2 bg-[#d4a574] hover:bg-[#c49060] disabled:bg-slate-200 disabled:text-slate-400 text-white px-5 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer disabled:cursor-not-allowed shadow-md shadow-[#d4a574]/20"
+                            >
+                                Apply Range
+                            </button>
+                            <button
+                                onClick={() => setShowDatePicker(false)}
+                                className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer px-2 py-2"
+                            >
+                                Cancel
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </motion.div>
 
             {/* Top Stat Cards Grid */}
@@ -420,6 +672,38 @@ const Mapping = () => {
                 )}
             </motion.div>
 
+            {/* Active Filter Summary Badge */}
+            <AnimatePresence>
+                {quickFilter !== 'all' && (
+                    <motion.div
+                        key={quickFilter + dateFrom + dateTo}
+                        initial={{ opacity: 0, y: -6, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                        exit={{ opacity: 0, y: -6, height: 0 }}
+                        className="flex items-center gap-2 -mt-2 overflow-hidden"
+                    >
+                        <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-[#d4a574]/10 to-[#d4a574]/5 border border-[#d4a574]/25 rounded-full text-xs font-bold text-[#c49060]">
+                            <CalendarDaysIcon className="w-3.5 h-3.5" />
+                            <span>Showing:</span>
+                            <span className="text-[#0f172a] font-black">
+                                {quickFilter === 'today' ? 'Today' :
+                                 quickFilter === 'week' ? 'This Week' :
+                                 quickFilter === 'month' ? 'This Month' :
+                                 quickFilter === 'year' ? 'This Year' :
+                                 quickFilter === 'custom' ? `${dateFrom} → ${dateTo}` : ''}
+                            </span>
+                            <span className="text-slate-400 font-medium">·</span>
+                            <span className="text-slate-500 font-semibold">{filteredApiData.length} record{filteredApiData.length !== 1 ? 's' : ''}</span>
+                            <button
+                                onClick={clearFilter}
+                                className="ml-1 w-4 h-4 rounded-full bg-[#d4a574]/20 hover:bg-rose-100 hover:text-rose-500 flex items-center justify-center text-[11px] font-black text-[#d4a574] transition-all cursor-pointer"
+                                title="Clear filter"
+                            >×</button>
+                        </span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Map and Charts Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -428,7 +712,20 @@ const Mapping = () => {
                     {/* Floating Map Controls */}
                     <div className="absolute top-4 right-4 z-[1001] flex flex-col gap-2">
                         <button
-                            onClick={() => setShowHeatmap(!showHeatmap)}
+                            onClick={() => {
+                                setShowRatioMode(!showRatioMode);
+                                if (showHeatmap) setShowHeatmap(false);
+                            }}
+                            className={`p-2.5 rounded-xl shadow-lg border transition-all cursor-pointer ${showRatioMode ? 'bg-[#d4a574] text-white border-[#d4a574]' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            title={showRatioMode ? "Switch to Standard View" : "Switch to Demographic Ratio Mode"}
+                        >
+                            <DocumentChartBarIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => {
+                                setShowHeatmap(!showHeatmap);
+                                if (showRatioMode) setShowRatioMode(false);
+                            }}
                             className={`p-2.5 rounded-xl shadow-lg border transition-all cursor-pointer ${showHeatmap ? 'bg-rose-500 text-white border-rose-400' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                             title={showHeatmap ? "Switch to Pin View" : "Switch to Heatmap View"}
                         >
@@ -444,49 +741,175 @@ const Mapping = () => {
                     </div>
 
                     {/* Legend Overlay */}
-                    <div className="absolute bottom-4 left-4 z-[1001] bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/60 min-w-[120px]">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Legend</p>
+                    <div className="absolute bottom-4 left-4 z-[1001] bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white/60 min-w-[145px]">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                            {showRatioMode ? 'Demographic Ratio' : 'Legend'}
+                        </p>
                         <div className="space-y-1.5">
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#d4a574]"></span>
-                                <span className="text-[10px] font-bold text-slate-700">Births</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-                                <span className="text-[10px] font-bold text-slate-700">Deaths</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
-                                <span className="text-[10px] font-bold text-slate-700">Marriages</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#0f172a]"></span>
-                                <span className="text-[10px] font-bold text-slate-700">No Records</span>
-                            </div>
+                            {showRatioMode ? (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">High Growth (&gt;1.2)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#6366f1]"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">Balanced (0.8-1.2)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">High Mortality (&lt;0.8)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#0f172a] opacity-40"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">No Records</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#d4a574]"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">Births</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">Deaths</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">Marriages</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#0f172a] opacity-40"></span>
+                                        <span className="text-[10px] font-bold text-slate-700">No Records</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
 
                     <div id="mapContainer" className="w-full h-full rounded-xl bg-slate-100 z-0"></div>
                 </motion.div>
 
-                {/* Chart Segment - 1 column */}
-                <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 p-6 flex flex-col h-[450px]">
-                    <div className="mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <DocumentChartBarIcon className="w-5 h-5 text-[#d4a574]" />
+                {/* Right Panel Segment - Charts or Demographics & Velocity */}
+                <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 p-5 flex flex-col h-[450px]">
+                    {/* Tab Switcher */}
+                    <div className="flex bg-slate-100/60 p-1 gap-1 rounded-xl mb-4">
+                        <button
+                            onClick={() => setRightPanelTab('charts')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rightPanelTab === 'charts' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
                             Monthly Trajectory
-                        </h3>
-                        <p className="text-xs text-slate-500">6-month document processing trends</p>
+                        </button>
+                        <button
+                            onClick={() => setRightPanelTab('demographics')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rightPanelTab === 'demographics' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Demographics & Velocity
+                        </button>
                     </div>
-                    <div className="flex-1 relative w-full">
-                        {isLoading ? (
-                            <div className="w-full h-full flex items-center justify-center">
-                                <SkeletonLoader type="default" />
+
+                    {rightPanelTab === 'charts' ? (
+                        <>
+                            <div className="mb-4">
+                                <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                                    <DocumentChartBarIcon className="w-4 h-4 text-[#d4a574]" />
+                                    Monthly Trajectory
+                                </h3>
+                                <p className="text-[10px] text-slate-500 font-medium">6-month document processing trends</p>
                             </div>
-                        ) : (
-                            <canvas ref={canvasRef}></canvas>
-                        )}
-                    </div>
+                            <div className="flex-1 relative w-full overflow-hidden">
+                                {isLoading ? (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <SkeletonLoader type="default" />
+                                    </div>
+                                ) : (
+                                    <canvas ref={canvasRef}></canvas>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex flex-col flex-1 overflow-hidden">
+                            {/* Velocities Header */}
+                            <div className="mb-4">
+                                <h3 className="text-sm font-black text-slate-800">Transaction Velocities</h3>
+                                <p className="text-[10px] text-slate-500 font-medium mb-2.5">Finalized record print rates</p>
+                                
+                                {isLoading ? (
+                                    <div className="h-10 bg-slate-100 rounded-lg animate-pulse"></div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        <div className="bg-emerald-50/50 border border-emerald-100/50 p-2 rounded-xl flex flex-col justify-center">
+                                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wide">Daily Velocity</span>
+                                            <span className="text-lg font-black text-slate-800 font-mono tabular-nums leading-none mt-1">
+                                                {getTransactionVelocity().dailyCount} <span className="text-[10px] font-bold text-slate-400">/day</span>
+                                            </span>
+                                        </div>
+                                        <div className="bg-indigo-50/50 border border-indigo-100/50 p-2 rounded-xl flex flex-col justify-center">
+                                            <span className="text-[9px] font-black text-indigo-600 uppercase tracking-wide">Weekly Velocity</span>
+                                            <span className="text-lg font-black text-slate-800 font-mono tabular-nums leading-none mt-1">
+                                                {getTransactionVelocity().weeklyCount} <span className="text-[10px] font-bold text-slate-400">/wk</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Demographics Rankings */}
+                            <div className="flex-1 flex flex-col overflow-hidden">
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Barangay Rankings</span>
+                                    <span className="text-[9px] font-bold text-slate-500">Sorted by Volume</span>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                                    {isLoading ? (
+                                        <div className="space-y-1">
+                                            <div className="h-8 bg-slate-100 rounded animate-pulse"></div>
+                                            <div className="h-8 bg-slate-100 rounded animate-pulse"></div>
+                                            <div className="h-8 bg-slate-100 rounded animate-pulse"></div>
+                                        </div>
+                                    ) : getBarangayRankings().length === 0 ? (
+                                        <div className="text-center py-8 text-xs text-slate-400 font-medium">
+                                            No vital events registered yet.
+                                        </div>
+                                    ) : (
+                                        getBarangayRankings().map((brgy, idx) => (
+                                            <div 
+                                                key={brgy.name}
+                                                className="flex items-center justify-between p-2 rounded-xl bg-slate-50/50 border border-slate-100 hover:bg-slate-50 transition-colors group/item"
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <button 
+                                                        onClick={() => locateBarangay(brgy.name)}
+                                                        className="text-xs font-bold text-slate-700 hover:text-[#d4a574] text-left truncate max-w-full cursor-pointer"
+                                                    >
+                                                        {idx + 1}. {brgy.name}
+                                                    </button>
+                                                    <div className="text-[9.5px] text-slate-400 font-medium mt-0.5">
+                                                        B: {brgy.births} · D: {brgy.deaths} · M: {brgy.marriages}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                                        {brgy.total}
+                                                    </span>
+                                                    <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded ${
+                                                        brgy.ratio > 1.2 ? 'bg-emerald-50 text-emerald-600' :
+                                                        brgy.ratio < 0.8 ? 'bg-rose-50 text-rose-600' :
+                                                        'bg-indigo-50 text-indigo-600'
+                                                    }`}>
+                                                        R: {brgy.ratio.toFixed(1)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </motion.div>
             </div>
 
@@ -495,7 +918,14 @@ const Mapping = () => {
                 <div className="p-6 border-b border-slate-100 bg-slate-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h3 className="text-lg font-bold text-slate-800">Recent Document Prints</h3>
-                        <p className="text-xs text-slate-500 mt-1">Track physical issuance logs</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Track physical issuance logs
+                            {quickFilter !== 'all' && (
+                                <span className="ml-1.5 text-[#d4a574] font-bold">
+                                    · {quickFilter === 'today' ? 'Today' : quickFilter === 'week' ? 'This Week' : quickFilter === 'month' ? 'This Month' : quickFilter === 'year' ? 'This Year' : quickFilter === 'custom' ? `${dateFrom} → ${dateTo}` : ''} only
+                                </span>
+                            )}
+                        </p>
                     </div>
 
                     {/* Filter Pills */}

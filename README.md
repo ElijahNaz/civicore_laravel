@@ -6,9 +6,10 @@
   <img src="https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react" alt="React Version">
   <img src="https://img.shields.io/badge/Python-3.10+-yellow?style=for-the-badge&logo=python" alt="Python Version">
   <img src="https://img.shields.io/badge/Tailwind-4.0-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind Version">
+  <img src="https://img.shields.io/badge/Last%20Updated-May%2026%2C%202026-brightgreen?style=for-the-badge" alt="Last Updated">
 </p>
 
-CiviCORE is a premium, high-performance document management system designed for Local Government Units (LGUs). It features **AI-powered Intelligent OCR** for automated data extraction from Birth, Marriage, and Death certificates, and an **Interactive Document Scanner** with live edge tracing.
+CiviCORE is a premium, high-performance document management system designed for Local Government Units (LGUs). It features **AI-powered Intelligent OCR** for automated data extraction from Birth, Marriage, and Death certificates, an **Interactive Document Scanner** with live edge tracing, **QR Code ticketing** for citizen request management, and a **Geospatial Analytics** dashboard for real-time demographic visualization across Naic barangays.
 
 ---
 
@@ -154,115 +155,167 @@ For convenience, a **One-Click Launcher** has been provided.
 
 ---
 
-## 📜 Final System Overhaul & Deployment Log
+## ✅ Project Objectives & Completion Status
 
-The following features, fixes, and architectural refinements have been successfully implemented and verified:
+These objectives define the full scope of the CiviCORE system. All items below have been implemented and verified as of **May 26, 2026**.
 
-### ⚡ OCR & Document Processing (Latest Updates)
-- **Intelligent Edge Detection**: Integrated **OpenCV.js** with adaptive throttling and stability telemetry to ensure smooth live tracing on low-power devices.
-- **Client-Side Preprocessing**: Implemented quality-aware image enhancement and metadata generation (DPI, exposure, and focus scoring) before server transmission.
-- **Resilient Capture Layer**: Added a multi-stage hardware fallback system to handle legacy camera drivers and permission edge cases.
-- **Multi-Engine Support**: Integrated **Tesseract** as a high-speed fallback for **EasyOCR**.
-- **Binary Safety**: Converted `issuances` table to use `LONGBLOB` for PDF storage, resolving 500 errors during approval.
-- **Reactive Extraction**: OCR results now populate the form fields in real-time as background jobs complete.
-- **Improved Accuracy**: Enhanced regex patterns to support Form 102 (Birth) and Form 103 (Death) standard layouts.
-- **UI Compaction**: Re-engineered the document queue to be significantly more compact, eliminating horizontal scrolling.
-
-### 🏛️ UI/UX & Layout Consistency
-- **Standardized Aesthetics**: Unified icons, fonts, and sub-heading styles across the entire platform.
-- **Optimized Sidebar**: 
-  - Logout button relocated to the absolute bottom for better ergonomics.
-  - Sidebar fixed position logic implemented; scrolling main content no longer affects navigation visibility.
-- **Performance**: Resolved "laggy" occurrences through requirement-based code optimization and background job offloading.
-
-### 🔐 Security & Account Management
-- **Verification Pipeline**: Integrated **Mailtrap** for robust Gmail/OTP verification testing.
-- **Strict Validation**: 
-  - Implemented Name validation logic.
-  - Enforced Minimum Password Requirements (One Capital, One Small, Number, Special Character).
+| # | Objective | Status | Summary |
+|---|-----------|--------|---------|
+| **1a** | OCR-Based Searchability | ✅ **Completed** | Full OCR search with webcam camera overlay in the Issuances section. Uses EasyOCR + Tesseract Python engine. Scan a document with your camera or upload a file — extracted fields auto-fill the search bar. |
+| **1b** | Auto-Generation from Extracted Text | ✅ **Completed** | `template_profiles` system with pre-seeded coordinate overlays for LCR Form 102 (Birth) & Form 103 (Death). Interactive `TemplateDesigner` allows admins to calibrate field positions visually. |
+| **1c** | Geospatial Demographic Analytics | ✅ **Completed** | Interactive Leaflet map showing barangay-level distribution of Birth, Death, and Marriage records across Naic. Features: Heatmap Mode, Demographic Ratio Mode, Barangay Rankings, Transaction Velocity panel, and full Timeframe Filtering (Today / This Week / This Month / This Year / Custom Date Range). |
+| **1d** | Role-Based Access Control (RBAC) | ✅ **Completed** | `RequireSessionAuth`, `AdminRole`, and `SuperAdminRole` middleware enforce backend API access. Staff, Admin, and SuperAdmin privilege levels are enforced across all routes. |
+| **1e** | Document Request Approval Workflow | ✅ **Completed** | In-person request modal with automated Official Receipt (OR) number generation. SuperAdmin approval queue integrated into the Issuances view. Approved requests can then be printed. |
+| **1f** | Centralized Data Management | ✅ **Completed** | Archive Manager tab integrated into the Documents UI. Supports soft-delete, Restore, and Permanent Purge with full audit trail tracking. |
+| **1g** | QR Code-Based Ticketing | ✅ **Completed** | Public citizen request portal with sequential QR ticket generation. Live queue tracking for staff with status transitions (Pending → Serving → Completed). QR code links to real-time ticket status page. |
 
 ---
 
-## ⚠️ Known Issues / Technical Debt (As of April 27, 2026)
-- **OCR Stability**: On machines with low RAM (e.g., 4GB), running multiple EasyOCR workers may cause system instability. Recommendation: Use Tesseract for high-speed CPU processing or limit to 1 worker.
-- **Auto-Fill Sync**: In some cases, OCR results may not automatically populate the template preview textboxes on the first load. (Workaround: Manually edit any field to trigger a re-sync).
-- **Template Alignment**: The current field coordinates for Form 102/103 are approximate and may require manual calibration via the "Template Designer" for perfect printer alignment.
-- **Marriage Certificates**: Official support for Municipal Form No. 101 (Marriage) is pending and has not yet been implemented in the overlay system.
-- **Document Type Detection**: Occasional classification challenges on low-quality scans. **Improved Logic**: The system now returns "Unknown" instead of an incorrect guess, allowing the user to select the correct template manually in the OCR panel.
-- **Database Race Conditions**: In very high-concurrency environments, multiple OCR pages may compete to update the same record. (Patch: Implemented Row-Level Locking in April 2026).
+## 📜 System Features Overview
+
+### 🏛️ Core Document Management
+- Upload, process, and manage Birth, Death, and Marriage Certificates.
+- Centralized Master Database view with OCR-powered document search.
+- Archive Manager: soft-delete, restore, and permanently purge records.
+- Full audit trail for every view, download, edit, and print action.
+
+### 🤖 AI / OCR Processing
+- **EasyOCR + Tesseract** dual-engine for document field extraction.
+- **Google Gemini (gemini-2.5-flash)** is fully integrated into the OCR pipeline for intelligent multi-layout document understanding — the integration is complete and ready to activate. A Gemini API key just needs to be purchased and added to the `.env` file (`GEMINI_API_KEY=`) to enable it.
+- **Camera-based Search**: Scan a physical document with your webcam to search the database.
+- **OpenCV.js** live edge detection for document framing during capture.
+- Client-side image preprocessing (DPI, exposure, focus scoring) before server upload.
+
+### 🎟️ QR Ticketing System
+- Citizens submit document requests via a public portal — no login required.
+- Each submission generates a unique **QR Code ticket** with a tracking URL.
+- Staff dashboard shows a real-time queue with one-click status transitions.
+
+### 🗺️ Geospatial Analytics
+- Leaflet-based interactive map pinned to Naic's geographical bounds.
+- Per-barangay breakdown of Births, Deaths, and Marriages.
+- **Heatmap Mode**: visualize activity density across barangays.
+- **Demographic Ratio Mode**: color-coded Birth-to-Death ratio across the map.
+- **Advanced Timeframe Filter**: All Time, Today, This Week, This Month, This Year, or a **Custom Date Range** (from date → to date).
+- Monthly Trajectory chart (6-month rolling view).
+- Barangay Rankings sorted by total document volume.
+- Transaction Velocity: daily and weekly request processing rates.
+
+### 🔐 Security & Access Control
+- Session-based authentication with middleware-enforced role separation.
+- **Mailtrap**-integrated OTP email verification pipeline *(currently used for testing/development — planned to be upgraded to **Gmail SMTP** for production in a future release)*.
+- Password strength enforcement (uppercase, lowercase, number, special character).
+- Strict name validation on registration.
+
+### 🖨️ Print & Approval Workflow
+- Staff submits a print request with an **auto-generated OR number** (overridable).
+- SuperAdmin reviews and approves pending print requests.
+- Upon approval, the document can be printed and is marked as `Issued`.
+- Dashboard "Total Issued Files" accurately counts only finalized `Issued` records.
 
 ---
 
-## 🔄 Recent Updates & Database Changes (April 27, 2026)
+## 🧠 Gemini AI Integration
 
-The system has been upgraded with a professional Document Registry and Overlay system for high-fidelity certificate generation.
+To achieve the highest OCR accuracy across multiple document layouts, CiviCORE is designed to integrate **Google Gemini (gemini-2.5-flash)** into the OCR pipeline.
 
-### 📜 Premium Template Overlay System
-- **Clean PDF Integration**: Implemented support for high-resolution PDF templates. Scanned document data is now overlaid on clean backgrounds for a professional look.
-- **Official Field Mapping**: Expanded field configurations to match **Philippine LCR Form 102 (Birth)** and **Form 103 (Death)**, supporting 20+ precise data points (e.g., Weight at Birth, Parents' Marriage Date, Causes of Death).
-- **Interactive Designer**: Built a drag-and-drop `TemplateDesigner` allowing administrators to calibrate field positions visually in real-time.
+> ⚠️ **Note: Gemini API Key Not Yet Purchased**
+> The Gemini AI integration is fully implemented in the codebase, but the production Gemini API key has **not yet been purchased**. The system currently falls back to EasyOCR + Tesseract for all document processing. Once a Gemini API key is acquired and added to the `.env` file (`GEMINI_API_KEY=`), the AI-powered extraction pipeline will activate automatically.
 
-### ⚡ Architectural Refinements
-- **Global Data Context**: Migrated to a centralized `DataContext` to ensure document and template lists are always synchronized across all tabs (Dashboard, Documents, Issuances).
-- **Smart Stream Previews**: Switched all document previews to `/api/documents/view` streaming, eliminating unwanted browser downloads and improving UI responsiveness.
-- **Heuristic Type Matching**: Enhanced the OCR engine to automatically pair scanned documents with the correct official template based on deep-text analysis.
+### What Gemini Enables
+- **Multi-Form Version Support**: Automatically identify whether a document is a 1958 or 1993 layout variant and map fields to the unified schema accordingly.
+- **Intelligent Field Mapping**: Rather than fixed pixel coordinates, Gemini reads the document semantically and maps fields like "Usual Residence of Mother" (older forms) to the standardized `mother_residence_house` schema field.
+- **Graceful Handling of Missing Data**: Fields absent in older form layouts are intelligently skipped rather than causing extraction failures.
 
-### 🌐 Localization & Audit
-- **Timezone Synchronization**: Fixed submission and activity logs to follow **Philippine Standard Time (Asia/Manila, UTC+8)**.
-- **Expanded Audit Trail**: Added detailed logging for every View, Download, Edit, and Print action performed by staff.
+---
 
-### 🗄️ Database Updates
-- **New Table: `template_profiles`**: Stores JSON-based Region of Interest (ROI) coordinates, field keys, and template metadata.
-- **Seeded ROIs**: Pre-populated the database with calibrated field positions for official 102 and 103 form layouts.
-- **Logging Persistence**: Updated `activity_logs` schema support for local time offsets.
+## ⚠️ Known Issues / Technical Debt
+
+| Issue | Details | Workaround |
+|-------|---------|------------|
+| **OCR Stability on Low RAM** | On 4GB machines, running multiple EasyOCR workers may cause system instability. | Use Tesseract mode or limit to 1 queue worker (`RAM_PROFILE=4GB`). |
+| **Auto-Fill Sync Delay** | OCR results may not auto-populate template preview boxes on first load. | Manually edit any field to trigger a re-sync. |
+| **Template Alignment** | Form 102/103 field coordinates are approximate and may need printer calibration. | Use the Template Designer to visually fine-tune field positions. |
+| **Marriage Cert Overlay** | Municipal Form No. 101 (Marriage) overlay is not yet implemented. | Tracked as a future development item. |
+| **Type Detection on Low-Quality Scans** | Occasional misclassification. System now returns "Unknown" instead of a wrong guess. | User selects the correct template manually in the OCR panel. |
+| **Death & Marriage Stats Accuracy** | Geospatial and Dashboard stats may undercount Death/Marriage records due to inconsistent `type` field values. | Tracked as a future development item (see below). |
+
+---
+
+## 🔭 Future Development Plans
+
+The following items have been identified and documented for upcoming development cycles:
+
+### 🔧 Fix: Death Certificate Stats / Counting Accuracy
+- Normalize `type` field detection across `issuances` and `documents` tables (e.g., `"Death"` vs `"death certificate"` vs `"Death Certificate (LCR Form 103)"` all resolve to the same type).
+- Add a dedicated `certificate_type` enum column (`birth | death | marriage`) to `issuances` to ensure reliable classification.
+- Update `DashboardController.php` and `Mapping.jsx` stats aggregation to use the normalized field.
+
+### 🔧 Fix: Marriage Certificate Stats / Counting Accuracy
+- Apply the same `certificate_type` normalization as the death certificate fix.
+- Verify the Monthly Trajectory chart correctly accumulates marriage records.
+- Add a dedicated **Marriage Certs** stat card to the Dashboard (currently only Births and Deaths have their own cards).
+
+### 🔧 Marriage Certificate Overlay System
+- Implement the LCR Form 101 (Marriage Certificate) overlay template with full field mapping support in the `TemplateDesigner`.
+
+### 📧 Upgrade: Email Driver — Mailtrap → Gmail SMTP
+- The current email/OTP verification system uses **Mailtrap** (a development/sandbox mail catcher). For production deployment, this will be replaced with a real **Gmail SMTP** (or other production mail provider) so citizens and staff actually receive verification and notification emails.
+- Required change: update `.env` `MAIL_MAILER`, `MAIL_HOST`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM_ADDRESS` to Gmail credentials.
+
+### 📱 Enhancement: Phone Number / SMS Notifications for QR Tickets
+- The QR ticketing system currently collects an optional `phone` field on the citizen request form but does not yet send SMS notifications.
+- Future plan: Integrate an SMS gateway (e.g., **Semaphore**, **Vonage**, or **Globe Labs**) so that when a ticket's status changes (e.g., moves to *Serving*), the citizen receives an SMS alert with their queue number and estimated wait time.
+- This mirrors the same approach as the ticket's QR code — using the stored `phone` number as the delivery target.
+
+### 🔑 Gemini API Key Activation
+- Purchase and configure a production Gemini API key to activate the AI-powered OCR pipeline for significantly higher extraction accuracy and multi-layout document support.
+
+---
+
+## 📝 Development Log — May 26, 2026
+
+The following features were implemented in the morning session of **May 26, 2026**:
+
+### 🎟️ QR Code Ticketing System (Component 1)
+- Created `tickets` database table with sequential ticket numbering (`T-2026-0001` format), client info, purpose, status, and unique QR tracking token.
+- Built `TicketController` with public submission, status tracking, and staff queue management endpoints.
+- Implemented `Ticketing.jsx` split interface:
+  - **Public Portal**: Citizens fill a form and receive a downloadable QR ticket.
+  - **Staff Dashboard**: Real-time queue view with status transition controls (Pending → Serving → Completed).
+
+### 🗄️ Archive Management (Component 2)
+- Added Archive Manager tab to the Documents UI.
+- Staff can soft-delete records (move to archive), restore them, or permanently purge with confirmation.
+- Full audit trail maintained for all archive actions.
+
+### 🔐 RBAC & Session Security (Component 3)
+- Implemented `RequireSessionAuth`, `AdminRole`, and `SuperAdminRole` middleware.
+- Protected sensitive API routes (template management, permanent deletion, user administration) under admin/superadmin middleware groups.
+
+### 🖨️ Print Approval Workflow & Automated Receipts (Component 5)
+- Changed the "Print" button in Issuances to a **"Request Print"** workflow.
+- Automated **Official Receipt (OR) number** generation — pre-filled on modal open, overridable by staff.
+- SuperAdmin approval queue: pending requests await approval before printing is authorized.
+- Dashboard "Total Issued Files" now accurately counts only records with `status = 'Issued'`.
+
+### 📷 OCR-Based Camera Search (Component 5)
+- Added a **Scan Search** camera button next to the search bar in the Issuances Master Database view.
+- Clicking it opens a full-screen overlay with:
+  - Live webcam feed with capture button.
+  - File upload drag-and-drop alternative.
+- Captured image is sent to the Python OCR backend (`/api/issuances/ocr-search`).
+- Extracted fields (name, registry number, barangay) auto-fill the search bar and filter the list.
+
+### 🗺️ Geospatial Time Filtering (Component 4)
+- Replaced the basic dropdown with a full **Filter Bar** featuring:
+  - Quick-select pills: **All Time / Today / This Week / This Month / This Year**
+  - **Custom Date Range** picker with animated slide-in panel (From date → To date → Apply Range button).
+- Active filter badge below stat cards shows current period and live record count with inline clear button.
+- All map markers, stat cards, Monthly Trajectory chart, Barangay Rankings, and the Prints table react to the selected timeframe.
+- Upgraded header design: icon now uses a branded gradient background box matching the project's design language.
 
 ---
 
 ## License
 Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
-
----
-
-## 🧠 Advanced OCR with Gemini Integration
-
-To achieve the highest accuracy and handle various document layouts, we have integrated **Google Gemini (gemini-2.5-flash)** into our OCR pipeline.
-
-### 📄 Handling Multiple Form Varieties
-Philippine civil registry documents have evolved over the years. We support extracting data from different layouts, such as:
-- **Municipal Form No. 102 (Revised January 1993)**: The modern grid layout.
-- **Municipal Form No. 102 (Revised Dec. 1, 1958)**: Older text-heavy layouts.
-
-### 🗺️ Intelligent Field Mapping
-Instead of relying on fixed pixel coordinates, we use Gemini's vision and language capabilities to:
-1. **Identify the Form Version**: Automatically recognize the layout style.
-2. **Map Fields to a Consistent Schema**: Map fields from older forms (e.g., "Usual Residence of Mother", "Previous Deliveries") to our standardized modern database schema (e.g., `mother_residence_house`, `mother_children_living`).
-3. **Handle Missing Data**: Intelligently fill or skip fields that are not present in older forms.
-
-This ensures that the frontend and database always receive data in a uniform structure, regardless of the physical layout of the uploaded certificate.
-
----
-
-## 📝 Work Summary - May 18, 2026
-
-Here are the accomplishments and updates implemented today:
-
-### Interface & Layout Updates
-- **Fixed Dashboard and Data Interfaces**: Moved the search bar to the upper left and placed action buttons below the text for a cleaner look.
-- **Added Checkboxes**: Added checkboxes to the document list to allow for batch operations.
-- **Fixed Dashboard Numbers**: Corrected the data display in the dashboard to show the right numbers.
-
-### File Management
-- **Fixed Connected Files Display**: Fixed the issue where deleting or viewing files affected connected files incorrectly.
-- **Fixed Disappearing Files Bug**: Fixed the bug where uploading many files caused some or all of them to disappear from the list temporarily.
-
-### OCR Queue & Rate Limit Optimizations
-- **Added Delay in Jobs**: Added a 15-second pause between jobs in Laravel to avoid hammering the Gemini API.
-- **Added Retry Logic in Python**: Added a retry loop (up to 5 attempts) with exponential backoff in the OCR server to handle rate limits gracefully.
-- **Implemented API Key Rotation**: Added support for reading multiple keys from the `.env` file and rotating them automatically to increase throughput.
-- **Enforced Strict Sequential Processing**: Moved all OCR jobs to the `low` queue to ensure they process strictly one by one and never in parallel.
-
-### OCR Form Support
-- **Civil Birth Record Variety Handling**: Verified support for handling multiple varieties of the Certificate of Live Birth (e.g., 1958 and 1993 forms) using the Gemini OCR engine, ensuring correct mapping to the standard schema regardless of layout changes.
-
-### Outstanding Problem
-- **Gemini Rate Limits**: Batch processing is still difficult because the Gemini free tier has strict limits on requests per minute (RPM). Even with delays and retries, processing many files quickly hits these limits. Using multiple keys (Key Rotation) is our best free solution so far!

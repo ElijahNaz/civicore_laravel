@@ -114,6 +114,24 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, isViewOnly = 
                 init[f.key] = val;
             });
         });
+
+        // Merge active queue ticket details if applicable
+        try {
+            const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
+            if (prefillStr) {
+                const prefill = JSON.parse(prefillStr);
+                if (prefill && prefill.purpose === effectiveType && prefill.details) {
+                    Object.keys(prefill.details).forEach(key => {
+                        if (prefill.details[key] !== undefined && prefill.details[key] !== '') {
+                            init[key] = prefill.details[key];
+                        }
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('Error merging ticket details in OcrFormPanel:', err);
+        }
+
         return init;
     });
 

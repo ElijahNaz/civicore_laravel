@@ -24,6 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
+
+        $middleware->alias([
+            'auth.session' => \App\Http\Middleware\RequireSessionAuth::class,
+            'admin'        => \App\Http\Middleware\AdminRoleMiddleware::class,
+            'superadmin'   => \App\Http\Middleware\SuperAdminRoleMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

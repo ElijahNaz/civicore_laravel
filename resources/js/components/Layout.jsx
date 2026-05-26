@@ -8,7 +8,8 @@ import {
     UsersIcon,
     MapPinIcon,
     MegaphoneIcon,
-    Squares2X2Icon
+    Squares2X2Icon,
+    TicketIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import SaveToasts from './SaveToasts.jsx';
@@ -28,6 +29,7 @@ const Layout = ({ children }) => {
     // Admin   → Dashboard, Documents, Issuances, Accounts
     const allMenuItems = [
         { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/tickets', icon: TicketIcon, label: 'Tickets Queue', roles: ['SuperAdmin', 'Admin'] },
         { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document', roles: ['SuperAdmin', 'Admin'] },
         { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance', roles: ['SuperAdmin', 'Admin'] },
         { path: '/mapping', icon: MapPinIcon, label: 'Mapping', roles: ['SuperAdmin'] },

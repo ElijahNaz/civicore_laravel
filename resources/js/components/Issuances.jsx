@@ -7,7 +7,7 @@ import {
     AdjustmentsHorizontalIcon, EyeIcon,
     TrashIcon, CheckCircleIcon, ClockIcon, ArrowDownTrayIcon,
     PencilSquareIcon, ShieldCheckIcon, XMarkIcon, ArrowPathIcon,
-    ChevronDownIcon, ChevronUpIcon
+    ChevronDownIcon, ChevronUpIcon, CameraIcon
 } from '@heroicons/react/24/outline';
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -172,6 +172,135 @@ const Issuances = () => {
     const [editingCert, setEditingCert] = useState(null);
     const [viewingCert, setViewingCert] = useState(null);
 
+    // Print Approval workflow state
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+    const [requestingPrintCert, setRequestingPrintCert] = useState(null);
+    const [orNumber, setOrNumber] = useState('');
+    const [printRemarks, setPrintRemarks] = useState('');
+    const [isSubmittingPrintRequest, setIsSubmittingPrintRequest] = useState(false);
+    
+    // Tickets and approvals
+    const [tickets, setTickets] = useState([]);
+    const [ticketsLoading, setTicketsLoading] = useState(false);
+    const [approvalsSearch, setApprovalsSearch] = useState('');
+
+    // Scan Search workflow state
+    const [isScanSearchOpen, setIsScanSearchOpen] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [scanSource, setScanSource] = useState('webcam');
+    const [cameraStream, setCameraStream] = useState(null);
+    const [ocrError, setOcrError] = useState('');
+
+    const startCamera = async () => {
+        try {
+            setOcrError('');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            setCameraStream(stream);
+            const videoElement = document.getElementById('scan-video');
+            if (videoElement) {
+                videoElement.srcObject = stream;
+                videoElement.play().catch(e => console.error("Video play failed:", e));
+            }
+        } catch (err) {
+            console.error("Camera access failed:", err);
+            setOcrError("Could not access camera. Please upload an image instead.");
+            setScanSource('upload');
+        }
+    };
+
+    const stopCamera = () => {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            setCameraStream(null);
+        }
+    };
+
+    const capturePhoto = () => {
+        const videoElement = document.getElementById('scan-video');
+        if (!videoElement) return;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = videoElement.videoWidth || 640;
+        canvas.height = videoElement.videoHeight || 480;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+            if (blob) {
+                const file = new File([blob], "captured_doc.jpg", { type: "image/jpeg" });
+                handleOcrSearchUpload(file);
+            }
+        }, 'image/jpeg', 0.85);
+    };
+
+    const handleOcrSearchUpload = async (file) => {
+        setIsScanning(true);
+        setOcrError('');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            stopCamera();
+            const res = await axios.post('/api/issuances/ocr-search', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            if (res.data.success && res.data.extracted) {
+                const { name, certNumber, barangay, type } = res.data.extracted;
+                
+                const searchVal = certNumber || name || '';
+                setSearchTerm(searchVal);
+                
+                if (type && ['birth', 'death', 'marriage'].includes(type.toLowerCase())) {
+                    setSelectedType(type.toLowerCase());
+                }
+                
+                if (barangay && NAIC_BARANGAYS.includes(barangay)) {
+                    setSelectedBarangay(barangay);
+                }
+                
+                showAlert({
+                    title: 'Scan Successful',
+                    message: `OCR Extracted:\nName: ${name || '—'}\nCert No: ${certNumber || '—'}\nType: ${type || '—'}\nBarangay: ${barangay || '—'}`,
+                    type: 'success'
+                });
+                
+                setIsScanSearchOpen(false);
+            } else {
+                setOcrError(res.data.error || 'Failed to extract text from scan.');
+            }
+        } catch (err) {
+            console.error("Scan upload failed:", err);
+            setOcrError(err.response?.data?.error || 'An error occurred during OCR search.');
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isScanSearchOpen && scanSource === 'webcam') {
+            startCamera();
+        } else {
+            stopCamera();
+        }
+        return () => stopCamera();
+    }, [isScanSearchOpen, scanSource]);
+
+    const fetchTickets = async () => {
+        setTicketsLoading(true);
+        try {
+            const res = await axios.get('/api/tickets');
+            setTickets(res.data || []);
+        } catch (e) {
+            console.error("Error fetching tickets:", e);
+            setTickets([]);
+        } finally {
+            setTicketsLoading(false);
+        }
+    };
+
     useEffect(() => {
         // Create a set of IDs that are already issued to prevent duplicates
         // Use Number() to ensure type consistency across database drivers
@@ -192,7 +321,7 @@ const Issuances = () => {
                     name: i.name || 'Unnamed Record',
                     barangay: i.barangay || '—',
                     date: i.issuanceDate || i.date,
-                    status: 'Issued',
+                    status: i.status || 'Active',
                     encoded_by: i.encoded_by,
                     source: 'issuance',
                     raw: {
@@ -238,12 +367,15 @@ const Issuances = () => {
             }
         };
         fetchUsers();
+        fetchTickets();
     }, []);
 
-    // Fetch Activity Logs when History tab is active
+    // Fetch Activity Logs when History tab is active, fetch tickets when approvals is active
     useEffect(() => {
         if (activeTab === 'history') {
             fetchActivityLogs();
+        } else if (activeTab === 'approvals') {
+            fetchTickets();
         }
     }, [activeTab]);
 
@@ -275,6 +407,78 @@ const Issuances = () => {
         }
     };
 
+
+    const openRequestModal = (cert) => {
+        // Pre-generate an automatic OR number: OR-YYYYMMDD-XXXX
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const autoOr = `OR-${dateStr}-${randomNum}`;
+
+        setOrNumber(autoOr);
+        setPrintRemarks('');
+        setRequestingPrintCert(cert);
+    };
+
+    const submitPrintRequest = async () => {
+        if (!requestingPrintCert || !orNumber) return;
+        setIsSubmittingPrintRequest(true);
+        try {
+            const res = await axios.post(`/api/issuances/${requestingPrintCert.realId}/request-print`, {
+                or_number: orNumber,
+                print_remarks: printRemarks
+            });
+            if (res.data.success) {
+                showAlert({ title: 'Request Submitted', message: 'Print request submitted for SuperAdmin approval.', type: 'success' });
+                setRequestingPrintCert(null);
+                refreshAll();
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert({ title: 'Error', message: err.response?.data?.error || 'Failed to submit print request.', type: 'danger' });
+        } finally {
+            setIsSubmittingPrintRequest(false);
+        }
+    };
+
+    const handleApprovePrint = (cert) => {
+        withConfirmation({
+            title: 'Approve Print Request?',
+            message: `Authorize printing of ${cert.type} certificate for ${cert.name}?`,
+            type: 'success',
+            action: async () => {
+                try {
+                    const res = await axios.post(`/api/issuances/${cert.realId}/approve-print`);
+                    if (res.data.success) {
+                        showAlert({ title: 'Request Approved', message: 'Print request authorized.', type: 'success' });
+                        refreshAll();
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showAlert({ title: 'Error', message: 'Failed to approve print request.', type: 'danger' });
+                }
+            }
+        });
+    };
+
+    const handleRejectPrint = (cert) => {
+        withConfirmation({
+            title: 'Reject Print Request?',
+            message: `Deny print request for ${cert.name}? The record will return to Active status.`,
+            type: 'danger',
+            action: async () => {
+                try {
+                    const res = await axios.post(`/api/issuances/${cert.realId}/reject-print`);
+                    if (res.data.success) {
+                        showAlert({ title: 'Request Rejected', message: 'Print request denied.', type: 'info' });
+                        refreshAll();
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showAlert({ title: 'Error', message: 'Failed to reject print request.', type: 'danger' });
+                }
+            }
+        });
+    };
 
     const handleEdit = (cert) => {
         setPasswordModal({
@@ -357,11 +561,16 @@ const Issuances = () => {
                     document.body.appendChild(iframe);
                 }
                 iframe.src = url;
-                iframe.onload = () => {
+                iframe.onload = async () => {
                     try {
                         iframe.contentWindow.focus();
                         iframe.contentWindow.print();
-                        logActivity('Printed', cert);
+                        logActivity(cert.status === 'Issued' ? 'Reprinted' : 'Printed', cert);
+
+                        if (cert.status === 'Approved') {
+                            await axios.post(`/api/issuances/${cert.realId}/issue`);
+                            refreshAll();
+                        }
                     } catch (e) {
                         window.open(url, '_blank');
                     }
@@ -576,6 +785,206 @@ const Issuances = () => {
                         onDownload={() => handleAction('Download', viewingCert)}
                     />
                 )}
+                {requestingPrintCert && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
+                        >
+                            <div className="p-8">
+                                {/* Header */}
+                                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-6 mx-auto border border-amber-100">
+                                    <PrinterIcon className="w-8 h-8" />
+                                </div>
+                                
+                                <h3 className="text-2xl font-black text-slate-800 text-center tracking-tight mb-2">Request Print Approval</h3>
+                                <p className="text-slate-500 text-center text-sm font-medium leading-relaxed mb-6">
+                                    An Official Receipt (OR) Number is required to request print authorization for <strong className="text-slate-800">{requestingPrintCert.name}</strong>.
+                                </p>
+
+                                {/* Linked Queue Ticket Notification */}
+                                {(() => {
+                                    const ticket = tickets.find(t => t.document_id && Number(t.document_id) === Number(requestingPrintCert.raw?.document_id));
+                                    if (ticket) {
+                                        return (
+                                            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center text-xs font-black shrink-0 shadow-md shadow-indigo-200">
+                                                    Ticket
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-indigo-900 font-black leading-none">{ticket.ticket_number}</p>
+                                                    <p className="text-[10px] text-indigo-500 mt-1 font-bold uppercase tracking-wider">Live Citizen Waiting: {ticket.client_name}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+
+                                {/* Input Fields */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Official Receipt (OR) Number</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="Enter receipt number (e.g. OR-8888)..."
+                                            value={orNumber}
+                                            onChange={(e) => setOrNumber(e.target.value)}
+                                            className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-bold text-slate-700"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Remarks / Purpose (Optional)</label>
+                                        <textarea 
+                                            placeholder="Enter any notes or remarks..."
+                                            value={printRemarks}
+                                            onChange={(e) => setPrintRemarks(e.target.value)}
+                                            rows="3"
+                                            className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-medium text-slate-600 resize-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 flex gap-3">
+                                <button 
+                                    onClick={() => setRequestingPrintCert(null)}
+                                    disabled={isSubmittingPrintRequest}
+                                    className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={submitPrintRequest}
+                                    disabled={!orNumber || isSubmittingPrintRequest}
+                                    className="flex-1 px-6 py-3.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                >
+                                    {isSubmittingPrintRequest ? 'Submitting...' : 'Submit Request'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+                {isScanSearchOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-[#d4a574]/15 text-[#d4a574] rounded-xl flex items-center justify-center">
+                                        <CameraIcon className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-slate-800 tracking-tight leading-none">Scan to Search</h3>
+                                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">OCR Document Search using EasyOCR / Tesseract</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setIsScanSearchOpen(false)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+                                >
+                                    <XMarkIcon className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                {/* Source Toggle */}
+                                <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+                                    <button
+                                        onClick={() => setScanSource('webcam')}
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${scanSource === 'webcam' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                                    >
+                                        Use Camera
+                                    </button>
+                                    <button
+                                        onClick={() => setScanSource('upload')}
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${scanSource === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                                    >
+                                        Upload Image
+                                    </button>
+                                </div>
+
+                                {ocrError && (
+                                    <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-xl leading-relaxed">
+                                        {ocrError}
+                                    </div>
+                                )}
+
+                                {/* Webcam viewport */}
+                                {scanSource === 'webcam' && (
+                                    <div className="relative aspect-video w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
+                                        {isScanning ? (
+                                            <div className="absolute inset-0 z-20 bg-slate-900/80 flex flex-col items-center justify-center text-white gap-3">
+                                                <ArrowPathIcon className="w-8 h-8 animate-spin text-[#d4a574]" />
+                                                <span className="text-xs font-bold tracking-widest uppercase">Processing OCR...</span>
+                                            </div>
+                                        ) : null}
+                                        <video
+                                            id="scan-video"
+                                            className="w-full h-full object-cover relative z-10"
+                                            playsInline
+                                            muted
+                                        />
+                                        <div className="absolute inset-0 border-[3px] border-dashed border-[#d4a574]/40 z-20 pointer-events-none rounded-2xl m-4 animate-pulse" />
+                                    </div>
+                                )}
+
+                                {/* Upload Area */}
+                                {scanSource === 'upload' && (
+                                    <div className="relative aspect-video w-full bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#d4a574]/40 flex flex-col items-center justify-center p-6 text-center transition-all group overflow-hidden">
+                                        {isScanning ? (
+                                            <div className="absolute inset-0 bg-slate-900/80 z-20 flex flex-col items-center justify-center text-white gap-3">
+                                                <ArrowPathIcon className="w-8 h-8 animate-spin text-[#d4a574]" />
+                                                <span className="text-xs font-bold tracking-widest uppercase">Processing OCR...</span>
+                                            </div>
+                                        ) : null}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                    handleOcrSearchUpload(e.target.files[0]);
+                                                }
+                                            }}
+                                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                        />
+                                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-[#d4a574] group-hover:bg-[#d4a574]/10 transition-all border border-slate-200 mb-3 shadow-sm">
+                                            <ArrowDownTrayIcon className="w-6 h-6 rotate-180" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-700">Drag and drop or click to upload</p>
+                                        <p className="text-[10px] text-slate-400 font-medium mt-1">Supports PNG, JPG or WEBP up to 10MB</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center gap-3">
+                                <button
+                                    onClick={() => setIsScanSearchOpen(false)}
+                                    className="px-5 py-3 text-xs font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-xl transition-all cursor-pointer"
+                                >
+                                    Close
+                                </button>
+                                {scanSource === 'webcam' && (
+                                    <button
+                                        onClick={capturePhoto}
+                                        disabled={isScanning}
+                                        className="px-6 py-3 text-xs font-black uppercase tracking-widest text-white bg-[#d4a574] hover:bg-[#d4a574]/90 rounded-xl transition-all cursor-pointer shadow-md shadow-[#d4a574]/20 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                                    >
+                                        Capture & Search
+                                    </button>
+                                )}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
             </AnimatePresence>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -620,6 +1029,7 @@ const Issuances = () => {
 
             <motion.div variants={itemVariants} className="flex space-x-1 bg-slate-100 p-1.5 rounded-xl w-fit">
                 <button onClick={() => setActiveTab('database')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'database' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Master Database</button>
+                <button onClick={() => setActiveTab('approvals')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'approvals' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Print Approvals Queue</button>
                 <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'history' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Activity Log History</button>
             </motion.div>
 
@@ -628,9 +1038,21 @@ const Issuances = () => {
                     <>
                         <div className="p-6 border-b border-slate-100 bg-slate-50/30 space-y-4">
                             <div className="flex flex-col lg:flex-row justify-between gap-4">
-                                <div className="relative max-w-md w-full">
-                                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                    <input type="text" placeholder="Search by Cert No, Name or Barangay..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm" />
+                                <div className="relative max-w-md w-full flex items-center gap-2">
+                                    <div className="relative flex-1">
+                                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                        <input type="text" placeholder="Search by Cert No, Name or Barangay..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm" />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setOcrError('');
+                                            setIsScanSearchOpen(true);
+                                        }}
+                                        title="Scan Document to Search (Camera/OCR)"
+                                        className="p-2.5 bg-slate-100 hover:bg-[#d4a574]/20 text-slate-600 hover:text-[#d4a574] border border-slate-200 rounded-xl transition-all active:scale-95 cursor-pointer shadow-sm flex items-center justify-center shrink-0"
+                                    >
+                                        <CameraIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -698,6 +1120,7 @@ const Issuances = () => {
                                         <th className="p-4">Type</th>
                                         <th className="p-4">Recipient Name</th>
                                         <th className="p-4">Barangay</th>
+                                        <th className="p-4">Status</th>
                                         <th className="p-4">Encoded By</th>
                                         <th className="p-4 pr-6 text-right">Actions</th>
                                     </tr>
@@ -722,12 +1145,30 @@ const Issuances = () => {
                                                 <td className="p-4"><span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">{cert.type}</span></td>
                                                 <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
                                                 <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
+                                                <td className="p-4">
+                                                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                                                        cert.status === 'Pending Approval' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                                                        cert.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                                                        cert.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+                                                        'bg-slate-100 text-slate-500 border-slate-200'
+                                                    }`}>{cert.status}</span>
+                                                </td>
                                                 <td className="p-4 text-slate-400 text-xs">{cert.encoded_by || 'System'}</td>
                                                 <td className="p-4 pr-6 text-right">
                                                     <div className="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
                                                         <button onClick={() => handleAction('View', cert)} title="View Document" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><EyeIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => handleEdit(cert)} title="Edit Record" className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg transition-all border border-amber-100 cursor-pointer"><PencilSquareIcon className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleAction('Print', cert)} title="Print" className="p-2 text-slate-600 bg-slate-50 hover:bg-slate-900 hover:text-white rounded-lg transition-all border border-slate-200 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
+                                                        
+                                                        {cert.status === 'Pending Approval' ? (
+                                                            <button disabled title="Awaiting Print Approval" className="p-2 text-amber-500 bg-amber-50 rounded-lg border border-amber-100 opacity-60 cursor-not-allowed"><ClockIcon className="w-4 h-4" /></button>
+                                                        ) : cert.status === 'Approved' ? (
+                                                            <button onClick={() => handleAction('Print', cert)} title="Print (Approved)" className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-100 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
+                                                        ) : cert.status === 'Issued' ? (
+                                                            <button onClick={() => handleAction('Print', cert)} title="Print again (Reprint)" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><PrinterIcon className="w-4 h-4 animate-pulse" /></button>
+                                                        ) : (
+                                                            <button onClick={() => openRequestModal(cert)} title="Request Print Approval" className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg transition-all border border-amber-100 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
+                                                        )}
+
                                                         <button onClick={() => handleAction('Download', cert)} title="Download" className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-all border border-blue-100 cursor-pointer"><ArrowDownTrayIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => handleDelete(cert)} title="Delete" className="p-2 text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-100 cursor-pointer"><TrashIcon className="w-4 h-4" /></button>
                                                     </div>
@@ -739,6 +1180,150 @@ const Issuances = () => {
                             </table>
                         </div>
                     </>
+                ) : activeTab === 'approvals' ? (
+                    <div className="p-0">
+                        <div className="p-6 border-b border-slate-100 bg-slate-50/10">
+                            {/* Top Row: Title & Action */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 shadow-sm border border-amber-100">
+                                            <ClockIcon className="w-5 h-5 animate-pulse" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">Print Approvals Queue</h3>
+                                            <p className="text-[11px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Awaiting SuperAdmin authorization for physical printing</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-200/50">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest tabular-nums italic">
+                                            {certificates.filter(c => c.status === 'Pending Approval').length} Pending Requests
+                                        </span>
+                                    </div>
+                                    <button 
+                                        onClick={() => { refreshAll(); fetchTickets(); }}
+                                        className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
+                                    >
+                                        <ArrowPathIcon className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                                        Refresh Queue
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Search Field */}
+                            <div className="relative max-w-md w-full pt-2">
+                                <MagnifyingGlassIcon className="absolute left-3 top-[calc(50%+4px)] -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search by Cert No, Name or Barangay..." 
+                                    value={approvalsSearch} 
+                                    onChange={(e) => setApprovalsSearch(e.target.value)} 
+                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm" 
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-black border-b border-slate-200">
+                                        <th className="p-4 pl-6">Ref/Cert No.</th>
+                                        <th className="p-4">Recipient Name</th>
+                                        <th className="p-4">Type</th>
+                                        <th className="p-4">Barangay</th>
+                                        <th className="p-4">Ticket Number</th>
+                                        <th className="p-4">OR Number</th>
+                                        <th className="p-4">Requested By</th>
+                                        <th className="p-4">Remarks</th>
+                                        <th className="p-4 pr-6 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {certificates.filter(c => c.status === 'Pending Approval').filter(cert => {
+                                        const term = approvalsSearch.toLowerCase();
+                                        return cert.number.toLowerCase().includes(term) ||
+                                            cert.name.toLowerCase().includes(term) ||
+                                            cert.barangay.toLowerCase().includes(term);
+                                    }).length === 0 ? (
+                                        <tr>
+                                            <td colSpan="9" className="p-12 text-center text-slate-400">
+                                                <ClockIcon className="w-12 h-12 mx-auto mb-2 opacity-20 text-slate-400" />
+                                                <p className="font-semibold text-slate-600">No print requests awaiting approval</p>
+                                                <p className="text-xs text-slate-400 mt-1">Pending in-person requests will appear in this list.</p>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        certificates.filter(c => c.status === 'Pending Approval').filter(cert => {
+                                            const term = approvalsSearch.toLowerCase();
+                                            return cert.number.toLowerCase().includes(term) ||
+                                                cert.name.toLowerCase().includes(term) ||
+                                                cert.barangay.toLowerCase().includes(term);
+                                        }).map((cert) => {
+                                            const ticket = tickets.find(t => t.document_id && Number(t.document_id) === Number(cert.raw?.document_id));
+                                            return (
+                                                <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="p-4 pl-6">
+                                                        <span className="font-bold text-slate-800 text-sm tracking-tight">{cert.number}</span>
+                                                    </td>
+                                                    <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
+                                                    <td className="p-4">
+                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                                            {cert.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
+                                                    <td className="p-4">
+                                                        {ticket ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#d4a574]/15 text-[#b37a4c] font-black text-xs border border-[#d4a574]/30 animate-pulse">
+                                                                {ticket.ticket_number}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-400 text-xs font-medium">—</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className="text-slate-700 font-bold text-xs bg-slate-100/80 px-2 py-1 rounded border border-slate-200">
+                                                            {cert.raw?.or_number || '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-slate-500 text-xs font-semibold">{cert.raw?.requested_by || '—'}</td>
+                                                    <td className="p-4 text-slate-500 text-xs max-w-[200px] truncate" title={cert.raw?.print_remarks}>
+                                                        {cert.raw?.print_remarks || <span className="text-slate-400 italic">No remarks</span>}
+                                                    </td>
+                                                    <td className="p-4 pr-6 text-right">
+                                                        {user.role === 'SuperAdmin' ? (
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <button 
+                                                                    onClick={() => handleApprovePrint(cert)}
+                                                                    title="Approve Print Request"
+                                                                    className="p-2 text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center border border-emerald-400/20 active:scale-95"
+                                                                >
+                                                                    <CheckCircleIcon className="w-4 h-4" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleRejectPrint(cert)}
+                                                                    title="Reject & Deny Request"
+                                                                    className="p-2 text-white bg-rose-500 hover:bg-rose-600 rounded-xl transition-all shadow-md shadow-rose-200 cursor-pointer flex items-center justify-center border border-rose-400/20 active:scale-95"
+                                                                >
+                                                                    <XMarkIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="inline-flex px-2 py-1 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-400 border border-slate-200">
+                                                                Awaiting SuperAdmin
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 ) : (
                     <div className="p-0">
                         <div className="p-6 border-b border-slate-100 bg-slate-50/10">

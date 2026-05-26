@@ -18,6 +18,7 @@ import PublicLayout     from './components/PublicLayout.jsx';
 import AboutPortal      from './components/AboutPortal.jsx';
 import DigitalServices  from './components/DigitalServices.jsx';
 import ContactDirectory from './components/ContactDirectory.jsx';
+import Ticketing        from './components/Ticketing.jsx';
 import { ModalProvider } from './components/ModalContext.jsx';
 import { DataProvider } from './components/DataContext.jsx';
 
@@ -74,6 +75,8 @@ function App() {
                         <Route path="/about"    element={<PublicLayout><AboutPortal /></PublicLayout>} />
                         <Route path="/services" element={<PublicLayout><DigitalServices /></PublicLayout>} />
                         <Route path="/contact"  element={<PublicLayout><ContactDirectory /></PublicLayout>} />
+                        <Route path="/ticket-request" element={<PublicLayout><Ticketing mode="portal" /></PublicLayout>} />
+                        <Route path="/ticket-status/:token" element={<PublicLayout><Ticketing mode="status" /></PublicLayout>} />
                         <Route path="/login"    element={<Login />} />
 
                         {/* ── Protected ──────────────────────────────────────── */}
@@ -95,6 +98,13 @@ function App() {
                         <Route path="/issuances" element={
                             <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
                                 <Layout><Issuances /></Layout>
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Tickets Queue — Admin + SuperAdmin */}
+                        <Route path="/tickets" element={
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
+                                <Layout><Ticketing mode="staff" /></Layout>
                             </ProtectedRoute>
                         } />
 

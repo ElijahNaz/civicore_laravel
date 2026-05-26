@@ -139,6 +139,31 @@ const Documents = () => {
     }, [globalFiles, archivedIds]);
 
     const [selectedDocType, setSelectedDocType] = useState('birth');
+    const [activePrefill, setActivePrefill] = useState(null);
+
+    const checkPrefill = useCallback(() => {
+        try {
+            const str = sessionStorage.getItem('civicore_ticket_prefill');
+            if (str) {
+                const parsed = JSON.parse(str);
+                setActivePrefill(parsed);
+                if (parsed.purpose) {
+                    setSelectedDocType(parsed.purpose);
+                }
+            } else {
+                setActivePrefill(null);
+            }
+        } catch (e) {
+            setActivePrefill(null);
+        }
+    }, []);
+
+    useEffect(() => {
+        checkPrefill();
+        window.addEventListener('storage', checkPrefill);
+        return () => window.removeEventListener('storage', checkPrefill);
+    }, [checkPrefill]);
+
     const [dragging, setDragging] = useState(false);
     const [activeOcr, setActiveOcr] = useState(null); // { file, ocrResult }
     const [activeTab, setActiveTab] = useState('queue');
@@ -150,6 +175,37 @@ const Documents = () => {
         barangay: 'all',
         dateRange: 'all' // all, today, yesterday, week, month
     });
+
+    // ── Archive Manager State & Fetch ──────────────────────────────────────────
+    const [archivedFiles, setArchivedFiles] = useState([]);
+    const [isLoadingArchived, setIsLoadingArchived] = useState(false);
+    const [archiveSearch, setArchiveSearch] = useState('');
+    const [archiveTypeFilter, setArchiveTypeFilter] = useState('all');
+    const [selectedArchiveIds, setSelectedArchiveIds] = useState([]);
+
+    const fetchArchivedFiles = useCallback(async () => {
+        setIsLoadingArchived(true);
+        try {
+            const params = new URLSearchParams({
+                search: archiveSearch,
+                type: archiveTypeFilter
+            });
+            const res = await fetch(`/api/documents/archived?${params.toString()}`, { credentials: 'include' });
+            if (res.ok) {
+                const data = await res.json();
+                setArchivedFiles(data.data || []);
+            }
+        } catch (e) {
+            console.error('Failed to fetch archived files:', e);
+        } finally {
+            setIsLoadingArchived(false);
+        }
+    }, [archiveSearch, archiveTypeFilter]);
+
+    useEffect(() => {
+        // Trigger fetch whenever active tab is archive, or whenever documents context changes
+        fetchArchivedFiles();
+    }, [globalFiles, activeTab, fetchArchivedFiles]);
 
     const [previewFile, setPreviewFile] = useState(null); // file to preview
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -349,6 +405,24 @@ const Documents = () => {
                 const res = await fetch(`/api/documents/${fileId}/quick-approve`, { method: 'POST', credentials: 'include' });
                 const data = await res.json();
                 if (data.success) {
+                    // Link active ticket if applicable
+                    try {
+                        const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
+                        if (prefillStr) {
+                            const prefill = JSON.parse(prefillStr);
+                            await fetch(`/api/tickets/${prefill.ticket_id}/link-document`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ document_id: fileId })
+                            });
+                            sessionStorage.removeItem('civicore_ticket_prefill');
+                            checkPrefill();
+                        }
+                    } catch (linkErr) {
+                        console.error('Failed to link ticket to document:', linkErr);
+                    }
+
                     refreshAll();
                     return { success: true };
                 }
@@ -430,6 +504,24 @@ const Documents = () => {
                 });
                 const data = await res.json();
                 if (data.success) {
+                    // Link active ticket if applicable
+                    try {
+                        const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
+                        if (prefillStr) {
+                            const prefill = JSON.parse(prefillStr);
+                            await fetch(`/api/tickets/${prefill.ticket_id}/link-document`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ document_id: fileId })
+                            });
+                            sessionStorage.removeItem('civicore_ticket_prefill');
+                            checkPrefill();
+                        }
+                    } catch (linkErr) {
+                        console.error('Failed to link ticket to document:', linkErr);
+                    }
+
                     refreshAll();
                     return { success: true, message: `Data for ${personName} has been secured.` };
                 }
@@ -502,6 +594,125 @@ const Documents = () => {
                     setSelectedIds([]); // Clear selection after delete
                     refreshAll();
                     return { success: true, message: `Successfully deleted ${successCount} files.` };
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    // ── Archive Manager Actions ──────────────────────────────────────────────
+    const restoreArchived = async (fileId) => {
+        const file = archivedFiles.find(f => f.id === fileId);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Restore Document',
+            message: `Restore "${file?.name || 'document'}" to the active queue?`,
+            type: 'success',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Restoring: ${file?.name}`, async () => {
+                    const res = await fetch(`/api/documents/${fileId}/undo`, { method: 'POST', credentials: 'include' });
+                    if (res.ok) {
+                        refreshAll();
+                        fetchArchivedFiles();
+                        return { success: true, message: 'Document restored successfully' };
+                    }
+                    throw new Error('Restore failed');
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    const purgeArchived = async (fileId) => {
+        const file = archivedFiles.find(f => f.id === fileId);
+        setConfirmModal({
+            isOpen: true,
+            title: 'PERMANENTLY Delete',
+            message: `Are you sure you want to permanently delete "${file?.name || 'document'}"? This action is IRREVERSIBLE and will delete the record and its file from storage.`,
+            type: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Purging: ${file?.name}`, async () => {
+                    const res = await fetch(`/api/documents/${fileId}/purge`, { method: 'DELETE', credentials: 'include' });
+                    if (res.ok) {
+                        refreshAll();
+                        fetchArchivedFiles();
+                        return { success: true, message: 'Document permanently deleted' };
+                    }
+                    throw new Error('Purge failed');
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    const toggleSelectArchive = (id) => {
+        setSelectedArchiveIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAllArchive = (filteredArchive) => {
+        if (selectedArchiveIds.length === filteredArchive.length && filteredArchive.length > 0) {
+            setSelectedArchiveIds([]);
+        } else {
+            setSelectedArchiveIds(filteredArchive.map(f => f.id));
+        }
+    };
+
+    const bulkRestoreArchived = () => {
+        if (!selectedArchiveIds.length) return;
+        setConfirmModal({
+            isOpen: true,
+            title: 'Restore Selected Documents',
+            message: `Are you sure you want to restore all ${selectedArchiveIds.length} selected documents to the active queue?`,
+            type: 'success',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Restoring ${selectedArchiveIds.length} files`, async () => {
+                    let successCount = 0;
+                    for (const id of selectedArchiveIds) {
+                        try {
+                            const res = await fetch(`/api/documents/${id}/undo`, { method: 'POST', credentials: 'include' });
+                            if (res.ok) successCount++;
+                        } catch (err) {
+                            console.error(`Failed to restore ${id}`, err);
+                        }
+                    }
+                    setSelectedArchiveIds([]);
+                    refreshAll();
+                    fetchArchivedFiles();
+                    return { success: true, message: `Successfully restored ${successCount} files.` };
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
+    const bulkPurgeArchived = () => {
+        if (!selectedArchiveIds.length) return;
+        setConfirmModal({
+            isOpen: true,
+            title: 'PERMANENTLY Delete Selected',
+            message: `Are you sure you want to permanently delete all ${selectedArchiveIds.length} selected documents? This action is IRREVERSIBLE and cannot be undone.`,
+            type: 'danger',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Purging ${selectedArchiveIds.length} files`, async () => {
+                    let successCount = 0;
+                    for (const id of selectedArchiveIds) {
+                        try {
+                            const res = await fetch(`/api/documents/${id}/purge`, { method: 'DELETE', credentials: 'include' });
+                            if (res.ok) successCount++;
+                        } catch (err) {
+                            console.error(`Failed to purge ${id}`, err);
+                        }
+                    }
+                    setSelectedArchiveIds([]);
+                    refreshAll();
+                    fetchArchivedFiles();
+                    return { success: true, message: `Successfully permanently deleted ${successCount} files.` };
                 });
             },
             onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -716,6 +927,28 @@ const Documents = () => {
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 className="space-y-8 max-w-[1400px] mx-auto pb-12"
             >
+                {activePrefill && (
+                    <div className="bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-lg shadow-indigo-900/10 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xl">🎫</span>
+                            <div>
+                                <p className="text-sm font-black">Active Request: Serving {activePrefill.ticket_number}</p>
+                                <p className="text-xs text-indigo-200">
+                                    Client: {activePrefill.client_name} • Requesting {activePrefill.purpose.toUpperCase()} certificate. Upload a scanned record to auto-merge with their details.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                sessionStorage.removeItem('civicore_ticket_prefill');
+                                checkPrefill();
+                            }}
+                            className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* ── Left: Upload Panel ──────────────────────────────── */}
                     <motion.div
@@ -794,9 +1027,10 @@ const Documents = () => {
                         {/* Tab Switcher */}
                         <div className="flex bg-slate-100/50 p-1.5 gap-1 border-b border-slate-100">
                             {[
-                                { id: 'queue', label: 'Document Queue', count: queueFiles.length, icon: BoltIcon },
-                                { id: 'history', label: 'Submission History', count: historyFiles.length, icon: CheckCircleIcon },
-                            ].map(tab => (
+                                { id: 'queue', label: 'Document Queue', count: queueFiles.length, icon: BoltIcon, show: true },
+                                { id: 'history', label: 'Submission History', count: historyFiles.length, icon: CheckCircleIcon, show: true },
+                                { id: 'archive', label: 'Archive Manager', count: archivedFiles.length, icon: TrashIcon, show: ['SuperAdmin', 'Admin'].includes(JSON.parse(sessionStorage.getItem('user') || '{}').role) }
+                            ].filter(t => t.show).map(tab => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
@@ -1165,6 +1399,128 @@ const Documents = () => {
                                                         </tr>
                                                     );
                                                 })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {activeTab === 'archive' && (
+                            <>
+                                {/* Archive Header */}
+                                <div className="p-5 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-800">Archive Manager</h3>
+                                        <p className="text-xs text-slate-400 mt-0.5">Restore soft-deleted records or purge them permanently</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="relative">
+                                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                            <input value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
+                                                placeholder="Search Archive…"
+                                                className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 w-36"
+                                            />
+                                        </div>
+                                        <select
+                                            value={archiveTypeFilter}
+                                            onChange={e => setArchiveTypeFilter(e.target.value)}
+                                            className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 cursor-pointer"
+                                        >
+                                            <option value="all">📂 All Types</option>
+                                            <option value="birth">Birth Certificate</option>
+                                            <option value="death">Death Certificate</option>
+                                            <option value="marriage">Marriage License</option>
+                                        </select>
+                                        {selectedArchiveIds.length > 0 && (
+                                            <>
+                                                <button onClick={bulkRestoreArchived}
+                                                    className="text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white px-3 py-2 rounded-lg border border-emerald-100 transition-all flex items-center gap-1.5 shadow-sm">
+                                                    <ArrowPathIcon className="w-3.5 h-3.5" />
+                                                    Restore Selected ({selectedArchiveIds.length})
+                                                </button>
+                                                <button onClick={bulkPurgeArchived}
+                                                    className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white px-3 py-2 rounded-lg border border-rose-100 transition-all flex items-center gap-1.5 shadow-sm">
+                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                    Purge Selected ({selectedArchiveIds.length})
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isLoadingArchived ? (
+                                    <div className="p-4"><SkeletonLoader type="table" rows={5} /></div>
+                                ) : archivedFiles.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center flex-1 p-12 text-slate-400 text-center">
+                                        <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
+                                            <TrashIcon className="w-8 h-8 opacity-20" />
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-600">{archiveSearch ? 'No matching archived items' : 'Archive is empty'}</p>
+                                        <p className="text-xs mt-1 max-w-[200px]">{archiveSearch ? 'Adjust search or filters' : 'Deleted records will appear here'}</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto custom-scrollbar flex-1 w-full">
+                                        <table className="w-full text-left border-collapse table-auto">
+                                            <thead>
+                                                <tr className="bg-slate-50/50 text-slate-400 text-[9px] uppercase tracking-widest border-b border-slate-100">
+                                                    <th className="px-3 py-2.5 font-black text-slate-500 w-10">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
+                                                            checked={selectedArchiveIds.length === archivedFiles.length && archivedFiles.length > 0}
+                                                            onChange={() => toggleSelectAllArchive(archivedFiles)}
+                                                        />
+                                                    </th>
+                                                    <th className="px-3 py-2.5 font-black text-slate-500">Document</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500 w-16">Type</th>
+                                                    <th className="px-2 py-2.5 font-black text-slate-500">Deleted At</th>
+                                                    <th className="px-3 py-2.5 text-right font-black text-slate-500 w-28">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {archivedFiles.map(file => (
+                                                    <tr key={file.id} className="hover:bg-slate-50/60 transition-colors">
+                                                        <td className="px-3 py-2.5">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="rounded border-slate-300 text-[#d4a574] focus:ring-[#d4a574]/30"
+                                                                checked={selectedArchiveIds.includes(file.id)}
+                                                                onChange={() => toggleSelectArchive(file.id)}
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2.5">
+                                                            <div className="min-w-0">
+                                                                <p className="text-[11px] font-bold text-slate-800 truncate max-w-[25ch]">{file.name}</p>
+                                                                <p className="text-[9px] text-slate-400 font-medium truncate uppercase tracking-tighter">
+                                                                    {file.personName || `${file.size || ''} · ${file.encoded_by || 'Unknown'}`}
+                                                                </p>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-2 py-2.5">
+                                                            <span className="text-[9.5px] font-black px-1.5 py-0.5 bg-slate-50 text-slate-400 border border-slate-100 rounded-md uppercase tracking-tighter">
+                                                                {file.type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-2.5 text-xs text-slate-500 font-mono tabular-nums">
+                                                            {new Date(file.deleted_at).toLocaleString()}
+                                                        </td>
+                                                        <td className="px-3 py-2.5 text-right">
+                                                            <div className="flex items-center justify-end gap-1 px-1">
+                                                                <button onClick={() => restoreArchived(file.id)}
+                                                                    className="p-2 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl transition-all cursor-pointer"
+                                                                    title="Restore to Queue">
+                                                                    <ArrowPathIcon className="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={() => purgeArchived(file.id)}
+                                                                    className="p-2 text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-600 hover:text-white rounded-xl transition-all cursor-pointer"
+                                                                    title="Permanently Delete">
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>

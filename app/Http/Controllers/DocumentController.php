@@ -917,4 +917,102 @@ class DocumentController extends Controller
             \Log::error("Failed to log document history: " . $e->getMessage());
         }
     }
+
+    /**
+     * Get soft-deleted documents (Archive Manager view)
+     */
+    public function archived(Request $request)
+    {
+        $page = (int) $request->query('page', 1);
+        $perPage = min((int) $request->query('per_page', 20), 100);
+        $type = $request->query('type', '');
+        $search = $request->query('search', '');
+
+        // Build query
+        $whereClause = " WHERE deleted_at IS NOT NULL";
+        $params = [];
+
+        if (!empty($type)) {
+            $whereClause .= " AND type = ?";
+            $params[] = $type;
+        }
+
+        if (!empty($search)) {
+            $whereClause .= " AND (name LIKE ? OR personName LIKE ? OR barangay LIKE ?)";
+            $searchTerm = "%{$search}%";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+
+        // Get total count
+        $countQuery = "SELECT COUNT(*) as total FROM documents" . $whereClause;
+        $totalResult = DB::select($countQuery, $params);
+        $total = $totalResult[0]->total;
+
+        // Get paginated results
+        $query = "SELECT id, name, type, date, size, status, personName, barangay, metadata, ocr_text, extracted_fields, detected_type, created_at, updated_at, encoded_by, deleted_at 
+                  FROM documents" . $whereClause . " ORDER BY deleted_at DESC LIMIT ? OFFSET ?";
+        
+        $params[] = $perPage;
+        $params[] = ($page - 1) * $perPage;
+
+        $documents = DB::select($query, $params);
+
+        return response()->json([
+            'data' => $documents,
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
+            ]
+        ]);
+    }
+
+    /**
+     * Permanently delete a document from the system (Purge)
+     */
+    public function purge(Request $request, $id)
+    {
+        $document = DB::table('documents')->where('id', $id)->first();
+        
+        if (!$document) {
+            return response()->json(['success' => false, 'error' => 'Document not found'], 404);
+        }
+
+        return DB::transaction(function () use ($request, $id, $document) {
+            // 1. Delete actual file from storage
+            if (!empty($document->file_path)) {
+                if (Storage::disk('public')->exists($document->file_path)) {
+                    Storage::disk('public')->delete($document->file_path);
+                }
+            }
+
+            // 2. Delete linked issuance files if applicable
+            $issuances = DB::table('issuances')->where('document_id', $id)->get();
+            foreach ($issuances as $iss) {
+                if (!empty($iss->file_path)) {
+                    if (Storage::disk('public')->exists($iss->file_path)) {
+                        Storage::disk('public')->delete($iss->file_path);
+                    }
+                }
+            }
+
+            // 3. Log history of purge
+            $this->logHistory($id, 'Purged', [
+                'filename' => $document->name,
+                'person_name' => $document->personName,
+                'type' => $document->detected_type ?: $document->type,
+                'barangay' => $document->barangay
+            ]);
+
+            // 4. Delete DB records
+            DB::table('documents')->where('id', $id)->delete();
+            DB::table('issuances')->where('document_id', $id)->delete();
+            DB::table('document_ocr_pages')->where('document_id', $id)->delete();
+
+            return response()->json(['success' => true]);
+        });
+    }
 }

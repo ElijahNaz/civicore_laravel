@@ -15,23 +15,23 @@ export default function Login() {
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        
+
         try {
             const response = await fetch('/api/login', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json' 
+                    'Accept': 'application/json'
                 },
                 credentials: 'include', // Sends/receives session cookies
                 body: JSON.stringify({ email, password })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 // Store user data for the auth guard
-                sessionStorage.setItem('user', JSON.stringify(data.user)); 
+                sessionStorage.setItem('user', JSON.stringify(data.user));
                 console.log("Authenticated successfully");
                 navigate('/dashboard', { replace: true });
             } else {
@@ -58,7 +58,7 @@ export default function Login() {
             {/* Background Decorative Element */}
             <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-[#d4a574]/5 blur-[120px] rounded-full pointer-events-none" />
 
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
@@ -67,44 +67,44 @@ export default function Login() {
                 <div className="h-1.5 w-full bg-[#d4a574]/80" />
 
                 <div className="p-10">
-                    <button 
+                    <button
                         type="button"
-                        onClick={() => navigate('/')} 
+                        onClick={() => navigate('/')}
                         className="cursor-pointer text-[#d4a574]/50 text-[10px] font-bold uppercase tracking-[0.2em] mb-10 hover:text-[#d4a574] transition-colors flex items-center gap-2 group"
                     >
                         <span>←</span> BACK TO PORTAL
                     </button>
-                    
+
                     <div className="mb-10">
                         <h1 className="text-3xl font-black text-white tracking-tight mb-2 italic uppercase">CiviCORE</h1>
                         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.15em]">Naic Civil Registry System</p>
                     </div>
-                    
+
                     <form className="space-y-6" onSubmit={handleLogin}>
                         <div className="space-y-2">
                             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Account Email</label>
-                            <input 
+                            <input
                                 name="email"
-                                type="email" 
+                                type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="admin@naic.gov.ph" 
+                                placeholder="admin@naic.gov.ph"
                                 required
-                                className="w-full p-4 bg-black/20 border border-white/5 rounded-2xl text-white text-sm outline-none focus:border-[#d4a574]/50 focus:ring-4 focus:ring-[#d4a574]/5 transition-all placeholder:text-slate-600" 
+                                className="w-full p-4 bg-black/20 border border-white/5 rounded-2xl text-white text-sm outline-none focus:border-[#d4a574]/50 focus:ring-4 focus:ring-[#d4a574]/5 transition-all placeholder:text-slate-600"
                             />
                         </div>
-                        
+
                         <div className="space-y-2">
                             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
                             <div className="relative">
-                                <input 
+                                <input
                                     name="password"
-                                    type={showPassword ? "text" : "password"} 
+                                    type={showPassword ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••" 
+                                    placeholder="••••••••"
                                     required
-                                    className="w-full p-4 bg-black/20 border border-white/5 rounded-2xl text-white text-sm outline-none focus:border-[#d4a574]/50 focus:ring-4 focus:ring-[#d4a574]/5 transition-all placeholder:text-slate-600 pr-12" 
+                                    className="w-full p-4 bg-black/20 border border-white/5 rounded-2xl text-white text-sm outline-none focus:border-[#d4a574]/50 focus:ring-4 focus:ring-[#d4a574]/5 transition-all placeholder:text-slate-600 pr-12"
                                 />
                                 <button
                                     type="button"
@@ -119,8 +119,8 @@ export default function Login() {
                                 </button>
                             </div>
                         </div>
-                        
-                        <motion.button 
+
+                        <motion.button
                             type="submit"
                             disabled={isLoading}
                             whileHover={!isLoading ? { scale: 1.02 } : {}}
@@ -145,7 +145,7 @@ export default function Login() {
             </motion.div>
 
             <footer className="mt-12 text-center opacity-30">
-                <p className="text-white text-[9px] font-bold uppercase tracking-[0.4em]">Authorized Personnel Only • Naic Civil Registry © 2024</p>
+                <p className="text-white text-[9px] font-bold uppercase tracking-[0.4em]">Authorized Personnel Only • Naic Civil Registry © 2026</p>
             </footer>
         </div>
     );

@@ -42,7 +42,9 @@ return new class extends Migration
             });
 
             // Create FULLTEXT index for full-text search on raw_text and name
-            DB::statement('ALTER TABLE documents ADD FULLTEXT INDEX ft_raw_text_name (raw_text, name)');
+            if (DB::getDriverName() !== 'sqlite') {
+                DB::statement('ALTER TABLE documents ADD FULLTEXT INDEX ft_raw_text_name (raw_text, name)');
+            }
         }
     }
 

@@ -45,7 +45,7 @@ class IssuanceController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results
-        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
+        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, or_number, print_remarks, requested_by, approved_by, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
@@ -243,9 +243,11 @@ class IssuanceController extends Controller
      */
     public function markAsIssued(Request $request, $id)
     {
-        $user = $request->session()->get('user_name', 'System');
+        $userId = $request->session()->get('user_id');
+        $dbUser = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $dbUser ? $dbUser->name : $request->session()->get('user_name', 'System');
         
-        DB::update("UPDATE issuances SET status = 'Issued', encoded_by = ? WHERE id = ?", [$user, $id]);
+        DB::update("UPDATE issuances SET status = 'Issued', encoded_by = ? WHERE id = ?", [$userName, $id]);
         
         return response()->json(['success' => true]);
     }
@@ -327,5 +329,202 @@ class IssuanceController extends Controller
     {
         $certNumber = preg_replace('/[^a-z0-9_-]/i', '_', $record->certNumber ?? 'certificate');
         return 'Certificate_' . $certNumber . '.pdf';
+    }
+
+    /**
+     * Request print approval for an issuance
+     */
+    public function requestPrint(Request $request, $id)
+    {
+        $request->validate([
+            'or_number' => 'nullable|string|max:255',
+            'print_remarks' => 'nullable|string|max:1000',
+        ]);
+
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        // Resolve user name from session
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $user ? $user->name : 'System';
+
+        $orNumber = $request->or_number;
+        if (empty($orNumber)) {
+            $orNumber = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+        }
+
+        DB::table('issuances')->where('id', $id)->update([
+            'status' => 'Pending Approval',
+            'or_number' => $orNumber,
+            'print_remarks' => $request->print_remarks,
+            'requested_by' => $userName,
+            'updated_at' => now(),
+        ]);
+
+        // Insert activity log
+        DB::table('activity_logs')->insert([
+            'user_name' => $userName,
+            'action' => 'Requested Print',
+            'record_type' => 'Issuance',
+            'record_id' => $id,
+            'details' => "Requested print for {$record->type} certificate (OR: {$orNumber}) of {$record->name}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Approve a print request
+     */
+    public function approvePrint(Request $request, $id)
+    {
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        // Resolve user name from session
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $user ? $user->name : 'System';
+
+        DB::table('issuances')->where('id', $id)->update([
+            'status' => 'Approved',
+            'approved_by' => $userName,
+            'updated_at' => now(),
+        ]);
+
+        // Insert activity log
+        DB::table('activity_logs')->insert([
+            'user_name' => $userName,
+            'action' => 'Approved Print',
+            'record_type' => 'Issuance',
+            'record_id' => $id,
+            'details' => "Approved print for {$record->type} certificate of {$record->name}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Reject a print request
+     */
+    public function rejectPrint(Request $request, $id)
+    {
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        // Resolve user name from session
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $user ? $user->name : 'System';
+
+        DB::table('issuances')->where('id', $id)->update([
+            'status' => 'Active', // reset to base state
+            'updated_at' => now(),
+        ]);
+
+        // Insert activity log
+        DB::table('activity_logs')->insert([
+            'user_name' => $userName,
+            'action' => 'Rejected Print',
+            'record_type' => 'Issuance',
+            'record_id' => $id,
+            'details' => "Rejected print for {$record->type} certificate of {$record->name}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Process OCR on an uploaded image to search issuances
+     */
+    public function ocrSearch(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|image|max:10240', // max 10MB
+        ]);
+
+        if (!$request->hasFile('file') || !$request->file('file')->isValid()) {
+            return response()->json(['error' => 'Invalid file uploaded'], 400);
+        }
+
+        $uploadedFile = $request->file('file');
+        
+        // Save file temporarily in public disk
+        $tempPath = 'temp_ocr_search/' . time() . '_' . uniqid() . '.' . $uploadedFile->getClientOriginalExtension();
+        \Storage::disk('public')->put($tempPath, file_get_contents($uploadedFile));
+        
+        $absolutePath = \Storage::disk('public')->path($tempPath);
+
+        try {
+            // Call Python OCR server running on port 8080
+            $response = \Illuminate\Support\Facades\Http::timeout(60)->post('http://127.0.0.1:8080/ocr', [
+                'file_path' => $absolutePath,
+                'preprocess' => true,
+                'ocr_mode' => 'balanced',
+            ]);
+
+            // Delete local temp file
+            \Storage::disk('public')->delete($tempPath);
+
+            if ($response->failed() || !($response->json()['success'] ?? false)) {
+                return response()->json(['error' => 'OCR server failed to extract text: ' . $response->body()], 500);
+            }
+
+            $ocrResult = $response->json();
+            $extractedFields = $ocrResult['extracted_fields'] ?? [];
+            $detectedType = $ocrResult['detected_type'] ?? 'unknown';
+
+            // Extract terms
+            $name = $extractedFields['full_name'] ?? '';
+            if (empty($name)) {
+                $firstName = $extractedFields['first_name'] ?? '';
+                $middleName = $extractedFields['middle_name'] ?? '';
+                $lastName = $extractedFields['last_name'] ?? '';
+                $name = trim("{$firstName} {$middleName} {$lastName}");
+            }
+            if (empty($name)) {
+                // Check groom/bride names for marriage certs
+                $hName = $extractedFields['husbands_name'] ?? '';
+                $wName = $extractedFields['wifes_name'] ?? '';
+                if ($hName || $wName) {
+                    $name = $hName ?: $wName;
+                }
+            }
+
+            $certNumber = $extractedFields['registry_number'] ?? '';
+            $barangay = $extractedFields['barangay'] ?? '';
+
+            return response()->json([
+                'success' => true,
+                'extracted' => [
+                    'name' => $name,
+                    'certNumber' => $certNumber,
+                    'barangay' => $barangay,
+                    'type' => $detectedType,
+                ],
+                'raw_ocr' => $ocrResult
+            ]);
+
+        } catch (\Exception $e) {
+            // Cleanup temp file in case of exception
+            if (\Storage::disk('public')->exists($tempPath)) {
+                \Storage::disk('public')->delete($tempPath);
+            }
+            \Log::error('OCR search error: ' . $e->getMessage());
+            return response()->json(['error' => 'An error occurred during OCR: ' . $e->getMessage()], 500);
+        }
     }
 }

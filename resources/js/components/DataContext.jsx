@@ -247,6 +247,10 @@ export const DataProvider = ({ children }) => {
                     status:          i.status || 'Pending',
                     encoded_by:      i.encoded_by,
                     document_id:     i.document_id,
+                    or_number:       i.or_number,
+                    print_remarks:   i.print_remarks,
+                    requested_by:    i.requested_by,
+                    approved_by:     i.approved_by,
                     created_at:      i.created_at
                 }));
                 setIssuances(mapped);
