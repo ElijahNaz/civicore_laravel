@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExclamationTriangleIcon, InformationCircleIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 
@@ -14,10 +15,10 @@ const ActionConfirmModal = ({ isOpen, onConfirm, onCancel, title, message, type 
 
     const color = getColor();
 
-    return (
+    return createPortal(
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                     <motion.div 
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -52,7 +53,8 @@ const ActionConfirmModal = ({ isOpen, onConfirm, onCancel, title, message, type 
                     </motion.div>
                 </div>
             )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 };
 

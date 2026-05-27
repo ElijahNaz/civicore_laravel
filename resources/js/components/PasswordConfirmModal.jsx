@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LockClosedIcon, XMarkIcon, ShieldCheckIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
@@ -42,7 +43,7 @@ const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) =
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[1000000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -115,7 +116,8 @@ const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) =
                     </form>
                 </div>
             </motion.div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

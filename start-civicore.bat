@@ -39,9 +39,18 @@ if /I "%RAM_PROFILE%"=="4GB" (
 :: CPU-aware safety cap for low queue fan-out workers.
 if %CPU_CORES% LEQ 4 set "LOW_WORKERS=1"
 
+:: Detect Local IP Address
+set "PC_IP=localhost"
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| find "IPv4 Address"') do (
+    set "PC_IP=%%a"
+    goto :found_ip
+)
+:found_ip
+if defined PC_IP set "PC_IP=%PC_IP:~1%"
+
 :: 1. Start PHP Laravel Server
-echo [1/4] Launching Laravel Server on http://localhost:8000...
-start "Laravel Server" cmd /k "php artisan serve"
+echo [1/4] Launching Laravel Server on http://0.0.0.0:8000...
+start "Laravel Server" cmd /k "php artisan serve --host 0.0.0.0"
 
 :: 2. Start Laravel Queue Workers (Queue-Specific)
 echo [2/4] Launching dedicated queue workers (high, low, default)...
@@ -64,13 +73,24 @@ echo [3/4] Launching Persistent OCR Server (FastAPI + Dynamic Scaling)...
 start "OCR Server" cmd /k "C:\laragon\bin\python\python-3.13\python.exe ocr_server.py"
 
 :: 4. Start Vite (Frontend)
-echo [4/4] Launching Vite Frontend (npm run dev)...
-start "Vite Dev" cmd /k "npm run dev"
+set "START_VITE=y"
+echo [4/4] Do you want to run Vite Dev Server for hot-reloading? (y/n)
+set /p START_VITE="Enter choice (y/n, default y): "
+if /I "%START_VITE%"=="n" (
+    echo Bypassing Vite Dev Server (Running in Production Mode).
+    if exist public\hot del public\hot
+) else (
+    echo Launching Vite Frontend (npm run dev)...
+    start "Vite Dev" cmd /k "npm run dev"
+)
 
 echo ===================================================
-echo   ALL SYSTEMS GO! s
+echo   ALL SYSTEMS GO!
 echo   1. Wait for "OCR Reader ready" in the OCR window.
-echo   2. Wait for "VITE ready" in the Vite window.
-echo   3. Then visit: http://localhost:8000
+echo   2. If running dev mode, wait for "VITE ready" in the Vite window.
+echo   3. Then visit on PC:   http://localhost:8000
+echo      Or visit on phone: http://%PC_IP%:8000
+echo   * Note: Choose 'n' to run in Production Mode if you
+echo     want to access it on your phone without firewall issues.
 echo ===================================================
 pause

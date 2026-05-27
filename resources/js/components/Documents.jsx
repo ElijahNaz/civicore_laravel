@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -133,8 +133,15 @@ const Documents = () => {
             // Filter fetched files
             const fetched = globalFiles.filter(f => !archivedIds.includes(f.id));
 
-            // Remove uploading files that have appeared in fetched files (by name)
-            const uploadingFiltered = uploading.filter(u => !fetched.some(f => f.name === u.name));
+            // Remove uploading files that have appeared in fetched files (by base name comparison)
+            const getBaseName = (filename) => {
+                if (!filename) return '';
+                const base = filename.replace(/\.[^/.]+$/, '');
+                return base.replace(/-preprocessed$/, '').trim();
+            };
+            const uploadingFiltered = uploading.filter(u => 
+                !fetched.some(f => getBaseName(f.name) === getBaseName(u.name))
+            );
 
             // Make sure the local files status updates duplicate indicators instantly
             const nextFiles = [...uploadingFiltered, ...fetched];
@@ -175,6 +182,16 @@ const Documents = () => {
 
     const [dragging, setDragging] = useState(false);
     const [activeOcr, setActiveOcr] = useState(null); // { file, ocrResult }
+    const [isOcrSaving, setIsOcrSaving] = useState(false);
+    const savingRecordRef = useRef(false);
+
+    useEffect(() => {
+        if (!activeOcr) {
+            setIsOcrSaving(false);
+            savingRecordRef.current = false;
+        }
+    }, [activeOcr]);
+
     const [activeTab, setActiveTab] = useState('queue');
     const [queueSearch, setQueueSearch] = useState('');
     const [historySearch, setHistorySearch] = useState('');
@@ -474,7 +491,60 @@ const Documents = () => {
         });
     };
 
-    const saveRecord = async ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {
+    const saveRecord = ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {
+        if (!activeOcr) return Promise.reject(new Error('No active OCR'));
+        if (savingRecordRef.current) return Promise.reject(new Error('Save already in progress'));
+
+        const file = activeOcr.file;
+        const isDuplicate = file.has_duplicate;
+
+        return new Promise((resolve, reject) => {
+            const performActualSave = async () => {
+                if (savingRecordRef.current) return;
+                savingRecordRef.current = true;
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                setIsOcrSaving(true);
+                try {
+                    const result = await executeSave({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested });
+                    savingRecordRef.current = false;
+                    resolve(result);
+                } catch (err) {
+                    savingRecordRef.current = false;
+                    setIsOcrSaving(false);
+                    reject(err);
+                }
+            };
+
+            if (isDuplicate) {
+                setConfirmModal({
+                    isOpen: true,
+                    title: 'Confirm Duplicate Entry',
+                    message: 'A potential duplicate of this record exists in the Master Registry. Are you sure you want to save and approve this duplicate?',
+                    type: 'warning',
+                    onConfirm: performActualSave,
+                    onCancel: () => {
+                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                        reject(new Error('duplicate_cancelled'));
+                    }
+                });
+            } else {
+                savingRecordRef.current = true;
+                setIsOcrSaving(true);
+                executeSave({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested })
+                    .then((res) => {
+                        savingRecordRef.current = false;
+                        resolve(res);
+                    })
+                    .catch((err) => {
+                        savingRecordRef.current = false;
+                        setIsOcrSaving(false);
+                        reject(err);
+                    });
+            }
+        });
+    };
+
+    const executeSave = async ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {
         if (!activeOcr) return;
         const file = activeOcr.file;
         const fileId = file.id;
@@ -493,7 +563,7 @@ const Documents = () => {
             setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
         }
 
-        runBackgroundTask(`Saving: ${personName}`, async () => {
+        return runBackgroundTask(`Saving: ${personName}`, async () => {
             try {
                 const url = fileId === 'manual' ? '/api/documents/manual' : `/api/documents/${fileId}`;
                 const method = fileId === 'manual' ? 'POST' : 'PUT';
@@ -514,6 +584,15 @@ const Documents = () => {
                 });
                 const data = await res.json();
                 if (data.success) {
+                    // Clear the sessionStorage cache for this file
+                    try {
+                        sessionStorage.removeItem(`civicore_ocr_draft_${fileId}`);
+                        sessionStorage.removeItem(`civicore_ocr_draft_type_${fileId}`);
+                        sessionStorage.removeItem(`civicore_ocr_draft_text_${fileId}`);
+                    } catch (cacheErr) {
+                        console.error('Failed to clear draft cache:', cacheErr);
+                    }
+
                     // Link active ticket if applicable
                     try {
                         const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
@@ -524,7 +603,7 @@ const Documents = () => {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
                                 credentials: 'include',
-                                body: JSON.stringify({ document_id: fileId })
+                                body: JSON.stringify({ document_id: finalDocId })
                             });
                             sessionStorage.removeItem('civicore_ticket_prefill');
                             checkPrefill();
@@ -842,6 +921,8 @@ const Documents = () => {
                         docType={activeOcr.file?.type || selectedDocType}
                         ocrResult={activeOcr.ocrResult}
                         onSave={saveRecord}
+                        onMinimize={() => setActiveOcr(null)}
+                        isSaving={isOcrSaving}
                         onClose={async () => {
                             if (activeOcr.file && activeOcr.file.file_path === null && activeOcr.file.name === 'Manual Entry' && activeOcr.file.id !== 'manual') {
                                 try {

@@ -503,6 +503,13 @@ const Issuances = () => {
             });
 
             if (res.data.success) {
+                try {
+                    sessionStorage.removeItem(`civicore_ocr_draft_${fileId}`);
+                    sessionStorage.removeItem(`civicore_ocr_draft_type_${fileId}`);
+                    sessionStorage.removeItem(`civicore_ocr_draft_text_${fileId}`);
+                } catch (cacheErr) {
+                    console.error('Failed to clear draft cache:', cacheErr);
+                }
                 logActivity('Edited', certToClear);
                 refreshAll();
                 return { success: true };

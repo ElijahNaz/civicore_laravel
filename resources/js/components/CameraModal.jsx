@@ -593,7 +593,10 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const toggleCamera = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
     const capturePhoto = async () => {
-        if (!videoRef.current) return;
+        if (!videoRef.current || !stream) {
+            openFilePicker();
+            return;
+        }
 
         setScannerStatus('capture');
         setIsCapturing(true);
@@ -704,16 +707,22 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         event.target.value = '';
         if (!file) return;
 
-        setScannerStatus('ocr_processing');
+        setScannerStatus('crop_confirm');
         setIsCapturing(true);
-        onCapture({
-            file,
-            corners: null,
-            edgeStability: null,
-            deviceType: 'upload'
-        });
-        onClose();
-        setIsCapturing(false);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setPreviewImage(e.target.result);
+            setCapturedFile(file);
+            setCropBox({ x: 15, y: 15, w: 70, h: 70 });
+            setEdgeDetectionFailed(true);
+            setIsCapturing(false);
+            stopCamera();
+        };
+        reader.onerror = () => {
+            setIsCapturing(false);
+        };
+        reader.readAsDataURL(file);
     };
     const activeStepIndex = sharedSteps.findIndex((step) => step.key === scannerStatus);
     const currentStep = sharedSteps[Math.max(activeStepIndex, 0)];
@@ -771,6 +780,18 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                     <img src={previewImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10" style={{ filter: isGrayscale ? 'grayscale(100%)' : 'none' }} alt="Preview" />
                                 </motion.div>
                                 <canvas ref={overlayCanvasRef} onMouseDown={handleDragStart} onMouseMove={handleDragging} onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd} onTouchStart={handleDragStart} onTouchMove={handleDragging} onTouchEnd={handleDragEnd} className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-10" />
+                            </motion.div>
+                        ) : (hasPermission === false || !stream) ? (
+                            <motion.div key="fallback" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 text-center max-w-sm mx-auto flex flex-col items-center gap-4">
+                                <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full">
+                                    <CpuChipIcon className="w-8 h-8 animate-pulse" />
+                                </div>
+                                <h3 className="text-white font-bold text-base">Local Camera Stream Offline</h3>
+                                <p className="text-xs text-white/50 leading-relaxed">
+                                    Mobile browsers require a secure HTTPS connection to stream live video. 
+                                    <br /><br />
+                                    Tap <strong>Capture Page</strong> below to take a photo using your phone's native camera.
+                                </p>
                             </motion.div>
                         ) : (
                             <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full relative">

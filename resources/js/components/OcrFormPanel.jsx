@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     DocumentCheckIcon, XMarkIcon, ChevronDoubleDownIcon,
     ExclamationTriangleIcon, ShieldExclamationIcon,
-    CloudArrowUpIcon, SparklesIcon
+    CloudArrowUpIcon, SparklesIcon, ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import SignaturePad from './SignaturePad.jsx';
@@ -88,12 +88,77 @@ const FIELD_CONFIG = {
     marriage: MarriageConfig
 };
 
-const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateStatusChange, isViewOnly = false, hideBoxes = false }) => {
+const getInitialFormData = (type, ocrFields, fileObj) => {
+    let ef = ocrFields || {};
+    if (typeof ef === 'string') {
+        try { ef = JSON.parse(ef); } catch (e) { ef = {}; }
+    }
+    const isManualEntry = !fileObj.file_path || fileObj.name === 'Manual Entry' || fileObj.id === 'manual';
+    const init = {};
+    const configSections = FIELD_CONFIG[type] || FIELD_CONFIG.birth;
+
+    configSections.forEach(section => {
+        section.fields.forEach(f => {
+            let val = ef[f.key] === undefined || ef[f.key] === null ? '' : String(ef[f.key]).trim();
+            if (f.type === 'date') {
+                if (val && val.toLowerCase() !== 'n/a' && val.toLowerCase() !== 'not applicable') {
+                    const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                    if (!isNaN(d.getTime())) {
+                        val = d.toISOString().split('T')[0];
+                    } else {
+                        val = '';
+                    }
+                } else {
+                    val = '';
+                }
+            }
+            if (!isManualEntry) {
+                if (!f.required && val === '' && f.type !== 'date') {
+                    val = 'n/a';
+                }
+                if (f.type === 'signature' && val === '') {
+                    val = 'n/a';
+                }
+            }
+            init[f.key] = val;
+        });
+    });
+
+    try {
+        const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
+        if (prefillStr) {
+            const prefill = JSON.parse(prefillStr);
+            if (prefill && prefill.purpose === type && prefill.details) {
+                Object.keys(prefill.details).forEach(key => {
+                    if (prefill.details[key] !== undefined && prefill.details[key] !== '') {
+                        init[key] = prefill.details[key];
+                    }
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Error merging ticket details in getInitialFormData:', err);
+    }
+
+    return init;
+};
+
+const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, onDuplicateStatusChange, isSaving = false, isViewOnly = false, hideBoxes = false }) => {
     const { stats } = useData();
-    const [isSaving, setIsSaving] = useState(false);
 
     const detectedType = ocrResult?.detected_type !== 'unknown' ? ocrResult?.detected_type : (docType || file.type || 'unknown');
-    const [manualType, setManualType] = useState(detectedType === 'unknown' ? '' : detectedType);
+    
+    // Loaded manually or from cache
+    const [manualType, setManualType] = useState(() => {
+        try {
+            const cachedType = sessionStorage.getItem(`civicore_ocr_draft_type_${file.id}`);
+            if (cachedType) return cachedType;
+        } catch (err) {
+            console.error('Error loading manualType draft:', err);
+        }
+        return detectedType === 'unknown' ? '' : detectedType;
+    });
+    
     const effectiveType = manualType || detectedType;
 
     const formatNumber = (num) => {
@@ -106,67 +171,103 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
     const budget = stats?.tokenBudget || 1000000;
     const remaining = Math.max(0, budget - totalUsed);
 
+    const isDirtyRef = useRef(false);
+
     // Normalize and parse extracted fields
     const [formData, setFormData] = useState(() => {
-        let ef = ocrResult?.extracted_fields || file.extracted_fields || {};
-        if (typeof ef === 'string') {
-            try { ef = JSON.parse(ef); } catch (e) { ef = {}; }
-        }
-
-        const isManualEntry = !file.file_path || file.name === 'Manual Entry' || file.id === 'manual';
-        const init = {};
-        const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
-
-        configSections.forEach(section => {
-            section.fields.forEach(f => {
-                let val = ef[f.key] === undefined || ef[f.key] === null ? '' : String(ef[f.key]).trim();
-                if (f.type === 'date') {
-                    if (val && val.toLowerCase() !== 'n/a' && val.toLowerCase() !== 'not applicable') {
-                        const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                        if (!isNaN(d.getTime())) {
-                            val = d.toISOString().split('T')[0];
-                        } else {
-                            val = '';
-                        }
-                    } else {
-                        val = '';
-                    }
-                }
-                // All optional fields: if empty, default to "n/a" (only for OCR scan, not manual additions)
-                if (!isManualEntry) {
-                    if (!f.required && val === '' && f.type !== 'date') {
-                        val = 'n/a';
-                    }
-                    // Signature fields that are empty also default to 'n/a'
-                    if (f.type === 'signature' && val === '') {
-                        val = 'n/a';
-                    }
-                }
-                init[f.key] = val;
-            });
-        });
-
-        // Merge active queue ticket details if applicable
         try {
-            const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
-            if (prefillStr) {
-                const prefill = JSON.parse(prefillStr);
-                if (prefill && prefill.purpose === effectiveType && prefill.details) {
-                    Object.keys(prefill.details).forEach(key => {
-                        if (prefill.details[key] !== undefined && prefill.details[key] !== '') {
-                            init[key] = prefill.details[key];
-                        }
-                    });
-                }
+            const cachedDraft = sessionStorage.getItem(`civicore_ocr_draft_${file.id}`);
+            if (cachedDraft) {
+                return JSON.parse(cachedDraft);
             }
         } catch (err) {
-            console.error('Error merging ticket details in OcrFormPanel:', err);
+            console.error('Error loading draft from sessionStorage:', err);
         }
-
-        return init;
+        const rawFields = ocrResult?.extracted_fields || file.extracted_fields || {};
+        return getInitialFormData(effectiveType, rawFields, file);
     });
 
-    const [ocrText, setOcrText] = useState(file.ocr_text || ocrResult?.text || '');
+    const [ocrText, setOcrText] = useState(() => {
+        try {
+            const cachedText = sessionStorage.getItem(`civicore_ocr_draft_text_${file.id}`);
+            if (cachedText) return cachedText;
+        } catch (err) {
+            console.error('Error loading ocrText draft:', err);
+        }
+        return file.ocr_text || ocrResult?.text || '';
+    });
+
+    // Save draft data to sessionStorage when dirty
+    useEffect(() => {
+        if (isDirtyRef.current && file && file.id) {
+            try {
+                sessionStorage.setItem(`civicore_ocr_draft_${file.id}`, JSON.stringify(formData));
+            } catch (err) {
+                console.error('Error saving draft to sessionStorage:', err);
+            }
+        }
+    }, [formData, file]);
+
+    useEffect(() => {
+        if (isDirtyRef.current && file && file.id) {
+            try {
+                if (manualType) {
+                    sessionStorage.setItem(`civicore_ocr_draft_type_${file.id}`, manualType);
+                } else {
+                    sessionStorage.removeItem(`civicore_ocr_draft_type_${file.id}`);
+                }
+            } catch (err) {
+                console.error('Error saving manualType draft:', err);
+            }
+        }
+    }, [manualType, file]);
+
+    useEffect(() => {
+        if (isDirtyRef.current && file && file.id) {
+            try {
+                sessionStorage.setItem(`civicore_ocr_draft_text_${file.id}`, ocrText);
+            } catch (err) {
+                console.error('Error saving ocrText draft:', err);
+            }
+        }
+    }, [ocrText, file]);
+
+    const handleSaveAndClearCache = async (saveData) => {
+        try {
+            await onSave(saveData);
+            try {
+                sessionStorage.removeItem(`civicore_ocr_draft_${file.id}`);
+                sessionStorage.removeItem(`civicore_ocr_draft_type_${file.id}`);
+                sessionStorage.removeItem(`civicore_ocr_draft_text_${file.id}`);
+            } catch (cacheErr) {
+                console.error("Failed to clear draft cache:", cacheErr);
+            }
+        } catch (err) {
+            console.error("Save action failed in panel wrapper:", err);
+        }
+    };
+
+    const handleReset = () => {
+        if (window.confirm("Are you sure you want to discard your draft and reset fields to the original extracted values?")) {
+            try {
+                sessionStorage.removeItem(`civicore_ocr_draft_${file.id}`);
+                sessionStorage.removeItem(`civicore_ocr_draft_type_${file.id}`);
+                sessionStorage.removeItem(`civicore_ocr_draft_text_${file.id}`);
+            } catch (err) {
+                console.error('Error clearing draft cache on reset:', err);
+            }
+            isDirtyRef.current = false;
+            const origType = detectedType === 'unknown' ? '' : detectedType;
+            setManualType(origType);
+            const rawFields = ocrResult?.extracted_fields || file.extracted_fields || {};
+            const targetType = origType || 'birth';
+            const resetData = getInitialFormData(targetType, rawFields, file);
+            setFormData(resetData);
+            setOcrText(file.ocr_text || ocrResult?.text || '');
+            setErrors({});
+        }
+    };
+
     const [viewMode, setViewMode] = useState('fields');
     const [showDiagnosticBoxes, setShowDiagnosticBoxes] = useState(hideBoxes); // Toggle state for green grid
     const [showConsent, setShowConsent] = useState(false);
@@ -387,8 +488,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
             setShowConsent(true);
             return;
         }
-        setIsSaving(true);
-        onSave({
+        handleSaveAndClearCache({
             fields: sanitizedFields,
             ocr_text: ocrText,
             parentalConsent: consentGiven,
@@ -400,8 +500,6 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
     useEffect(() => {
         if (savePending && consentGiven) {
             setSavePending(false);
-            setIsSaving(true);
-
             const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
             const sanitizedFields = { ...formData };
             configSections.forEach(section => {
@@ -419,7 +517,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                 });
             });
 
-            onSave({
+            handleSaveAndClearCache({
                 fields: sanitizedFields,
                 ocr_text: ocrText,
                 parentalConsent: true,
@@ -463,7 +561,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
 
                             {!isViewOnly && (
                                 <button
-                                    onClick={(e) => handleSubmit(e, true)}
+                                    onClick={onMinimize || onClose}
                                     className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95"
                                 >
                                     Minimize & Continue Working
@@ -496,13 +594,22 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                     </div>
                     <div className="flex items-center gap-2">
                         {!isViewOnly && (
-                            <button
-                                onClick={(e) => handleSubmit(e, true)}
-                                title="Minimize to Tray"
-                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
-                            >
-                                <ChevronDoubleDownIcon className="w-6 h-6" />
-                            </button>
+                            <>
+                                <button
+                                    onClick={handleReset}
+                                    title="Reset to Original"
+                                    className="text-slate-400 hover:text-amber-600 p-2 rounded-xl hover:bg-amber-50 transition-all cursor-pointer"
+                                >
+                                    <ArrowPathIcon className="w-6 h-6" />
+                                </button>
+                                <button
+                                    onClick={onMinimize || onClose}
+                                    title="Minimize to Tray"
+                                    className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
+                                >
+                                    <ChevronDoubleDownIcon className="w-6 h-6" />
+                                </button>
+                            </>
                         )}
                         <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer group">
                             <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
@@ -528,7 +635,11 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                             {['birth', 'death', 'marriage'].map(t => (
                                 <button
                                     key={t}
-                                    onClick={() => { setManualType(t); setErrors(p => ({ ...p, _type: false })); }}
+                                    onClick={() => {
+                                        isDirtyRef.current = true;
+                                        setManualType(t);
+                                        setErrors(p => ({ ...p, _type: false }));
+                                    }}
                                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all cursor-pointer ${
                                         manualType === t
                                             ? t === 'birth' ? 'bg-[#d4a574] text-white border-[#d4a574] shadow-md'
@@ -629,7 +740,10 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                                 </div>
                                 <textarea
                                     value={ocrText}
-                                    onChange={(e) => setOcrText(e.target.value)}
+                                    onChange={(e) => {
+                                        isDirtyRef.current = true;
+                                        setOcrText(e.target.value);
+                                    }}
                                     className="w-full h-[400px] p-4 text-sm font-mono border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/40 focus:border-[#d4a574] transition-all"
                                     placeholder="Edit the extracted text here..."
                                 />
@@ -673,6 +787,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                                                             <select
                                                                 value={formData[field.key] || ''}
                                                                 onChange={e => {
+                                                                    isDirtyRef.current = true;
                                                                     setFormData(p => ({ ...p, [field.key]: e.target.value }));
                                                                     if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
                                                                 }}
@@ -686,6 +801,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                                                                 fieldKey={field.key}
                                                                 value={formData[field.key] || 'n/a'}
                                                                 onChange={val => {
+                                                                    isDirtyRef.current = true;
                                                                     setFormData(p => ({ ...p, [field.key]: val }));
                                                                 }}
                                                                 disabled={isViewOnly}
@@ -696,6 +812,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                                                                     type={field.type === 'date' ? 'date' : 'text'}
                                                                     value={formData[field.key] || ''}
                                                                     onChange={e => {
+                                                                        isDirtyRef.current = true;
                                                                         setFormData(p => ({ ...p, [field.key]: e.target.value }));
                                                                         if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
                                                                     }}

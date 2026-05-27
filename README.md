@@ -434,3 +434,34 @@ The following requirements have been logged for future updates:
 - **Interactive Camera Edge & Light Scanner (GCash-style):** Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success) to guide users when to capture the document. fix the camera in the issuance section too, there will be many changes
 -Fix UI In The Camera and make the cropping work and simplify it.
 - **Death & Marriage Certificate Templates:** Expand composite template layouts to support Death Certificates and Marriage Certificates. will update this death certificate for tomm so we can finally add it in the system and do a complete registration of that. then finalize how will the marriage certificate will work as there are things involve that what if the underage? what if the parents is not married? what if divorced? so it takes time to do it right. 
+
+---
+
+## 📝 Development Log — May 28, 2026 (Morning Session)
+
+The following features and updates were implemented during the morning session of **May 28, 2026**:
+
+### ✍️ Form Caching & Input Persistence (OCR & Manual Panels)
+- **SessionStorage Field Caching**: Configured [OcrFormPanel.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/OcrFormPanel.jsx) to load and save draft form data, selected document type, and OCR text to `sessionStorage` drafts (`civicore_ocr_draft_${file.id}`, etc.) in real-time.
+- **Dirty-Tracking Saves**: Implemented a `isDirtyRef` so drafts are written only when the user makes changes to fields.
+- **Reset to Original Action**: Added a **Reset to Original** button (reload icon) in the form panel header. Clicking it prompts the user, clears cached drafts, and reverts fields back to backend defaults.
+- **Auto-Clearing Cache**: Programmed [OcrFormPanel.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/OcrFormPanel.jsx), [Documents.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Documents.jsx), and [Issuances.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Issuances.jsx) to clear the draft cache automatically upon a successful document save.
+
+### 🛡️ Double-Save Prevention & Modal Layout Fixes
+- **Submission Lock**: Implemented a transaction lock `savingRecordRef` in [Documents.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Documents.jsx) to prevent rapid double-clicks on confirmation warnings from spawning concurrent save processes.
+- **Direct Minimize**: Rewired the **Minimize to Tray** button to directly close the editor panel instead of triggering a validation/save cycle, since user edits are already persisted in `sessionStorage` drafts.
+- **Confirm Portal Overlay**: Layered both `ActionConfirmModal.jsx` and `PasswordConfirmModal.jsx` directly to `document.body` via React Portals, placing warning prompts on top of the fullscreen OCR panel.
+
+---
+
+## 🔭 Future Update Targets (Next session checklist)
+
+The following requirements have been logged for future updates:
+
+- **🔧 Fix: Cannot Save Allegedly Duplicated Files**: Analyze and resolve the backend save failure when committing duplicates.
+- **📜 Death and Marriage Certificates**:
+  - Implement full registration and overlay templates for LCR Form 103 (Death Certificate) and Form 101 (Marriage Certificate).
+- **⚖️ Handling Various Forms of Certificates**:
+  - Establish specific processing logic for special certificate scenarios (e.g., minor cases, parents not married, divorced status, etc.).
+- **📷 Interactive Camera Edge & Light Scanner**: Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success).
+ 
