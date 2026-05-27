@@ -1,5 +1,5 @@
-const TARGET_LONG_EDGE = 1600;
-const MAX_LONG_EDGE = 1800;
+const TARGET_LONG_EDGE = 1024;
+const MAX_LONG_EDGE = 1024;
 
 const detectDeviceType = () => {
     if (typeof window === 'undefined') return 'desktop';
@@ -99,39 +99,35 @@ const computeBrightnessScore = (minGray, maxGray) => Number((((minGray + maxGray
 const getOutputMimeType = (inputType = '') => (inputType.includes('webp') ? 'image/webp' : 'image/jpeg');
 
 const tryPerspectiveTransform = ({ sourceFile, corners }) => {
-    if (!corners || typeof window === 'undefined' || !window.cv) return sourceFile;
-
-    const cv = window.cv;
+    if (!corners || typeof window === 'undefined') return sourceFile;
 
     return new Promise((resolve) => {
         const img = new Image();
         const url = URL.createObjectURL(sourceFile);
         img.onload = async () => {
             try {
-                const src = cv.imread(img);
-                const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                    corners.tl.x * src.cols, corners.tl.y * src.rows,
-                    corners.tr.x * src.cols, corners.tr.y * src.rows,
-                    corners.br.x * src.cols, corners.br.y * src.rows,
-                    corners.bl.x * src.cols, corners.bl.y * src.rows
-                ]);
-                const dstWidth = 900;
-                const dstHeight = 1200;
-                const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, dstWidth, 0, dstWidth, dstHeight, 0, dstHeight]);
+                // Compute absolute pixel bounds from normalized coordinates with safety clamping
+                const minX = Math.max(0, Math.min(img.width - 1, Math.round(Math.min(corners.tl.x, corners.bl.x, corners.tr.x, corners.br.x) * img.width)));
+                const maxX = Math.max(minX + 1, Math.min(img.width, Math.round(Math.max(corners.tl.x, corners.bl.x, corners.tr.x, corners.br.x) * img.width)));
+                const minY = Math.max(0, Math.min(img.height - 1, Math.round(Math.min(corners.tl.y, corners.bl.y, corners.tr.y, corners.br.y) * img.height)));
+                const maxY = Math.max(minY + 1, Math.min(img.height, Math.round(Math.max(corners.tl.y, corners.bl.y, corners.tr.y, corners.br.y) * img.height)));
 
-                const M = cv.getPerspectiveTransform(srcPts, dstPts);
-                const dst = new cv.Mat();
-                cv.warpPerspective(src, dst, M, new cv.Size(dstWidth, dstHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+                const sw = maxX - minX;
+                const sh = maxY - minY;
 
                 const outputCanvas = document.createElement('canvas');
-                cv.imshow(outputCanvas, dst);
+                outputCanvas.width = sw;
+                outputCanvas.height = sh;
+                const ctx = outputCanvas.getContext('2d');
+                ctx.drawImage(img, minX, minY, sw, sh, 0, 0, sw, sh);
+
                 const outputType = getOutputMimeType(sourceFile.type);
                 const blob = await canvasToBlob(outputCanvas, outputType, 0.88);
                 const transformed = new File([blob], sourceFile.name, { type: outputType, lastModified: Date.now() });
 
-                src.delete(); srcPts.delete(); dstPts.delete(); M.delete(); dst.delete();
                 resolve(transformed);
-            } catch {
+            } catch (err) {
+                console.error("Canvas crop failed, returning original file:", err);
                 resolve(sourceFile);
             } finally {
                 URL.revokeObjectURL(url);

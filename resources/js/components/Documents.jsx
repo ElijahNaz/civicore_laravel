@@ -136,7 +136,14 @@ const Documents = () => {
             // Remove uploading files that have appeared in fetched files (by name)
             const uploadingFiltered = uploading.filter(u => !fetched.some(f => f.name === u.name));
 
-            return [...uploadingFiltered, ...fetched];
+            // Make sure the local files status updates duplicate indicators instantly
+            const nextFiles = [...uploadingFiltered, ...fetched];
+            return nextFiles.map(f => {
+                const existing = prev.find(p => p.id === f.id);
+                // If local state or backend state flags duplicate, treat as duplicate.
+                const hasDuplicateVal = (existing && existing.has_duplicate) || f.has_duplicate;
+                return { ...f, has_duplicate: !!hasDuplicateVal };
+            });
         });
     }, [globalFiles, archivedIds]);
 
@@ -450,7 +457,12 @@ const Documents = () => {
     };
 
     const handleDuplicateStatusChange = (fileId, hasDuplicate) => {
-        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, has_duplicate: hasDuplicate } : f));
+        setFiles(prev => prev.map(f => {
+            if (f.id === fileId) {
+                return { ...f, has_duplicate: hasDuplicate };
+            }
+            return f;
+        }));
         setActiveOcr(prev => {
             if (prev && prev.file.id === fileId) {
                 return {

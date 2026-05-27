@@ -59,10 +59,10 @@ class DocumentController extends Controller
         
         // Enhance documents with real-time batch progress and duplicate detection
         foreach ($documents as $doc) {
-            $doc->has_duplicate = false;
+            $metadata = json_decode($doc->metadata, true) ?: [];
+            $doc->has_duplicate = !empty($metadata['has_duplicate']);
             $status = strtolower($doc->status ?? '');
             if ($status === 'processing' || $status === 'pending') {
-                $metadata = json_decode($doc->metadata, true);
                 if (isset($metadata['batch_id'])) {
                     $batch = Bus::findBatch($metadata['batch_id']);
                     if ($batch) {
@@ -73,41 +73,45 @@ class DocumentController extends Controller
                         $doc->batch_finished = $batch->finished();
                     }
                 }
-            } elseif ($status === 'extracted') {
-                // Check if similar records already exist in the issuances table
-                $fields = json_decode($doc->extracted_fields, true) ?: [];
-                $type = $doc->detected_type ?: $doc->type;
-                if ($type === 'marriage_license') {
-                    $type = 'marriage';
-                }
+            } elseif ($status === 'extracted' || $status === 'checking') {
+                if ($doc->has_duplicate) {
+                    // Skip redundant query if metadata already flagged it
+                } else {
+                    // Check if similar records already exist in the issuances table
+                    $fields = json_decode($doc->extracted_fields, true) ?: [];
+                    $type = $doc->detected_type ?: $doc->type;
+                    if ($type === 'marriage_license') {
+                        $type = 'marriage';
+                    }
 
-                $dupQuery = DB::table('issuances')
-                    ->where('type', $type)
+                    $dupQuery = DB::table('issuances')
+                        ->where('type', $type)
                     ->where('document_id', '!=', $doc->id)
                     ->whereNull('deleted_at');
 
-                if ($type === 'birth' || $type === 'death') {
-                    $firstName = trim($fields['first_name'] ?? '');
-                    $lastName = trim($fields['last_name'] ?? '');
-                    if (!empty($firstName) && !empty($lastName)) {
-                        $dupQuery->where('name', 'like', "%{$lastName}%")
-                                 ->where('name', 'like', "%{$firstName}%");
-                        if ($dupQuery->exists()) {
-                            $doc->has_duplicate = true;
+                    if ($type === 'birth' || $type === 'death') {
+                        $firstName = trim($fields['first_name'] ?? '');
+                        $lastName = trim($fields['last_name'] ?? '');
+                        if (!empty($firstName) && !empty($lastName)) {
+                            $dupQuery->where('name', 'like', "%{$lastName}%")
+                                     ->where('name', 'like', "%{$firstName}%");
+                            if ($dupQuery->exists()) {
+                                $doc->has_duplicate = true;
+                            }
                         }
-                    }
-                } elseif ($type === 'marriage') {
-                    $hLastName = trim($fields['husband_last_name'] ?? '');
-                    $wLastName = trim($fields['wife_last_name'] ?? '');
-                    if (!empty($hLastName) || !empty($wLastName)) {
-                        if (!empty($hLastName)) {
-                            $dupQuery->where('name', 'like', "%{$hLastName}%");
-                        }
-                        if (!empty($wLastName)) {
-                            $dupQuery->where('name', 'like', "%{$wLastName}%");
-                        }
-                        if ($dupQuery->exists()) {
-                            $doc->has_duplicate = true;
+                    } elseif ($type === 'marriage') {
+                        $hLastName = trim($fields['husband_last_name'] ?? '');
+                        $wLastName = trim($fields['wife_last_name'] ?? '');
+                        if (!empty($hLastName) || !empty($wLastName)) {
+                            if (!empty($hLastName)) {
+                                $dupQuery->where('name', 'like', "%{$hLastName}%");
+                            }
+                            if (!empty($wLastName)) {
+                                $dupQuery->where('name', 'like', "%{$wLastName}%");
+                            }
+                            if ($dupQuery->exists()) {
+                                $doc->has_duplicate = true;
+                            }
                         }
                     }
                 }
@@ -580,6 +584,18 @@ class DocumentController extends Controller
         $parentalConsent = $request->input('parental_consent', false);
         $detectedType    = $request->input('detectedType');
 
+        // Normalize date parts (day, year) to integers if they look numeric
+        if (is_array($extractedFields)) {
+            foreach (['dob_day', 'dob_year', 'marriage_parents_day', 'marriage_parents_year', 'death_day', 'death_year'] as $dateKey) {
+                if (isset($extractedFields[$dateKey]) && is_string($extractedFields[$dateKey])) {
+                    $cleaned = preg_replace('/[^0-9]/', '', $extractedFields[$dateKey]);
+                    if ($cleaned !== '') {
+                        $extractedFields[$dateKey] = (int)$cleaned;
+                    }
+                }
+            }
+        }
+
         return $this->performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType);
     }
 
@@ -721,10 +737,18 @@ class DocumentController extends Controller
                     $issuanceFilePath = 'issuances/' . $docType . '_' . $id . '_' . time() . '.pdf';
                     \Storage::disk('public')->put($issuanceFilePath, $pdfData);
 
+                    $normCertType = 'birth';
+                    if ($docType === 'death') {
+                        $normCertType = 'death';
+                    } elseif ($docType === 'marriage' || $docType === 'marriage_license') {
+                        $normCertType = 'marriage';
+                    }
+
                     if (count($existing) > 0) {
                         // 2. UPDATE existing Master Record (Keep certNumber)
                         DB::table('issuances')->where('document_id', $id)->update([
                             'type' => $docType,
+                            'certificate_type' => $normCertType,
                             'name' => $personName,
                             'barangay' => $barangay,
                             'status' => 'Active',
@@ -750,6 +774,7 @@ class DocumentController extends Controller
                         DB::table('issuances')->insert([
                             'certNumber' => $certNumber,
                             'type' => $docType,
+                            'certificate_type' => $normCertType,
                             'name' => $personName,
                             'barangay' => $barangay,
                             'issuanceDate' => $issuanceDate,

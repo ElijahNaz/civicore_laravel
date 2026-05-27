@@ -1214,13 +1214,12 @@ def process_ocr_gemini(data: dict):
             raise HTTPException(status_code=500, detail=f"Failed to open image: {str(e)}")
             
     # -- TOKEN OPTIMIZATION / BUDGET SAVINGS --
-    # Downscale the loaded image to a maximum dimension of 1200px.
+    # Downscale the loaded image to a maximum dimension of 1024px.
     # Gemini calculates image tokens based on 768x768 pixel tiles (each tile costs 258 tokens).
-    # A high-res photo (e.g. 3000x4000) costs 24 tiles (6,192 tokens).
-    # Downscaling to 1200px preserves maximum text readability for OCR while keeping
-    # the image within 2-4 tiles (516 - 1,032 tokens). This reduces token costs by 60% to 80%.
+    # Downscaling to 1024px preserves maximum text readability for OCR while keeping
+    # the image within 2 tiles (516 tokens). This reduces token costs significantly.
     if img:
-        max_size = 1200
+        max_size = 1024
         if max(img.size) > max_size:
             orig_w, orig_h = img.size
             resample_filter = getattr(Image, "Resampling", Image).LANCZOS
@@ -1442,12 +1441,29 @@ def process_ocr_gemini(data: dict):
     tiles = math.ceil(img_w / 768) * math.ceil(img_h / 768)
     image_token_cost = tiles * 258
 
+    total_used_val = 0
+    try:
+        if data.get('total_tokens_used') is not None:
+            total_used_val = int(data.get('total_tokens_used'))
+    except Exception:
+        pass
+
+    budget_val = 1000000
+    try:
+        if data.get('token_budget') is not None:
+            budget_val = int(data.get('token_budget'))
+        else:
+            budget_val = int(os.getenv('GEMINI_TOKEN_BUDGET', '1000000'))
+    except Exception:
+        pass
+
     print(f"\n========================================")
     print(f" Gemini OCR Scan Token Usage Summary:")
     print(f" - Document Type: {doc_type}")
     print(f" - Image Size   : {img_w}x{img_h}")
     print(f" - Tile Count   : {tiles} (each tile is 258 tokens)")
-    print(f" - Token Cost   : {image_token_cost} tokens")
+    print(f" - Token Cost   : {image_token_cost:,}/1,000,000 tokens")
+    print(f" - Cumulative   : {total_used_val + image_token_cost:,}/{budget_val:,} tokens used")
     print(f"========================================\n")
 
     return {

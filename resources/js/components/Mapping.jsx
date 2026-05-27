@@ -19,6 +19,16 @@ import Avatar from 'boring-avatars';
 
 import { useData } from './DataContext.jsx';
 
+const getNormalizedType = (item) => {
+    if (!item) return 'birth';
+    if (item.certificate_type) return item.certificate_type;
+    const type = (item.type || '').toLowerCase();
+    if (type.includes('birth') || type.includes('102')) return 'birth';
+    if (type.includes('death') || type.includes('103')) return 'death';
+    if (type.includes('marriage') || type.includes('97')) return 'marriage';
+    return 'birth';
+};
+
 const Mapping = () => {
     const mapRef = useRef(null);
     const chartRef = useRef(null);
@@ -209,33 +219,33 @@ const Mapping = () => {
         };
 
         filteredApiData.forEach(issuance => {
-            const type = (issuance.type || '').toLowerCase();
+            const type = getNormalizedType(issuance);
             const dateStr = issuance.issuanceDate || issuance.created_at;
             const date = new Date(dateStr);
             const month = date.toLocaleString('default', { month: 'short' });
             const monthIdx = last6Months.indexOf(month);
 
             if (monthIdx !== -1) {
-                if (type.includes('birth')) monthData.births[monthIdx]++;
-                else if (type.includes('death')) monthData.deaths[monthIdx]++;
-                else if (type.includes('marriage')) monthData.marriages[monthIdx]++;
+                if (type === 'birth') monthData.births[monthIdx]++;
+                else if (type === 'death') monthData.deaths[monthIdx]++;
+                else if (type === 'marriage') monthData.marriages[monthIdx]++;
             }
         });
 
         uniqueIssuances.forEach(item => {
             const brgy = item.barangay;
-            const type = (item.type || 'birth').toLowerCase();
+            const type = getNormalizedType(item);
             
             // Global counts
-            if (type.includes('birth')) birthCount++;
-            else if (type.includes('death')) deathCount++;
-            else if (type.includes('marriage')) marriageCount++;
+            if (type === 'birth') birthCount++;
+            else if (type === 'death') deathCount++;
+            else if (type === 'marriage') marriageCount++;
 
             if (brgy) {
                 if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
-                if (type.includes('birth')) brgyCounts[brgy].births++;
-                else if (type.includes('death')) brgyCounts[brgy].deaths++;
-                else if (type.includes('marriage')) brgyCounts[brgy].marriages++;
+                if (type === 'birth') brgyCounts[brgy].births++;
+                else if (type === 'death') brgyCounts[brgy].deaths++;
+                else if (type === 'marriage') brgyCounts[brgy].marriages++;
                 brgyCounts[brgy].total++;
 
                 if (brgyCounts[brgy].total > maxTotal) {
@@ -417,7 +427,7 @@ const Mapping = () => {
 
 
     const filteredPrints = filteredApiData.filter(print =>
-        activeFilter === 'all' || (print.type || '').toLowerCase().includes(activeFilter)
+        activeFilter === 'all' || getNormalizedType(print) === activeFilter
     );
 
 
@@ -447,10 +457,10 @@ const Mapping = () => {
             const brgy = i.barangay;
             if (brgy) {
                 if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
-                const type = (i.type || '').toLowerCase();
-                if (type.includes('birth')) brgyCountsLocal[brgy].births++;
-                else if (type.includes('death')) brgyCountsLocal[brgy].deaths++;
-                else if (type.includes('marriage')) brgyCountsLocal[brgy].marriages++;
+                const type = getNormalizedType(i);
+                if (type === 'birth') brgyCountsLocal[brgy].births++;
+                else if (type === 'death') brgyCountsLocal[brgy].deaths++;
+                else if (type === 'marriage') brgyCountsLocal[brgy].marriages++;
                 brgyCountsLocal[brgy].total++;
             }
         });
@@ -695,9 +705,9 @@ const Mapping = () => {
                         </div>
                     ) : (() => {
                         /* ── Tab 2: Issued Per Category ── */
-                        const issuedBirth    = filteredApiData.filter(i => (i.type || '').toLowerCase() === 'birth').length;
-                        const issuedDeath    = filteredApiData.filter(i => (i.type || '').toLowerCase() === 'death').length;
-                        const issuedMarriage = filteredApiData.filter(i => (i.type || '').toLowerCase().includes('marriage')).length;
+                        const issuedBirth    = filteredApiData.filter(i => getNormalizedType(i) === 'birth').length;
+                        const issuedDeath    = filteredApiData.filter(i => getNormalizedType(i) === 'death').length;
+                        const issuedMarriage = filteredApiData.filter(i => getNormalizedType(i) === 'marriage').length;
                         const totalIssued    = filteredApiData.length;
                         const maxCount       = Math.max(issuedBirth, issuedDeath, issuedMarriage, 1);
 
@@ -1157,10 +1167,11 @@ const Mapping = () => {
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${print.type?.toLowerCase().includes('birth') ? 'bg-[#d4a574]/10 text-[#d4a574] border-[#d4a574]/20' :
-                                                    print.type?.toLowerCase().includes('death') ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                                                        'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                                }`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                                                getNormalizedType(print) === 'birth' ? 'bg-[#d4a574]/10 text-[#d4a574] border-[#d4a574]/20' :
+                                                getNormalizedType(print) === 'death' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                            }`}>
                                                 {print.type}
                                             </span>
                                         </td>

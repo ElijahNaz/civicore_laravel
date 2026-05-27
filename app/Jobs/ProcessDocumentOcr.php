@@ -124,6 +124,17 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 'updated_at' => now(),
             ]);
 
+            // Calculate total tokens used so far
+            $tokensUsed = 0;
+            $docMeta = DB::select("SELECT metadata FROM documents WHERE deleted_at IS NULL AND metadata IS NOT NULL");
+            foreach ($docMeta as $dMeta) {
+                $meta = json_decode($dMeta->metadata, true);
+                if (isset($meta['image_token_cost'])) {
+                    $tokensUsed += (int) $meta['image_token_cost'];
+                }
+            }
+            $tokenBudget = (int) env('GEMINI_TOKEN_BUDGET', 1000000);
+
             // 4. Execute OCR via Gemini API (runs synchronously inside this job)
             Log::info("Executing Gemini OCR for Document ID {$this->documentId} using image: {$imagePath}");
             $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr/gemini', [
@@ -131,6 +142,8 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 'doc_type' => $this->docType,
                 'languages' => $this->languages,
                 'ocr_mode' => 'balanced',
+                'total_tokens_used' => $tokensUsed,
+                'token_budget' => $tokenBudget,
             ]);
 
             if ($response->failed() || !($response->json()['success'] ?? false)) {
@@ -177,11 +190,51 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
                 }
             }
 
+            // Run duplicate check on the newly extracted record against Master Registry (issuances table)
+            $hasDuplicate = false;
+            $dupType = $detectedType;
+            if ($dupType === 'marriage_license') {
+                $dupType = 'marriage';
+            }
+            $dupQuery = DB::table('issuances')
+                ->where('type', $dupType)
+                ->whereNull('deleted_at');
+
+            if ($dupType === 'birth' || $dupType === 'death') {
+                $firstName = trim($extractedFields['first_name'] ?? '');
+                $lastName = trim($extractedFields['last_name'] ?? '');
+                if (!empty($firstName) && !empty($lastName)) {
+                    $dupQuery->where('name', 'like', "%{$lastName}%")
+                             ->where('name', 'like', "%{$firstName}%");
+                    if ($dupQuery->exists()) {
+                        $hasDuplicate = true;
+                    }
+                }
+            } elseif ($dupType === 'marriage') {
+                $hLastName = trim($extractedFields['husband_last_name'] ?? '');
+                $wLastName = trim($extractedFields['wife_last_name'] ?? '');
+                if (!empty($hLastName) || !empty($wLastName)) {
+                    if (!empty($hLastName)) {
+                        $dupQuery->where('name', 'like', "%{$hLastName}%");
+                    }
+                    if (!empty($wLastName)) {
+                        $dupQuery->where('name', 'like', "%{$wLastName}%");
+                    }
+                    if ($dupQuery->exists()) {
+                        $hasDuplicate = true;
+                    }
+                }
+            }
+
             // Save metadata
             $metadata = json_decode($doc->metadata ?? '{}', true) ?: [];
             $metadata['quick_fill_used'] = $quickFillUsed;
             $metadata['template_family_detected'] = $templateFamilyDetected;
             $metadata['processed_pages_count'] = 1;
+            $metadata['has_duplicate'] = $hasDuplicate; // Save directly in metadata for instant client access
+            if (isset($result['image_token_cost'])) {
+                $metadata['image_token_cost'] = $result['image_token_cost'];
+            }
 
             // 6. Update database record with temporary checking status phase
             DB::table('documents')->where('id', $this->documentId)->update([

@@ -15,6 +15,8 @@ import { useData } from './DataContext.jsx';
 import OcrFormPanel from './OcrFormPanel.jsx';
 import PasswordConfirmModal from './PasswordConfirmModal.jsx';
 import ActionConfirmModal from './ActionConfirmModal.jsx';
+import CameraModal from './CameraModal.jsx';
+import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
 import axios from 'axios';
 
 const NAIC_BARANGAYS = [
@@ -216,49 +218,11 @@ const Issuances = () => {
     const [scanSource, setScanSource] = useState('webcam');
     const [cameraStream, setCameraStream] = useState(null);
     const [ocrError, setOcrError] = useState('');
+    const [isSearchCameraOpen, setIsSearchCameraOpen] = useState(false);
 
-    const startCamera = async () => {
-        try {
-            setOcrError('');
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            setCameraStream(stream);
-            const videoElement = document.getElementById('scan-video');
-            if (videoElement) {
-                videoElement.srcObject = stream;
-                videoElement.play().catch(e => console.error("Video play failed:", e));
-            }
-        } catch (err) {
-            console.error("Camera access failed:", err);
-            setOcrError("Could not access camera. Please upload an image instead.");
-            setScanSource('upload');
-        }
-    };
-
-    const stopCamera = () => {
-        if (cameraStream) {
-            cameraStream.getTracks().forEach(track => track.stop());
-            setCameraStream(null);
-        }
-    };
-
-    const capturePhoto = () => {
-        const videoElement = document.getElementById('scan-video');
-        if (!videoElement) return;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = videoElement.videoWidth || 640;
-        canvas.height = videoElement.videoHeight || 480;
-
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob((blob) => {
-            if (blob) {
-                const file = new File([blob], "captured_doc.jpg", { type: "image/jpeg" });
-                handleOcrSearchUpload(file);
-            }
-        }, 'image/jpeg', 0.85);
-    };
+    const startCamera = async () => {};
+    const stopCamera = () => {};
+    const capturePhoto = () => {};
 
     const handleOcrSearchUpload = async (file) => {
         setIsScanning(true);
@@ -946,20 +910,25 @@ const Issuances = () => {
 
                                 {/* Webcam viewport */}
                                 {scanSource === 'webcam' && (
-                                    <div className="relative aspect-video w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
+                                    <div className="relative aspect-video w-full bg-slate-50 rounded-2xl flex flex-col items-center justify-center p-6 text-center border border-slate-200 shadow-inner">
                                         {isScanning ? (
-                                            <div className="absolute inset-0 z-20 bg-slate-900/80 flex flex-col items-center justify-center text-white gap-3">
+                                            <div className="absolute inset-0 z-20 bg-slate-900/80 flex flex-col items-center justify-center text-white gap-3 rounded-2xl">
                                                 <ArrowPathIcon className="w-8 h-8 animate-spin text-[#d4a574]" />
                                                 <span className="text-xs font-bold tracking-widest uppercase">Processing OCR...</span>
                                             </div>
                                         ) : null}
-                                        <video
-                                            id="scan-video"
-                                            className="w-full h-full object-cover relative z-10"
-                                            playsInline
-                                            muted
-                                        />
-                                        <div className="absolute inset-0 border-[3px] border-dashed border-[#d4a574]/40 z-20 pointer-events-none rounded-2xl m-4 animate-pulse" />
+                                        <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 mb-3 border border-indigo-100 shadow-sm">
+                                            <CameraIcon className="w-6 h-6 animate-pulse" />
+                                        </div>
+                                        <p className="text-sm font-black text-slate-700">Scan using unified document camera</p>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Locks edges and crops automatically</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSearchCameraOpen(true)}
+                                            className="mt-5 px-6 py-3 bg-[#0f172a] hover:bg-slate-800 text-[#d4a574] font-black text-xs uppercase tracking-widest rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                                        >
+                                            Launch Scanner Camera
+                                        </button>
                                     </div>
                                 )}
 
@@ -991,23 +960,13 @@ const Issuances = () => {
                                 )}
                             </div>
 
-                            {/* Footer */}
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center gap-3">
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end items-center gap-3">
                                 <button
                                     onClick={() => setIsScanSearchOpen(false)}
                                     className="px-5 py-3 text-xs font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-xl transition-all cursor-pointer"
                                 >
                                     Close
                                 </button>
-                                {scanSource === 'webcam' && (
-                                    <button
-                                        onClick={capturePhoto}
-                                        disabled={isScanning}
-                                        className="px-6 py-3 text-xs font-black uppercase tracking-widest text-white bg-[#d4a574] hover:bg-[#d4a574]/90 rounded-xl transition-all cursor-pointer shadow-md shadow-[#d4a574]/20 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                                    >
-                                        Capture & Search
-                                    </button>
-                                )}
                             </div>
                         </motion.div>
                     </div>
@@ -2007,6 +1966,26 @@ const Issuances = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* CameraModal for Scan to Search */}
+            <CameraModal
+                isOpen={isSearchCameraOpen}
+                onClose={() => setIsSearchCameraOpen(false)}
+                onCapture={async (capturePayload) => {
+                    let file = capturePayload.file;
+                    try {
+                        const preprocessed = await preprocessUploadFile(capturePayload, {
+                            corners: capturePayload.corners,
+                            edgeStability: capturePayload.edgeStability,
+                            deviceType: capturePayload.deviceType
+                        });
+                        file = preprocessed.file;
+                    } catch (err) {
+                        console.warn("Preprocessing failed for Scan to Search:", err);
+                    }
+                    handleOcrSearchUpload(file);
+                }}
+            />
         </motion.div>
     );
 };

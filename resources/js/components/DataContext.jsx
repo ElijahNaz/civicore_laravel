@@ -224,6 +224,7 @@ export const DataProvider = ({ children }) => {
                         metadata:         meta || {},
                         created_at:       doc.created_at,
                         file_path:        doc.file_path,
+                        has_duplicate:    !!doc.has_duplicate,
                         // batch progress fields (populated by server for active processing docs)
                         batch_progress:   doc.batch_progress,
                         batch_total:      doc.batch_total,

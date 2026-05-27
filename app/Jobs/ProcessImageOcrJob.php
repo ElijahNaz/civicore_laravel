@@ -46,11 +46,24 @@ class ProcessImageOcrJob implements ShouldQueue
         Log::info("ProcessImageOcrJob starting for doc {$this->documentId}, image: {$this->imagePath}");
 
         try {
+            // Calculate total tokens used so far
+            $tokensUsed = 0;
+            $docMeta = DB::select("SELECT metadata FROM documents WHERE deleted_at IS NULL AND metadata IS NOT NULL");
+            foreach ($docMeta as $dMeta) {
+                $meta = json_decode($dMeta->metadata, true);
+                if (isset($meta['image_token_cost'])) {
+                    $tokensUsed += (int) $meta['image_token_cost'];
+                }
+            }
+            $tokenBudget = (int) env('GEMINI_TOKEN_BUDGET', 1000000);
+
             $response = Http::timeout(120)->post('http://127.0.0.1:8080/ocr/gemini', [
                 'file_path' => $this->imagePath,
                 'doc_type' => $this->docType,
                 'languages' => $this->languages,
                 'ocr_mode' => 'balanced',
+                'total_tokens_used' => $tokensUsed,
+                'token_budget' => $tokenBudget,
             ]);
 
             if ($response->failed() || !($response->json()['success'] ?? false)) {

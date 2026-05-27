@@ -91,6 +91,64 @@ class TemplateConfigService
                 ['key' => 'remarks', 'x' => 0.17, 'y' => 0.80, 'w' => 0.70, 'h' => 0.070],
             ];
         }
+
+        if ($type === 'death') {
+            return [
+                // REGISTRY DETAILS
+                ['key' => 'registry_number', 'x' => 0.63, 'y' => 0.08, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'province', 'x' => 0.22, 'y' => 0.075, 'w' => 0.34, 'h' => 0.015],
+                ['key' => 'city_municipality', 'x' => 0.28, 'y' => 0.09, 'w' => 0.20, 'h' => 0.015],
+
+                // DECEASED DETAILS
+                ['key' => 'first_name', 'x' => 0.25, 'y' => 0.13, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'middle_name', 'x' => 0.45, 'y' => 0.13, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'last_name', 'x' => 0.65, 'y' => 0.13, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'sex', 'x' => 0.20, 'y' => 0.15, 'w' => 0.10, 'h' => 0.015],
+                ['key' => 'date_of_death', 'x' => 0.55, 'y' => 0.15, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'date_of_birth', 'x' => 0.20, 'y' => 0.175, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'age', 'x' => 0.55, 'y' => 0.175, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'place_of_death', 'x' => 0.25, 'y' => 0.20, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'civil_status', 'x' => 0.20, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'religion', 'x' => 0.45, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'citizenship', 'x' => 0.70, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'residence', 'x' => 0.25, 'y' => 0.25, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'occupation', 'x' => 0.25, 'y' => 0.275, 'w' => 0.60, 'h' => 0.015],
+
+                // PARENTS
+                ['key' => 'father_first_name', 'x' => 0.25, 'y' => 0.32, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'father_middle_name', 'x' => 0.45, 'y' => 0.32, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'father_last_name', 'x' => 0.65, 'y' => 0.32, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'mother_maiden_first_name', 'x' => 0.25, 'y' => 0.35, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'mother_maiden_middle_name', 'x' => 0.45, 'y' => 0.35, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'mother_maiden_last_name', 'x' => 0.65, 'y' => 0.35, 'w' => 0.15, 'h' => 0.015],
+
+                // MEDICAL CERTIFICATE
+                ['key' => 'cause_of_death', 'x' => 0.25, 'y' => 0.42, 'w' => 0.60, 'h' => 0.030],
+            ];
+        }
+
+        if ($type === 'marriage' || $type === 'marriage_license') {
+            return [
+                // REGISTRY DETAILS
+                ['key' => 'registry_number', 'x' => 0.63, 'y' => 0.08, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'province', 'x' => 0.22, 'y' => 0.075, 'w' => 0.34, 'h' => 0.015],
+                ['key' => 'city_municipality', 'x' => 0.28, 'y' => 0.09, 'w' => 0.20, 'h' => 0.015],
+
+                // HUSBAND
+                ['key' => 'husband_first_name', 'x' => 0.25, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'husband_middle_name', 'x' => 0.45, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'husband_last_name', 'x' => 0.65, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
+
+                // WIFE
+                ['key' => 'wife_first_name', 'x' => 0.25, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'wife_middle_name', 'x' => 0.45, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
+                ['key' => 'wife_last_name', 'x' => 0.65, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
+
+                // MARRIAGE DETAILS
+                ['key' => 'date_of_marriage', 'x' => 0.25, 'y' => 0.30, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'place_of_marriage', 'x' => 0.60, 'y' => 0.30, 'w' => 0.30, 'h' => 0.015],
+            ];
+        }
         
         return [];
     }

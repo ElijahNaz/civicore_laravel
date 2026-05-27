@@ -34,33 +34,62 @@ class DashboardController extends Controller
 
         $usersCount = DB::table('users')->count();
 
-        // Count type groupings only for finalized/approved documents
-        $docTypes = DB::select("
-            SELECT type_group, COUNT(*) as count FROM (
-                SELECT LOWER(COALESCE(detected_type, type, 'birth')) as type_group
-                FROM documents 
-                WHERE deleted_at IS NULL
-                  AND LOWER(status) IN ('processed', 'issued', 'active')
-            ) t
-            GROUP BY type_group
-        ");
+        // Count type groupings only for finalized/approved documents using certificate_type
+        $docTypes = DB::table('issuances')
+            ->selectRaw("COALESCE(certificate_type, 'birth') as type_group, COUNT(*) as count")
+            ->whereNull('deleted_at')
+            ->groupBy('type_group')
+            ->get();
 
         $chartData = ['labels' => [], 'data' => []];
         foreach ($docTypes as $docType) {
-            $val = $docType->type_group === 'unknown' ? 'birth' : $docType->type_group;
-            $chartData['labels'][] = ucwords(str_replace('_', ' ', $val));
+            $chartData['labels'][] = ucwords($docType->type_group);
             $chartData['data'][] = (int) $docType->count;
         }
 
-        // 5. Timeline & Charts (Finalized registrations only)
-        $months = []; $monthlyRegistrations = [];
+        // Dedicated counts for stats cards
+        $birthsCount = DB::table('issuances')
+            ->whereNull('deleted_at')
+            ->where('certificate_type', 'birth')
+            ->count();
+
+        $deathsCount = DB::table('issuances')
+            ->whereNull('deleted_at')
+            ->where('certificate_type', 'death')
+            ->count();
+
+        $marriagesCount = DB::table('issuances')
+            ->whereNull('deleted_at')
+            ->where('certificate_type', 'marriage')
+            ->count();
+
+        // Timeline & Charts (Finalized registrations split by certificate type)
+        $months = [];
+        $trendBirths = [];
+        $trendDeaths = [];
+        $trendMarriages = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = now()->subMonths($i);
             $months[] = $month->format('M');
-            $monthlyRegistrations[] = DB::table('documents')
+            $start = $month->copy()->startOfMonth();
+            $end = $month->copy()->endOfMonth();
+
+            $trendBirths[] = DB::table('issuances')
                 ->whereNull('deleted_at')
-                ->whereIn(DB::raw('LOWER(status)'), ['processed', 'issued', 'active'])
-                ->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+                ->where('certificate_type', 'birth')
+                ->whereBetween('created_at', [$start, $end])
+                ->count();
+
+            $trendDeaths[] = DB::table('issuances')
+                ->whereNull('deleted_at')
+                ->where('certificate_type', 'death')
+                ->whereBetween('created_at', [$start, $end])
+                ->count();
+
+            $trendMarriages[] = DB::table('issuances')
+                ->whereNull('deleted_at')
+                ->where('certificate_type', 'marriage')
+                ->whereBetween('created_at', [$start, $end])
                 ->count();
         }
 
@@ -78,6 +107,17 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        // Calculate total Gemini tokens used and allowed token budget
+        $tokensUsed = 0;
+        $docMeta = DB::select("SELECT metadata FROM documents WHERE deleted_at IS NULL AND metadata IS NOT NULL");
+        foreach ($docMeta as $doc) {
+            $meta = json_decode($doc->metadata, true);
+            if (isset($meta['image_token_cost'])) {
+                $tokensUsed += (int) $meta['image_token_cost'];
+            }
+        }
+        $tokenBudget = (int) env('GEMINI_TOKEN_BUDGET', 1000000);
+
         return response()->json([
             'stats' => [
                 'totalDocs' => (int) $totalDocuments,
@@ -85,6 +125,11 @@ class DashboardController extends Controller
                 'totalIssuances' => (int) $totalIssuances,
                 'totalUsers' => (int) $usersCount,
                 'processedDocs' => (int) $processedDocs,
+                'tokensUsed' => (int) $tokensUsed,
+                'tokenBudget' => (int) $tokenBudget,
+                'birthsCount' => (int) $birthsCount,
+                'deathsCount' => (int) $deathsCount,
+                'marriagesCount' => (int) $marriagesCount,
             ],
             'chartData' => [
                 'docTypes' => $chartData,
@@ -92,7 +137,12 @@ class DashboardController extends Controller
                     'labels' => ['Complete', 'In Queue', 'Action Needed'],
                     'data' => [(int) $processedDocs, (int) $uploadPending, (int) $actionNeeded]
                 ],
-                'trendChart' => ['labels' => $months, 'data' => $monthlyRegistrations],
+                'trendChart' => [
+                    'labels' => $months,
+                    'births' => $trendBirths,
+                    'deaths' => $trendDeaths,
+                    'marriages' => $trendMarriages
+                ],
                 'accuracyChart' => [
                     'labels' => $barangayRows->pluck('barangay_name')->values(),
                     'data' => $barangayRows->pluck('count')->map(fn($count) => (int) $count)->values()

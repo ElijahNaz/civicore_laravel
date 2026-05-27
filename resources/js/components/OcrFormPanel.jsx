@@ -89,11 +89,22 @@ const FIELD_CONFIG = {
 };
 
 const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateStatusChange, isViewOnly = false, hideBoxes = false }) => {
+    const { stats } = useData();
     const [isSaving, setIsSaving] = useState(false);
 
     const detectedType = ocrResult?.detected_type !== 'unknown' ? ocrResult?.detected_type : (docType || file.type || 'unknown');
     const [manualType, setManualType] = useState(detectedType === 'unknown' ? '' : detectedType);
     const effectiveType = manualType || detectedType;
+
+    const formatNumber = (num) => {
+        if (num === undefined || num === null) return '0';
+        return Number(num).toLocaleString();
+    };
+
+    const currentCost = file?.metadata?.image_token_cost || ocrResult?.image_token_cost || 0;
+    const totalUsed = stats?.tokensUsed || 0;
+    const budget = stats?.tokenBudget || 1000000;
+    const remaining = Math.max(0, budget - totalUsed);
 
     // Normalize and parse extracted fields
     const [formData, setFormData] = useState(() => {
@@ -109,15 +120,21 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
         configSections.forEach(section => {
             section.fields.forEach(f => {
                 let val = ef[f.key] === undefined || ef[f.key] === null ? '' : String(ef[f.key]).trim();
-                if (f.type === 'date' && val) {
-                    const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                    if (!isNaN(d.getTime())) {
-                        val = d.toISOString().split('T')[0];
+                if (f.type === 'date') {
+                    if (val && val.toLowerCase() !== 'n/a' && val.toLowerCase() !== 'not applicable') {
+                        const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                        if (!isNaN(d.getTime())) {
+                            val = d.toISOString().split('T')[0];
+                        } else {
+                            val = '';
+                        }
+                    } else {
+                        val = '';
                     }
                 }
                 // All optional fields: if empty, default to "n/a" (only for OCR scan, not manual additions)
                 if (!isManualEntry) {
-                    if (!f.required && val === '') {
+                    if (!f.required && val === '' && f.type !== 'date') {
                         val = 'n/a';
                     }
                     // Signature fields that are empty also default to 'n/a'
@@ -267,15 +284,21 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                             if (newValue !== undefined && newValue !== null && newValue !== prev[f.key]) {
                                 let val = String(newValue).trim();
                                 // Basic date normalization
-                                if (f.type === 'date' && val) {
-                                    const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                                    if (!isNaN(d.getTime())) {
-                                        val = d.toISOString().split('T')[0];
+                                if (f.type === 'date') {
+                                    if (val && val.toLowerCase() !== 'n/a' && val.toLowerCase() !== 'not applicable') {
+                                        const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
+                                        if (!isNaN(d.getTime())) {
+                                            val = d.toISOString().split('T')[0];
+                                        } else {
+                                            val = '';
+                                        }
+                                    } else {
+                                        val = '';
                                     }
                                 }
                                 // Optional fields: if empty, default to "n/a"
                                 const isManualEntry = !file.file_path || file.name === 'Manual Entry' || file.id === 'manual';
-                                if (!isManualEntry && !f.required && val === '') {
+                                if (!isManualEntry && !f.required && val === '' && f.type !== 'date') {
                                     val = 'n/a';
                                 }
                                 next[f.key] = val;
@@ -457,9 +480,17 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onDuplicateSt
                         </div>
                         <div>
                             <h3 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none">Extracted Document Data</h3>
-                            <p className="text-xs font-semibold text-slate-400 mt-1.5 flex items-center gap-1.5 backdrop-blur-sm">
+                            <p className="text-xs font-semibold text-slate-400 mt-1.5 flex items-center gap-1.5 backdrop-blur-sm flex-wrap">
                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                {file?.name}
+                                <span className="truncate max-w-[250px]">{file?.name}</span>
+                                {(file?.metadata?.image_token_cost || ocrResult?.image_token_cost) && (
+                                    <>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-[10px] font-black text-indigo-600 uppercase tracking-wide">
+                                            Token Cost: {formatNumber(currentCost)} tokens
+                                        </span>
+                                    </>
+                                )}
                             </p>
                         </div>
                     </div>

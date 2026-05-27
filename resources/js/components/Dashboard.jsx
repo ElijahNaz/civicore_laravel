@@ -11,7 +11,10 @@ import {
     UsersIcon,
     ArrowUpTrayIcon,
     ShieldCheckIcon,
-    ArrowPathIcon
+    ArrowPathIcon,
+    HeartIcon,
+    XCircleIcon,
+    SparklesIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext';
 
@@ -183,21 +186,50 @@ function Dashboard() {
             type: 'line',
             data: {
                 labels: chartData?.trendChart?.labels || [],
-                datasets: [{
-                    label: 'New Registrations',
-                    data: chartData?.trendChart?.data || [],
-                    borderColor: '#1e293b',
-                    backgroundColor: 'rgba(30, 41, 59, 0.05)',
-                    borderWidth: 5,
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 6,
-                    pointHoverRadius: 12,
-                    pointHoverBorderWidth: 4,
-                    pointBackgroundColor: '#1e293b',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 3
-                }]
+                datasets: [
+                    {
+                        label: 'Births',
+                        data: chartData?.trendChart?.births || [],
+                        borderColor: '#d4a574',
+                        backgroundColor: 'rgba(212, 165, 116, 0.05)',
+                        borderWidth: 4,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 10,
+                        pointBackgroundColor: '#d4a574',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    },
+                    {
+                        label: 'Deaths',
+                        data: chartData?.trendChart?.deaths || [],
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.05)',
+                        borderWidth: 4,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 10,
+                        pointBackgroundColor: '#f43f5e',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    },
+                    {
+                        label: 'Marriages',
+                        data: chartData?.trendChart?.marriages || [],
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                        borderWidth: 4,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 10,
+                        pointBackgroundColor: '#6366f1',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -207,7 +239,7 @@ function Dashboard() {
                     x: { grid: { display: false }, ticks: { color: '#0f172a', font: { weight: '700' } } }
                 },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, labels: { font: { weight: '700' } } },
                     tooltip: {
                         backgroundColor: '#0f172a',
                         padding: 12,
@@ -314,6 +346,37 @@ function Dashboard() {
                             <p className={`text-xs font-bold uppercase tracking-widest mt-2 ${s.bg === 'bg-white' ? 'text-slate-950' : 'text-white'}`}>{s.label}</p>
                         </div>
                         <p className={`text-[10px] font-bold mt-4 uppercase tracking-tighter relative z-10 ${s.bg === 'bg-white' ? 'text-slate-500' : 'text-indigo-100'}`}>{s.sub} Volume</p>
+                    </motion.div>
+                ))}
+            </motion.div>
+
+            {/* Certificate Types Stats Grid */}
+            <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            >
+                {[
+                    { label: 'Birth Certificates', val: stats.birthsCount || 0, icon: HeartIcon, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', sub: 'Total Birth Records' },
+                    { label: 'Death Certificates', val: stats.deathsCount || 0, icon: XCircleIcon, color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200', sub: 'Total Death Records' },
+                    { label: 'Marriage Certificates', val: stats.marriagesCount || 0, icon: SparklesIcon, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', sub: 'Total Marriage Records' }
+                ].map((s, i) => (
+                    <motion.div
+                        key={i}
+                        variants={itemVariants}
+                        className={`${s.bg} rounded-[2rem] p-6 border-2 shadow-xs relative group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-out`}
+                    >
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-slate-200/50 shadow-xs">
+                                <s.icon className={`w-5 h-5 ${s.color}`} />
+                            </div>
+                        </div>
+                        <div className="space-y-1 relative z-10">
+                            <h3 className={`text-4xl font-black tracking-tight text-slate-950 tabular-nums leading-none`}>{s.val}</h3>
+                            <p className={`text-xs font-bold uppercase tracking-widest mt-2 ${s.color}`}>{s.label}</p>
+                        </div>
+                        <p className={`text-[10px] font-black mt-3 uppercase tracking-tighter relative z-10 text-slate-400`}>{s.sub}</p>
                     </motion.div>
                 ))}
             </motion.div>
