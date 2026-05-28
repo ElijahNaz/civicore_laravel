@@ -463,7 +463,6 @@ The following features and updates were implemented during the morning session o
 
 The following requirements have been logged for future updates:
 
-- **🔧 Fix: Cannot Save Allegedly Duplicated Files**: Analyze and resolve the backend save failure when committing duplicates.
 - **📜 Death and Marriage Certificates**:
   - Implement full registration and overlay templates for LCR Form 103 (Death Certificate) and Form 101 (Marriage Certificate).
 - **⚖️ Handling Various Forms of Certificates**:
