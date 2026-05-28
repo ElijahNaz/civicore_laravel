@@ -452,6 +452,11 @@ The following features and updates were implemented during the morning session o
 - **Direct Minimize**: Rewired the **Minimize to Tray** button to directly close the editor panel instead of triggering a validation/save cycle, since user edits are already persisted in `sessionStorage` drafts.
 - **Confirm Portal Overlay**: Layered both `ActionConfirmModal.jsx` and `PasswordConfirmModal.jsx` directly to `document.body` via React Portals, placing warning prompts on top of the fullscreen OCR panel.
 
+### 🔧 Fixes & Ticketing-Registry Connection Flow
+- **Issuance Save & Sync Fixed**: Resolved the 500 server error when updating master registry records by changing the database column size of `extracted_data` to `LONGTEXT` (to fit base64 signatures) and ensuring `name` constraints are met via frontend/backend name reconstruction.
+- **Ticketing-to-Registry Connection**: Added two-way linking between queue tickets and master registry issuances. Linked `ticket_number` now propagates automatically to `issuances` during OCR prefill-approvals or manual queue linking.
+
+
 ---
 
 ## 🔭 Future Update Targets (Next session checklist)
@@ -464,4 +469,5 @@ The following requirements have been logged for future updates:
 - **⚖️ Handling Various Forms of Certificates**:
   - Establish specific processing logic for special certificate scenarios (e.g., minor cases, parents not married, divorced status, etc.).
 - **📷 Interactive Camera Edge & Light Scanner**: Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success).
+- **⏰ Queue Time Slot / Appointment Scheduling**: Add appointment time slot selection to ticket requests, enabling citizens to visit the office at their scheduled time and establishing a complete queuing system.
  

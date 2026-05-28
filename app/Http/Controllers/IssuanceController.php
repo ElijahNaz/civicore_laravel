@@ -45,7 +45,7 @@ class IssuanceController extends Controller
         $total = $totalResult[0]->total;
         
         // Get paginated results
-        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, or_number, print_remarks, requested_by, approved_by, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
+        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, or_number, print_remarks, requested_by, approved_by, ticket_number, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
@@ -152,12 +152,62 @@ class IssuanceController extends Controller
             return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
+        $data = $request->only(['certNumber', 'type', 'name', 'barangay', 'issuanceDate', 'status', 'encoded_by', 'extracted_data']);
+        
+        if ($request->has('personName') && !$request->has('name')) {
+            $data['name'] = $request->input('personName');
+        }
+        if ($request->has('extracted_fields') && !$request->has('extracted_data')) {
+            $data['extracted_data'] = $request->input('extracted_fields');
+        }
+
+        // Reconstruct name from extracted_data if it is null or empty (e.g. from empty personName in frontend)
+        if (empty($data['name'])) {
+            $extData = $data['extracted_data'] ?? null;
+            if ($extData) {
+                $fieldsArray = is_string($extData) ? json_decode($extData, true) : $extData;
+                if ($fieldsArray) {
+                    $docType = $data['type'] ?? $request->input('detectedType') ?? null;
+                    if (!$docType && isset($id)) {
+                        $record = DB::selectOne("SELECT type FROM issuances WHERE id = ?", [$id]);
+                        $docType = $record ? $record->type : null;
+                    }
+                    $data['name'] = $this->buildFullName($fieldsArray, $docType);
+                }
+            }
+        }
+
+        // Safety fallback to prevent integrity constraint violation if name is still empty/null
+        if (empty($data['name']) && isset($id)) {
+            $record = DB::selectOne("SELECT name FROM issuances WHERE id = ?", [$id]);
+            if ($record) {
+                $data['name'] = $record->name;
+            }
+        }
+
+        // Keep certNumber updated from extracted fields tie if possible
+        if (empty($data['certNumber'])) {
+            $ext = $data['extracted_data'] ?? null;
+            if (is_array($ext) && isset($ext['cert_no'])) {
+                $data['certNumber'] = $ext['cert_no'];
+            } elseif (is_string($ext)) {
+                $extDecoded = json_decode($ext, true);
+                if (isset($extDecoded['cert_no'])) {
+                    $data['certNumber'] = $extDecoded['cert_no'];
+                }
+            }
+        }
+
         $fields = [];
         $params = [];
 
-        foreach ($request->only(['certNumber', 'type', 'name', 'barangay', 'issuanceDate', 'status', 'encoded_by']) as $key => $value) {
+        foreach ($data as $key => $value) {
             $fields[] = "$key = ?";
-            $params[] = $value;
+            if ($key === 'extracted_data') {
+                $params[] = is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE);
+            } else {
+                $params[] = $value;
+            }
         }
 
         if (empty($fields)) {
@@ -535,5 +585,27 @@ class IssuanceController extends Controller
             \Log::error('OCR search error: ' . $e->getMessage());
             return response()->json(['error' => 'An error occurred during OCR: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Build full name helper from split name fields
+     */
+    private function buildFullName($fields, $type)
+    {
+        if ($type === 'marriage') {
+            $h = trim(($fields['husband_last_name'] ?? '') . ', ' . ($fields['husband_first_name'] ?? '') . ' ' . ($fields['husband_middle_name'] ?? '') . ' ' . ($fields['husband_suffix'] ?? ''));
+            $w = trim(($fields['wife_last_name'] ?? '') . ', ' . ($fields['wife_first_name'] ?? '') . ' ' . ($fields['wife_middle_name'] ?? '') . ' ' . ($fields['wife_suffix'] ?? ''));
+            return trim("$h & $w", " &");
+        }
+        
+        // Default for Birth/Death
+        $last = $fields['last_name'] ?? '';
+        $first = $fields['first_name'] ?? '';
+        $middle = $fields['middle_name'] ?? '';
+        $suffix = $fields['suffix'] ?? '';
+        
+        if (!$last && !$first) return null;
+        
+        return trim("$last, $first $middle $suffix");
     }
 }

@@ -110,6 +110,7 @@ Route::middleware('web')->group(function () {
         Route::get('/tickets',                     [TicketController::class, 'index']);
         Route::put('/tickets/{id}/status',         [TicketController::class, 'updateStatus']);
         Route::post('/tickets/{id}/link-document', [TicketController::class, 'linkDocument']);
+        Route::post('/tickets/walk-in',            [TicketController::class, 'storeWalkIn']);
 
         // Document Archive/Undo (Restore) accessible to all authenticated users
         Route::get('/documents/archived',           [DocumentController::class, 'archived']);

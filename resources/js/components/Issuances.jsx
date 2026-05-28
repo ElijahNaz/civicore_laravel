@@ -314,6 +314,7 @@ const Issuances = () => {
                     status: i.status || 'Active',
                     encoded_by: i.encoded_by,
                     source: 'issuance',
+                    ticket_number: i.ticket_number || null,
                     raw: {
                         ...i,
                         type,
@@ -485,7 +486,25 @@ const Issuances = () => {
     const saveEdit = async ({ fields, ocr_text, parentalConsent, detectedType }) => {
         if (!editingCert) return;
         const fileId = editingCert.realId;
-        const personName = fields.full_name || fields.husbands_name || fields.wifes_name || '';
+        let personName = '';
+        const docType = detectedType || editingCert.type || '';
+        if (docType === 'marriage') {
+            const h = `${fields.husband_last_name || ''}, ${fields.husband_first_name || ''} ${fields.husband_middle_name || ''}`.trim();
+            const w = `${fields.wife_last_name || ''}, ${fields.wife_first_name || ''} ${fields.wife_middle_name || ''}`.trim();
+            personName = `${h} & ${w}`.trim();
+            if (personName.startsWith('&')) personName = personName.slice(1).trim();
+            if (personName.endsWith('&')) personName = personName.slice(0, -1).trim();
+        } else {
+            const last = fields.last_name || '';
+            const first = fields.first_name || '';
+            const middle = fields.middle_name || '';
+            const suffix = fields.suffix || '';
+            if (last || first) {
+                personName = `${last}, ${first} ${middle} ${suffix}`.replace(/\s+/g, ' ').trim();
+            } else {
+                personName = fields.full_name || fields.deceased_name || editingCert.name || '';
+            }
+        }
         const barangay = fields.barangay || '';
 
         const certToClear = editingCert;
@@ -1390,6 +1409,7 @@ const Issuances = () => {
                                         <th className="p-4">Type</th>
                                         <th className="p-4">Recipient Name</th>
                                         <th className="p-4">Barangay</th>
+                                        <th className="p-4">Ticket</th>
                                         <th className="p-4">Status</th>
                                         <th className="p-4">Encoded By</th>
                                         <th className="p-4 pr-6 text-right">Actions</th>
@@ -1397,9 +1417,9 @@ const Issuances = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {isLoading ? (
-                                        <tr><td colSpan="8"><SkeletonLoader type="table" rows={8} /></td></tr>
+                                        <tr><td colSpan="9"><SkeletonLoader type="table" rows={8} /></td></tr>
                                     ) : filteredCertificates.length === 0 ? (
-                                        <tr><td colSpan="8" className="p-12 text-center text-slate-400"><DocumentMinusIcon className="w-12 h-12 mx-auto mb-2 opacity-20" /><p className="font-semibold">No records found in database</p></td></tr>
+                                        <tr><td colSpan="9" className="p-12 text-center text-slate-400"><DocumentMinusIcon className="w-12 h-12 mx-auto mb-2 opacity-20" /><p className="font-semibold">No records found in database</p></td></tr>
                                     ) : (
                                         filteredCertificates.map((cert) => (
                                             <tr key={cert.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedIds.includes(cert.id) ? 'bg-indigo-50/30' : ''}`}>
@@ -1415,6 +1435,15 @@ const Issuances = () => {
                                                 <td className="p-4"><span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">{cert.type}</span></td>
                                                 <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
                                                 <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
+                                                <td className="p-4">
+                                                    {cert.ticket_number ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#d4a574]/15 text-[#b37a4c] font-black text-xs border border-[#d4a574]/30">
+                                                            {cert.ticket_number}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-400 text-xs font-medium">—</span>
+                                                    )}
+                                                </td>
                                                 <td className="p-4">
                                                     <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase border ${cert.status === 'Pending Approval' ? 'bg-amber-50 text-amber-600 border-amber-200' :
                                                             cert.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :

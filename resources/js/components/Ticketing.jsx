@@ -107,6 +107,7 @@ export default function Ticketing({ mode = 'portal' }) {
     // ── Ticket Status View State ──────────────────────────────────────────────
     const [ticket, setTicket] = useState(null);
     const [queuePosition, setQueuePosition] = useState(0);
+    const [ticketQrUrl, setTicketQrUrl] = useState(null);
     const [isLoadingTicket, setIsLoadingTicket] = useState(false);
 
     useEffect(() => {
@@ -123,6 +124,7 @@ export default function Ticketing({ mode = 'portal' }) {
             const res = await axios.get(`/api/public/tickets/${token}`);
             setTicket(res.data.ticket);
             setQueuePosition(res.data.queue_position);
+            if (res.data.qr_code_url) setTicketQrUrl(res.data.qr_code_url);
         } catch (err) {
             console.error(err);
         } finally {
@@ -139,12 +141,15 @@ export default function Ticketing({ mode = 'portal' }) {
     const [isLoadingQueue, setIsLoadingQueue] = useState(false);
     const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [selectedDocId, setSelectedDocId] = useState('');
+    const [activeQueueTab, setActiveQueueTab] = useState('active'); // 'active' or 'history'
 
     const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
     const [walkInName, setWalkInName] = useState('');
     const [walkInPurpose, setWalkInPurpose] = useState('birth');
     const [walkInPhone, setWalkInPhone] = useState('');
     const [walkInEmail, setWalkInEmail] = useState('');
+    // Walk-in QR result shown inline after creation
+    const [walkInResult, setWalkInResult] = useState(null); // { ticket_number, qr_base64, ticket_url }
 
     const handleCreateWalkIn = async (e) => {
         if (e) e.preventDefault();
@@ -153,17 +158,21 @@ export default function Ticketing({ mode = 'portal' }) {
             return;
         }
         try {
-            const res = await axios.post('/api/public/tickets', {
+            // Use dedicated walk-in endpoint (WI- prefix)
+            const res = await axios.post('/api/tickets/walk-in', {
                 client_name: walkInName,
-                email: walkInEmail,
                 phone: walkInPhone,
+                email: walkInEmail,
                 purpose: walkInPurpose,
                 details: {}
             });
             if (res.data.success) {
-                showAlert({ title: 'Ticket Created', message: `Ticket ${res.data.ticket.ticket_number} generated for walk-in.`, type: 'success' });
-                setIsWalkInModalOpen(false);
-                setWalkInName('Walk-In Client');
+                setWalkInResult({
+                    ticket_number: res.data.ticket.ticket_number,
+                    qr_base64: res.data.qr_base64,
+                    ticket_url: res.data.ticket_url,
+                });
+                setWalkInName('');
                 setWalkInPhone('');
                 setWalkInEmail('');
                 fetchQueue();
@@ -281,64 +290,74 @@ export default function Ticketing({ mode = 'portal' }) {
     if (mode === 'portal') {
         return (
             <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+                {/* Back to Home Button */}
+                <div className="mb-6">
+                    <Link
+                        to="/"
+                        className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-[#d4a574] transition-colors bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm"
+                    >
+                        <span>←</span> Back to Home
+                    </Link>
+                </div>
+
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-[2.5rem] p-8 sm:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.04)]"
+                    className="bg-white/90 backdrop-blur-xl border border-slate-200 rounded-[2.5rem] p-8 sm:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.06)]"
                 >
                     <div className="text-center space-y-3 mb-10">
-                        <div className="w-16 h-16 bg-[#d4a574]/10 rounded-2xl flex items-center justify-center mx-auto border border-[#d4a574]/20 shadow-sm text-3xl">
+                        <div className="w-16 h-16 bg-[#d4a574]/15 rounded-2xl flex items-center justify-center mx-auto border border-[#d4a574]/30 shadow-sm text-3xl">
                             🎫
                         </div>
-                        <h2 className="text-3xl font-black text-[#1a2f4a] tracking-tight">Online Document Request</h2>
-                        <p className="text-slate-500 text-sm max-w-md mx-auto">Skip the lines. Queue your document copy request online and get a real-time tracking QR code.</p>
+                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Online Document Request</h2>
+                        <p className="text-slate-700 text-sm max-w-md mx-auto font-medium">Skip the lines. Queue your document copy request online and get a real-time tracking QR code.</p>
                     </div>
 
                     <form onSubmit={handlePortalSubmit} className="space-y-8">
                         {/* Phase 1: Contact Details */}
                         <div className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-full bg-[#d4a574]/10 text-[#d4a574] text-xs font-black flex items-center justify-center">1</span>
+                            <h3 className="text-lg font-black text-slate-900 border-b border-slate-200 pb-3 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-[#d4a574]/20 text-[#c49a67] text-xs font-black flex items-center justify-center">1</span>
                                 Contact Information
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Your Full Name</label>
+                                    <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Your Full Name</label>
                                     <div className="relative">
-                                        <UserIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <UserIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                         <input
                                             type="text"
                                             required
                                             value={clientName}
                                             onChange={e => setClientName(e.target.value)}
                                             placeholder="Juan Santos"
-                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-200 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold"
+                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Email Address</label>
+                                    <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Email Address</label>
                                     <div className="relative">
-                                        <EnvelopeIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <EnvelopeIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                         <input
                                             type="email"
                                             value={email}
                                             onChange={e => setEmail(e.target.value)}
                                             placeholder="juan@email.com"
-                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-200 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold"
+                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Phone Number</label>
+                                    <label className="text-xs font-black text-slate-700 uppercase tracking-widest">Phone Number</label>
                                     <div className="relative">
-                                        <PhoneIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <PhoneIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                         <input
                                             type="text"
                                             value={phone}
                                             onChange={e => setPhone(e.target.value)}
                                             placeholder="09123456789"
-                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-200 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold"
+                                            className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
                                     </div>
                                 </div>
@@ -347,8 +366,8 @@ export default function Ticketing({ mode = 'portal' }) {
 
                         {/* Phase 2: Purpose */}
                         <div className="space-y-6">
-                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-full bg-[#d4a574]/10 text-[#d4a574] text-xs font-black flex items-center justify-center">2</span>
+                            <h3 className="text-lg font-black text-slate-900 border-b border-slate-200 pb-3 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-[#d4a574]/20 text-[#c49a67] text-xs font-black flex items-center justify-center">2</span>
                                 Document Type & Purpose
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -361,17 +380,17 @@ export default function Ticketing({ mode = 'portal' }) {
                                         key={item.id}
                                         onClick={() => setPurpose(item.id)}
                                         className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex flex-col justify-between h-36 ${purpose === item.id
-                                            ? 'border-[#d4a574] bg-[#d4a574]/5 shadow-sm'
-                                            : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50'
+                                            ? 'border-[#d4a574] bg-[#d4a574]/10 shadow-sm'
+                                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start">
                                             <span className="text-3xl">{item.icon}</span>
-                                            {purpose === item.id && <span className="w-5 h-5 rounded-full bg-[#d4a574] flex items-center justify-center text-white text-xs font-black">✓</span>}
+                                            {purpose === item.id && <span className="w-5 h-5 rounded-full bg-[#d4a574] flex items-center justify-center text-[#0f172a] text-xs font-black">✓</span>}
                                         </div>
                                         <div>
-                                            <p className="font-extrabold text-slate-800 text-sm">{item.label}</p>
-                                            <p className="text-[11px] text-slate-400 mt-1">{item.desc}</p>
+                                            <p className="font-black text-slate-900 text-sm">{item.label}</p>
+                                            <p className="text-[11px] text-slate-700 font-medium mt-1">{item.desc}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -379,8 +398,8 @@ export default function Ticketing({ mode = 'portal' }) {
                         </div>
 
                         {/* Phase 3: Details */}
-                        <div className="space-y-6 bg-slate-50/40 p-6 rounded-3xl border border-slate-100/50">
-                            <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                        <div className="space-y-6 bg-slate-100/40 p-6 rounded-3xl border border-slate-200">
+                            <h3 className="text-md font-black text-slate-900 flex items-center gap-2">
                                 <DocumentTextIcon className="w-5 h-5 text-[#d4a574]" />
                                 Provide Registry Information (To Speed Up Processing)
                             </h3>
@@ -388,32 +407,32 @@ export default function Ticketing({ mode = 'portal' }) {
                             {purpose === 'birth' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Child's First Name</label>
-                                        <input type="text" value={details.first_name} onChange={e => handleDetailChange('first_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="First Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">First Name (on Certificate)</label>
+                                        <input type="text" value={details.first_name} onChange={e => handleDetailChange('first_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="First Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Child's Middle Name</label>
-                                        <input type="text" value={details.middle_name} onChange={e => handleDetailChange('middle_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Middle Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Middle Name (on Certificate)</label>
+                                        <input type="text" value={details.middle_name} onChange={e => handleDetailChange('middle_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Middle Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Child's Last Name</label>
-                                        <input type="text" value={details.last_name} onChange={e => handleDetailChange('last_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Last Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Last Name (on Certificate)</label>
+                                        <input type="text" value={details.last_name} onChange={e => handleDetailChange('last_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Last Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date of Birth</label>
-                                        <input type="date" value={details.date_of_birth} onChange={e => handleDetailChange('date_of_birth', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Date of Birth</label>
+                                        <input type="date" value={details.date_of_birth} onChange={e => handleDetailChange('date_of_birth', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 focus:border-[#d4a574] focus:outline-none" />
                                     </div>
                                     <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Place of Birth (City/Hospital)</label>
-                                        <input type="text" value={details.place_of_birth} onChange={e => handleDetailChange('place_of_birth', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="e.g. Naic, Cavite" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Place of Birth (City/Hospital)</label>
+                                        <input type="text" value={details.place_of_birth} onChange={e => handleDetailChange('place_of_birth', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="e.g. Naic, Cavite" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Father's Full Name</label>
-                                        <input type="text" value={details.father_name} onChange={e => handleDetailChange('father_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Father's Full Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Father's Full Name</label>
+                                        <input type="text" value={details.father_name} onChange={e => handleDetailChange('father_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Father's Full Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mother's Full Maiden Name</label>
-                                        <input type="text" value={details.mother_name} onChange={e => handleDetailChange('mother_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Mother's Maiden Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Mother's Full Maiden Name</label>
+                                        <input type="text" value={details.mother_name} onChange={e => handleDetailChange('mother_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Mother's Maiden Name" />
                                     </div>
                                 </div>
                             )}
@@ -421,24 +440,24 @@ export default function Ticketing({ mode = 'portal' }) {
                             {purpose === 'death' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deceased First Name</label>
-                                        <input type="text" value={details.deceased_first_name} onChange={e => handleDetailChange('deceased_first_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Deceased First Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Deceased First Name</label>
+                                        <input type="text" value={details.deceased_first_name} onChange={e => handleDetailChange('deceased_first_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Deceased First Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deceased Middle Name</label>
-                                        <input type="text" value={details.deceased_middle_name} onChange={e => handleDetailChange('deceased_middle_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Deceased Middle Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Deceased Middle Name</label>
+                                        <input type="text" value={details.deceased_middle_name} onChange={e => handleDetailChange('deceased_middle_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Deceased Middle Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deceased Last Name</label>
-                                        <input type="text" value={details.deceased_last_name} onChange={e => handleDetailChange('deceased_last_name', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="Deceased Last Name" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Deceased Last Name</label>
+                                        <input type="text" value={details.deceased_last_name} onChange={e => handleDetailChange('deceased_last_name', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Deceased Last Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date of Death</label>
-                                        <input type="date" value={details.date_of_death} onChange={e => handleDetailChange('date_of_death', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Date of Death</label>
+                                        <input type="date" value={details.date_of_death} onChange={e => handleDetailChange('date_of_death', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 focus:border-[#d4a574] focus:outline-none" />
                                     </div>
                                     <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Place of Death</label>
-                                        <input type="text" value={details.place_of_death} onChange={e => handleDetailChange('place_of_death', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="e.g. Naic, Cavite" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Place of Death</label>
+                                        <input type="text" value={details.place_of_death} onChange={e => handleDetailChange('place_of_death', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="e.g. Naic, Cavite" />
                                     </div>
                                 </div>
                             )}
@@ -446,26 +465,26 @@ export default function Ticketing({ mode = 'portal' }) {
                             {purpose === 'marriage' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     {/* Husband */}
-                                    <div className="space-y-3 border-r border-slate-100 pr-4">
-                                        <h4 className="text-xs font-bold text-slate-700 uppercase">Husband Details</h4>
-                                        <input type="text" value={details.husband_first_name} onChange={e => handleDetailChange('husband_first_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm mb-2" placeholder="First Name" />
-                                        <input type="text" value={details.husband_middle_name} onChange={e => handleDetailChange('husband_middle_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm mb-2" placeholder="Middle Name" />
-                                        <input type="text" value={details.husband_last_name} onChange={e => handleDetailChange('husband_last_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm" placeholder="Last Name" />
+                                    <div className="space-y-3 border-r border-slate-200 pr-4">
+                                        <h4 className="text-xs font-black text-slate-800 uppercase">Husband Details</h4>
+                                        <input type="text" value={details.husband_first_name} onChange={e => handleDetailChange('husband_first_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm mb-2 text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="First Name" />
+                                        <input type="text" value={details.husband_middle_name} onChange={e => handleDetailChange('husband_middle_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm mb-2 text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Middle Name" />
+                                        <input type="text" value={details.husband_last_name} onChange={e => handleDetailChange('husband_last_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Last Name" />
                                     </div>
                                     {/* Wife */}
                                     <div className="space-y-3">
-                                        <h4 className="text-xs font-bold text-slate-700 uppercase">Wife Details</h4>
-                                        <input type="text" value={details.wife_first_name} onChange={e => handleDetailChange('wife_first_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm mb-2" placeholder="First Name" />
-                                        <input type="text" value={details.wife_middle_name} onChange={e => handleDetailChange('wife_middle_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm mb-2" placeholder="Middle Name" />
-                                        <input type="text" value={details.wife_last_name} onChange={e => handleDetailChange('wife_last_name', e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm" placeholder="Last Name" />
+                                        <h4 className="text-xs font-black text-slate-800 uppercase">Wife Details</h4>
+                                        <input type="text" value={details.wife_first_name} onChange={e => handleDetailChange('wife_first_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm mb-2 text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="First Name" />
+                                        <input type="text" value={details.wife_middle_name} onChange={e => handleDetailChange('wife_middle_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm mb-2 text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Middle Name" />
+                                        <input type="text" value={details.wife_last_name} onChange={e => handleDetailChange('wife_last_name', e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="Last Name" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date of Marriage</label>
-                                        <input type="date" value={details.date_of_marriage} onChange={e => handleDetailChange('date_of_marriage', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Date of Marriage</label>
+                                        <input type="date" value={details.date_of_marriage} onChange={e => handleDetailChange('date_of_marriage', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 focus:border-[#d4a574] focus:outline-none" />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Place of Marriage</label>
-                                        <input type="text" value={details.place_of_marriage} onChange={e => handleDetailChange('place_of_marriage', e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm" placeholder="e.g. Naic, Cavite" />
+                                        <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Place of Marriage</label>
+                                        <input type="text" value={details.place_of_marriage} onChange={e => handleDetailChange('place_of_marriage', e.target.value)} className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:border-[#d4a574] focus:outline-none" placeholder="e.g. Naic, Cavite" />
                                     </div>
                                 </div>
                             )}
@@ -475,7 +494,7 @@ export default function Ticketing({ mode = 'portal' }) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full py-4 bg-gradient-to-r from-[#d4a574] to-[#c49a67] text-[#0f172a] rounded-2xl font-black shadow-xl shadow-[#d4a574]/10 hover:shadow-2xl transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                className="w-full py-4 bg-gradient-to-r from-[#d4a574] to-[#c49a67] text-[#0f172a] rounded-2xl font-black shadow-xl shadow-[#d4a574]/15 hover:shadow-2xl transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                             >
                                 {isSubmitting ? 'Queueing request...' : 'Get Queue Ticket'}
                             </button>
@@ -524,7 +543,10 @@ export default function Ticketing({ mode = 'portal' }) {
                                     <p className="text-slate-400 text-xs mt-1 print:text-slate-500">{formattedDate}</p>
                                 </div>
                                 <div className="bg-white p-3 rounded-2xl shadow-lg print:shadow-none border border-slate-100 shrink-0">
-                                    <QRCodeSVG value={trackingUrl} size={110} />
+                                    {ticketQrUrl
+                                        ? <img src={ticketQrUrl} alt="QR Code" className="w-[110px] h-[110px]" />
+                                        : <QRCodeSVG value={trackingUrl} size={110} />
+                                    }
                                 </div>
                             </div>
 
@@ -552,7 +574,9 @@ export default function Ticketing({ mode = 'portal' }) {
                                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                                 : ticket.status === 'Cancelled'
                                                     ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    : ticket.status === 'Expired'
+                                                        ? 'bg-slate-200/60 text-slate-400 border-slate-300/50'
+                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                             }`}>
                                             {ticket.status}
                                         </span>
@@ -581,6 +605,15 @@ export default function Ticketing({ mode = 'portal' }) {
                                     <CheckCircleIcon className="w-8 h-8 text-emerald-400 mx-auto" />
                                     <h4 className="font-black text-lg text-white">Request Completed</h4>
                                     <p className="text-xs text-slate-300">Your document copy has been successfully issued. Thank you!</p>
+                                </div>
+                            )}
+
+                            {ticket.status === 'Expired' && (
+                                <div className="pt-8 text-center space-y-2 bg-slate-500/5 p-6 rounded-3xl border border-slate-500/10 print:hidden">
+                                    <ClockIcon className="w-8 h-8 text-slate-400 mx-auto" />
+                                    <h4 className="font-black text-lg text-slate-300">Ticket Expired</h4>
+                                    <p className="text-xs text-slate-400">This ticket was valid until 5:00 PM on the day it was issued. Please request a new ticket.</p>
+                                    <a href="/ticket-request" className="inline-block mt-3 px-5 py-2 bg-[#d4a574] text-[#0f172a] rounded-xl text-xs font-black uppercase tracking-widest">New Request</a>
                                 </div>
                             )}
                         </div>
@@ -612,7 +645,8 @@ export default function Ticketing({ mode = 'portal' }) {
     if (mode === 'staff') {
         const pendingTickets = tickets.filter(t => t.status === 'Pending');
         const servingTickets = tickets.filter(t => t.status === 'Serving');
-        const finishedTickets = tickets.filter(t => ['Completed', 'Cancelled'].includes(t.status));
+        const expiredTickets = tickets.filter(t => t.status === 'Expired');
+        const finishedTickets = tickets.filter(t => ['Completed', 'Cancelled', 'Expired'].includes(t.status));
 
         const getPurposeBadge = (purpose) => {
             const map = {
@@ -692,35 +726,72 @@ export default function Ticketing({ mode = 'portal' }) {
                                 className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-100"
                             >
                                 <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-                                    <h3 className="font-bold text-slate-800 text-lg">Create Walk-in Ticket</h3>
-                                    <button onClick={() => setIsWalkInModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                                    <h3 className="font-bold text-slate-800 text-lg">Walk-In Ticket</h3>
+                                    <button onClick={() => { setIsWalkInModalOpen(false); setWalkInResult(null); }} className="text-slateate-400 hover:text-slate-600">✕</button>
                                 </div>
 
-                                <form onSubmit={handleCreateWalkIn} className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Client Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={walkInName}
-                                            onChange={e => setWalkInName(e.target.value)}
-                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
-                                            placeholder="Client Name"
-                                        />
+                                {walkInResult ? (
+                                    /* QR Result View */
+                                    <div className="text-center space-y-4">
+                                        <p className="text-sm font-bold text-emerald-600">✓ Ticket Generated!</p>
+                                        <p className="text-2xl font-black text-slate-800 tracking-tight">{walkInResult.ticket_number}</p>
+                                        <div className="flex justify-center">
+                                            <div className="bg-white border-4 border-[#1a2f4a] rounded-2xl p-3 shadow-lg">
+                                                <img
+                                                    src={`data:image/svg+xml;base64,${walkInResult.qr_base64}`}
+                                                    alt="Walk-In QR Code"
+                                                    className="w-48 h-48"
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-400">Show this QR or the ticket number at the counter.<br/>Expires at 5:00 PM today.</p>
+                                        <div className="flex gap-3 pt-2">
+                                            <button
+                                                onClick={() => window.print()}
+                                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
+                                            >
+                                                <PrinterIcon className="w-4 h-4" /> Print
+                                            </button>
+                                            <button
+                                                onClick={() => { setWalkInResult(null); setIsWalkInModalOpen(false); }}
+                                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-[#1a2f4a] hover:bg-[#112033] transition-colors"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Purpose / Document Type</label>
-                                        <select
-                                            value={walkInPurpose}
-                                            onChange={e => setWalkInPurpose(e.target.value)}
-                                            className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
-                                        >
-                                            <option value="birth">Birth Certificate</option>
-                                            <option value="death">Death Certificate</option>
-                                            <option value="marriage">Marriage Certificate</option>
-                                        </select>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                ) : (
+                                    /* Form View */
+                                    <form onSubmit={handleCreateWalkIn} className="space-y-4">
+                                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-900 font-bold flex justify-between items-center">
+                                            <span>Next Dedicated Ticket Number:</span>
+                                            <span className="font-black text-sm bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                                                {`WI-${new Date().getFullYear()}-${String(tickets.filter(t => t.source === 'walk_in').length + 1).padStart(4, '0')}`}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Client Name</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={walkInName}
+                                                onChange={e => setWalkInName(e.target.value)}
+                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                                placeholder="Client Name"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Purpose / Document Type</label>
+                                            <select
+                                                value={walkInPurpose}
+                                                onChange={e => setWalkInPurpose(e.target.value)}
+                                                className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
+                                            >
+                                                <option value="birth">Birth Certificate</option>
+                                                <option value="death">Death Certificate</option>
+                                                <option value="marriage">Marriage Certificate</option>
+                                            </select>
+                                        </div>
                                         <div>
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Phone Number (Optional)</label>
                                             <input
@@ -728,37 +799,39 @@ export default function Ticketing({ mode = 'portal' }) {
                                                 value={walkInPhone}
                                                 onChange={e => setWalkInPhone(e.target.value)}
                                                 className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
-                                                placeholder="0912..."
+                                                placeholder="09123456789"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Email (Optional)</label>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Gmail / Email (Optional)</label>
                                             <input
                                                 type="email"
                                                 value={walkInEmail}
                                                 onChange={e => setWalkInEmail(e.target.value)}
                                                 className="w-full p-3 border border-slate-200 rounded-xl text-sm font-semibold"
-                                                placeholder="client@email.com"
+                                                placeholder="client@gmail.com"
                                             />
                                         </div>
-                                    </div>
-
-                                    <div className="flex gap-3 pt-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsWalkInModalOpen(false)}
-                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer"
-                                        >
-                                            Generate Ticket
-                                        </button>
-                                    </div>
-                                </form>
+                                        <p className="text-[10px] text-slate-400 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                                            ⚠️ Walk-in tickets use prefix <strong>WI-</strong> and expire at 5:00 PM today.
+                                        </p>
+                                        <div className="flex gap-3 pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsWalkInModalOpen(false); setWalkInResult(null); }}
+                                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer"
+                                            >
+                                                Generate Ticket
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
                             </motion.div>
                         </div>
                     )}
@@ -798,6 +871,30 @@ export default function Ticketing({ mode = 'portal' }) {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                     {/* Left: Queue Columns */}
                     <div className="lg:col-span-2 space-y-6">
+                        {/* Queue View Switcher */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl w-fit border border-slate-200/40 shadow-sm">
+                            <button
+                                onClick={() => setActiveQueueTab('active')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer ${
+                                    activeQueueTab === 'active'
+                                        ? 'bg-white text-slate-800 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                📋 Active Queue
+                            </button>
+                            <button
+                                onClick={() => setActiveQueueTab('history')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer ${
+                                    activeQueueTab === 'history'
+                                        ? 'bg-white text-slate-800 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                ⏳ Daily History Log
+                            </button>
+                        </div>
+
                         {/* Filters & Control bar */}
                         <div className="bg-white/60 backdrop-blur-xl rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex flex-col sm:flex-row gap-4 items-center justify-between">
                             <div className="flex gap-2 flex-wrap items-center">
@@ -833,123 +930,223 @@ export default function Ticketing({ mode = 'portal' }) {
                                     <PlusCircleIcon className="w-4 h-4 text-emerald-500" />
                                     Walk-in Ticket
                                 </button>
-                                <button
-                                    onClick={handleCallNext}
-                                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#d4a574] text-[#0f172a] font-black text-xs uppercase tracking-widest hover:bg-[#c49a67] rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-                                >
-                                    <MegaphoneIcon className="w-4 h-4" />
-                                    Call Next Ticket
-                                </button>
                             </div>
                         </div>
 
-                        {/* Queue Lists Split */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Pending List */}
-                            <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col h-[500px]">
-                                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                                    <h4 className="font-extrabold text-slate-800 text-sm">Pending Queue ({pendingTickets.length})</h4>
-                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[9px] font-black uppercase">In Line</span>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                                    {pendingTickets.length === 0 ? (
-                                        <div className="text-center py-20 text-slate-400">
-                                            <TicketIcon className="w-10 h-10 mx-auto mb-2 opacity-10" />
-                                            <p className="text-xs font-semibold">No pending requests</p>
-                                        </div>
-                                    ) : (
-                                        pendingTickets.map((t, idx) => (
-                                            <div
-                                                key={t.id}
-                                                onClick={() => setSelectedTicket(t)}
-                                                className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${selectedTicket?.id === t.id
-                                                    ? 'border-indigo-500 bg-indigo-50/10 shadow-sm'
-                                                    : 'border-slate-100 bg-white hover:bg-slate-50'
-                                                    }`}
-                                            >
-                                                <div>
-                                                    <span className="text-[10px] font-black text-slate-400 tracking-wider">#{idx + 1} in queue</span>
-                                                    <p className="font-black text-slate-800 text-sm tracking-tight">{t.ticket_number}</p>
-                                                    <p className="text-xs text-slate-600 font-semibold truncate max-w-[18ch]">{t.client_name}</p>
-                                                </div>
-                                                <span className={`px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${getPurposeBadge(t.purpose)}`}>
-                                                    {t.purpose}
-                                                </span>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Serving & Finished list */}
-                            <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col h-[500px]">
-                                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                                    <h4 className="font-extrabold text-slate-800 text-sm">Serving & Done</h4>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                    {/* Serving Section */}
-                                    <div>
-                                        <h5 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Currently Serving</h5>
-                                        {servingTickets.length === 0 ? (
-                                            <p className="text-xs text-slate-400 py-4 text-center italic">No ticket is currently called.</p>
-                                        ) : (
-                                            <div className="space-y-2.5">
-                                                {servingTickets.map(t => (
-                                                    <div
-                                                        key={t.id}
-                                                        onClick={() => setSelectedTicket(t)}
-                                                        className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between border-indigo-200 bg-indigo-50/20 ${selectedTicket?.id === t.id ? 'ring-2 ring-indigo-500' : ''}`}
-                                                    >
-                                                        <div>
-                                                            <p className="font-black text-indigo-700 text-sm tracking-tight">{t.ticket_number}</p>
-                                                            <p className="text-xs text-slate-700 font-bold truncate max-w-[15ch]">{t.client_name}</p>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); updateTicketStatus(t.id, 'Completed'); }}
-                                                                title="Complete Ticket"
-                                                                className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white"
-                                                            >
-                                                                ✓
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); updateTicketStatus(t.id, 'Cancelled'); }}
-                                                                title="Cancel Ticket"
-                                                                className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                        {activeQueueTab === 'active' ? (
+                            /* Queue Lists Split */
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Pending List */}
+                                <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col h-[500px]">
+                                    <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                                        <h4 className="font-extrabold text-slate-800 text-sm">Pending Queue ({pendingTickets.length})</h4>
+                                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-full text-[9px] font-black uppercase">In Line</span>
                                     </div>
-
-                                    {/* Finished Section */}
-                                    <div className="pt-4 border-t border-slate-100">
-                                        <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed / Cancelled</h5>
-                                        <div className="space-y-2 max-h-[220px] overflow-y-auto">
-                                            {finishedTickets.map(t => (
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                        {pendingTickets.length === 0 ? (
+                                            <div className="text-center py-20 text-slate-400">
+                                                <TicketIcon className="w-10 h-10 mx-auto mb-2 opacity-10" />
+                                                <p className="text-xs font-semibold">No pending requests</p>
+                                            </div>
+                                        ) : (
+                                            pendingTickets.map((t, idx) => (
                                                 <div
                                                     key={t.id}
                                                     onClick={() => setSelectedTicket(t)}
-                                                    className={`p-3 rounded-lg border text-xs flex items-center justify-between ${selectedTicket?.id === t.id ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-100'}`}
+                                                    className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${selectedTicket?.id === t.id
+                                                        ? 'border-indigo-500 bg-indigo-50/10 shadow-sm'
+                                                        : 'border-slate-100 bg-white hover:bg-slate-50'
+                                                        }`}
                                                 >
                                                     <div>
-                                                        <p className="font-bold text-slate-700">{t.ticket_number}</p>
-                                                        <p className="text-[10px] text-slate-500">{t.client_name}</p>
+                                                        <span className="text-[10px] font-black text-slate-400 tracking-wider">#{idx + 1} in queue</span>
+                                                        <p className="font-black text-slate-800 text-sm tracking-tight">{t.ticket_number}</p>
+                                                        <p className="text-xs text-slate-600 font-semibold truncate max-w-[18ch]">{t.client_name}</p>
                                                     </div>
-                                                    <span className={`text-[8px] font-black uppercase ${t.status === 'Completed' ? 'text-emerald-500' : 'text-rose-400'}`}>
-                                                        {t.status}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1 items-end shrink-0">
+                                                        <span className={`px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${getPurposeBadge(t.purpose)}`}>
+                                                            {t.purpose}
+                                                        </span>
+                                                        <span className={`px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${
+                                                            t.source === 'walk_in'
+                                                                ? 'bg-violet-50 text-violet-700 border-violet-100'
+                                                                : 'bg-sky-50 text-sky-700 border-sky-100'
+                                                        }`}>
+                                                            {t.source === 'walk_in' ? 'Walk-in' : 'Online'}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            ))}
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Serving & Finished list */}
+                                <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col h-[500px]">
+                                    <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                                        <h4 className="font-extrabold text-slate-800 text-sm">Serving & Done</h4>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                        {/* Serving Section */}
+                                        <div>
+                                            <h5 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Currently Serving</h5>
+                                            {servingTickets.length === 0 ? (
+                                                <p className="text-xs text-slate-400 py-4 text-center italic">No ticket is currently called.</p>
+                                            ) : (
+                                                <div className="space-y-2.5">
+                                                    {servingTickets.map(t => (
+                                                        <div
+                                                            key={t.id}
+                                                            onClick={() => setSelectedTicket(t)}
+                                                            className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between border-indigo-200 bg-indigo-50/20 ${selectedTicket?.id === t.id ? 'ring-2 ring-indigo-500' : ''}`}
+                                                        >
+                                                            <div>
+                                                                <div className="flex items-center gap-1.5 mb-0.5">
+                                                                    <p className="font-black text-indigo-700 text-sm tracking-tight">{t.ticket_number}</p>
+                                                                    <span className={`px-1.5 py-0.2 rounded text-[7px] font-black uppercase ${
+                                                                        t.source === 'walk_in'
+                                                                            ? 'bg-violet-50 text-violet-700 border border-violet-100'
+                                                                            : 'bg-sky-50 text-sky-700 border border-sky-100'
+                                                                    }`}>
+                                                                        {t.source === 'walk_in' ? 'Walk-in' : 'Online'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-700 font-bold truncate max-w-[15ch]">{t.client_name}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); updateTicketStatus(t.id, 'Completed'); }}
+                                                                    title="Complete Ticket"
+                                                                    className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white"
+                                                                >
+                                                                    ✓
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); updateTicketStatus(t.id, 'Cancelled'); }}
+                                                                    title="Cancel Ticket"
+                                                                    className="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-600 hover:text-white"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Finished Section */}
+                                        <div className="pt-4 border-t border-slate-100">
+                                            <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Completed / Cancelled</h5>
+                                            <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                                                {finishedTickets.map(t => (
+                                                    <div
+                                                        key={t.id}
+                                                        onClick={() => setSelectedTicket(t)}
+                                                        className={`p-3 rounded-lg border text-xs flex items-center justify-between ${selectedTicket?.id === t.id ? 'bg-slate-100 border-slate-300' : 'bg-slate-50 border-slate-100'}`}
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <p className="font-bold text-slate-700">{t.ticket_number}</p>
+                                                                <span className={`text-[7px] font-black uppercase ${
+                                                                    t.source === 'walk_in'
+                                                                        ? 'text-violet-600'
+                                                                        : 'text-sky-600'
+                                                                }`}>
+                                                                    {t.source === 'walk_in' ? 'Walk-in' : 'Online'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-500">{t.client_name}</p>
+                                                        </div>
+                                                        <span className={`text-[8px] font-black uppercase ${t.status === 'Completed' ? 'text-emerald-500' : 'text-rose-400'}`}>
+                                                            {t.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            /* Daily History Log Table */
+                            <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden flex flex-col min-h-[500px]">
+                                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                                    <h4 className="font-extrabold text-slate-800 text-sm">Today's Ticket Log History</h4>
+                                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-full text-[9px] font-black uppercase">Daily History</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-black border-b border-slate-200">
+                                                <th className="p-4 pl-6">Ticket No.</th>
+                                                <th className="p-4">Recipient Name</th>
+                                                <th className="p-4">Source</th>
+                                                <th className="p-4">Type</th>
+                                                <th className="p-4">Created Time</th>
+                                                <th className="p-4">Status</th>
+                                                <th className="p-4 pr-6 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-xs">
+                                            {tickets.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="7" className="p-12 text-center text-slate-400">
+                                                        <TicketIcon className="w-12 h-12 mx-auto mb-2 opacity-10" />
+                                                        <p className="font-semibold">No tickets found for today</p>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                tickets.map((t) => (
+                                                    <tr key={t.id} className={`hover:bg-slate-50/50 transition-colors ${selectedTicket?.id === t.id ? 'bg-indigo-50/20' : ''}`}>
+                                                        <td className="p-4 pl-6 font-black text-slate-800">{t.ticket_number}</td>
+                                                        <td className="p-4 font-semibold text-slate-700">{t.client_name}</td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${
+                                                                t.source === 'walk_in'
+                                                                    ? 'bg-violet-50 text-violet-700 border-violet-100'
+                                                                    : 'bg-sky-50 text-sky-700 border-sky-100'
+                                                            }`}>
+                                                                {t.source === 'walk_in' ? 'Walk-in' : 'Online'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${getPurposeBadge(t.purpose)}`}>
+                                                                {t.purpose}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 text-slate-400 font-mono">{new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                                        <td className="p-4">
+                                                            <span className={`inline-flex px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                                                t.status === 'Serving'
+                                                                    ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                                                                    : t.status === 'Completed'
+                                                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                                                        : t.status === 'Cancelled'
+                                                                            ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                                                            : t.status === 'Expired'
+                                                                                ? 'bg-slate-100 text-slate-500 border-slate-200'
+                                                                                : 'bg-amber-50 text-amber-600 border-amber-200'
+                                                            }`}>
+                                                                {t.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 pr-6 text-right">
+                                                            <button
+                                                                onClick={() => setSelectedTicket(t)}
+                                                                className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"
+                                                            >
+                                                                View
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Ticket Detail Panel */}
@@ -965,9 +1162,18 @@ export default function Ticketing({ mode = 'portal' }) {
                                 <div className="space-y-6">
                                     <div className="flex justify-between items-start border-b border-slate-100 pb-4">
                                         <div>
-                                            <span className={`inline-flex px-2 py-0.5 border rounded-full text-[8px] font-black uppercase mb-1.5 ${getPurposeBadge(selectedTicket.purpose)}`}>
-                                                {selectedTicket.purpose}
-                                            </span>
+                                            <div className="flex items-center gap-1.5 mb-1.5">
+                                                <span className={`inline-flex px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${getPurposeBadge(selectedTicket.purpose)}`}>
+                                                    {selectedTicket.purpose}
+                                                </span>
+                                                <span className={`inline-flex px-2 py-0.5 border rounded-full text-[8px] font-black uppercase ${
+                                                    selectedTicket.source === 'walk_in'
+                                                        ? 'bg-violet-50 text-violet-600 border-violet-100'
+                                                        : 'bg-sky-50 text-sky-600 border-sky-100'
+                                                }`}>
+                                                    {selectedTicket.source === 'walk_in' ? '🚶 Walk-in' : '🌐 Online'}
+                                                </span>
+                                            </div>
                                             <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">{selectedTicket.ticket_number}</h3>
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Status: {selectedTicket.status}</p>
                                         </div>

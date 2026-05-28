@@ -267,6 +267,7 @@ export const DataProvider = ({ children }) => {
                     print_remarks:   i.print_remarks,
                     requested_by:    i.requested_by,
                     approved_by:     i.approved_by,
+                    ticket_number:   i.ticket_number,
                     created_at:      i.created_at
                 }));
                 setIssuances(mapped);

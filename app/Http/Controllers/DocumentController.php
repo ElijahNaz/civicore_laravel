@@ -86,33 +86,11 @@ class DocumentController extends Controller
 
                     $dupQuery = DB::table('issuances')
                         ->where('type', $type)
-                    ->where('document_id', '!=', $doc->id)
-                    ->whereNull('deleted_at');
+                        ->where('document_id', '!=', $doc->id)
+                        ->whereNull('deleted_at');
 
-                    if ($type === 'birth' || $type === 'death') {
-                        $firstName = trim($fields['first_name'] ?? '');
-                        $lastName = trim($fields['last_name'] ?? '');
-                        if (!empty($firstName) && !empty($lastName)) {
-                            $dupQuery->where('name', 'like', "%{$lastName}%")
-                                     ->where('name', 'like', "%{$firstName}%");
-                            if ($dupQuery->exists()) {
-                                $doc->has_duplicate = true;
-                            }
-                        }
-                    } elseif ($type === 'marriage') {
-                        $hLastName = trim($fields['husband_last_name'] ?? '');
-                        $wLastName = trim($fields['wife_last_name'] ?? '');
-                        if (!empty($hLastName) || !empty($wLastName)) {
-                            if (!empty($hLastName)) {
-                                $dupQuery->where('name', 'like', "%{$hLastName}%");
-                            }
-                            if (!empty($wLastName)) {
-                                $dupQuery->where('name', 'like', "%{$wLastName}%");
-                            }
-                            if ($dupQuery->exists()) {
-                                $doc->has_duplicate = true;
-                            }
-                        }
+                    if ($this->hasTrueDuplicate($type, $fields, (int) $doc->id)) {
+                        $doc->has_duplicate = true;
                     }
                 }
             }
@@ -610,40 +588,18 @@ class DocumentController extends Controller
         $fields = json_decode($docData->extracted_fields, true) ?? [];
         $barangay = $fields['barangay'] ?? '';
         $detectedType = $docData->detected_type ?: $docData->type;
+        $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
         
         if ($detectedType === 'marriage_license') {
             $detectedType = 'marriage';
         }
 
-        // Duplicate registry validation check
-        $dupQuery = DB::table('issuances')
-            ->where('type', $detectedType)
-            ->where('document_id', '!=', $id)
-            ->whereNull('deleted_at');
-
-        $hasDuplicate = false;
-        if ($detectedType === 'birth' || $detectedType === 'death') {
-            $firstName = trim($fields['first_name'] ?? '');
-            $lastName = trim($fields['last_name'] ?? '');
-            if (!empty($firstName) && !empty($lastName)) {
-                $dupQuery->where('name', 'like', "%{$lastName}%")
-                         ->where('name', 'like', "%{$firstName}%");
-                if ($dupQuery->exists()) $hasDuplicate = true;
-            }
-        } elseif ($detectedType === 'marriage') {
-            $hLastName = trim($fields['husband_last_name'] ?? '');
-            $wLastName = trim($fields['wife_last_name'] ?? '');
-            if (!empty($hLastName) || !empty($wLastName)) {
-                if (!empty($hLastName)) $dupQuery->where('name', 'like', "%{$hLastName}%");
-                if (!empty($wLastName)) $dupQuery->where('name', 'like', "%{$wLastName}%");
-                if ($dupQuery->exists()) $hasDuplicate = true;
-            }
-        }
-
-        if ($hasDuplicate) {
+        // Two-factor duplicate check: name + date (skipped if staff forces through)
+        if (!$force && $this->hasTrueDuplicate($detectedType, $fields, (int) $id)) {
             return response()->json([
-                'success' => false,
-                'error' => 'Direct approval is blocked. This record has a potential duplicate in the Master Registry.'
+                'success'   => false,
+                'duplicate' => true,
+                'error'     => 'A record with this name AND date already exists in the Master Registry. Confirm to override.',
             ], 422);
         }
 
@@ -651,6 +607,103 @@ class DocumentController extends Controller
         $personName = $this->buildFullName($fields, $detectedType) ?: $docData->name;
         
         return $this->performSave($request, $id, $fields, $docData->ocr_text, $personName, $barangay, 'Processed', false, $detectedType);
+    }
+
+    /**
+     * Two-factor duplicate detection: name + date.
+     * Same name alone is NOT enough — civil registry commonly has people with the same name.
+     * We match on both the person's name AND a date field (DOB, DOD, or date of marriage).
+     * Returns true only when BOTH match an existing issuance record.
+     *
+     * @param string $type         Normalized type: birth|death|marriage
+     * @param array  $fields       Extracted fields from the current document
+     * @param int    $excludeDocId Document ID to exclude from the check (the current one)
+     */
+    private function hasTrueDuplicate(string $type, array $fields, int $excludeDocId = 0): bool
+    {
+        $base = DB::table('issuances')
+            ->where('type', $type)
+            ->whereNull('deleted_at');
+
+        if ($excludeDocId > 0) {
+            $base->where('document_id', '!=', $excludeDocId);
+        }
+
+        if ($type === 'birth') {
+            $firstName = trim($fields['first_name'] ?? '');
+            $lastName  = trim($fields['last_name']  ?? '');
+            $dob       = trim($fields['date_of_birth'] ?? $fields['birth_date'] ?? '');
+
+            // Need at least name; date is the tiebreaker
+            if (empty($firstName) || empty($lastName)) return false;
+
+            $query = (clone $base)
+                ->where('name', 'like', "%{$lastName}%")
+                ->where('name', 'like', "%{$firstName}%");
+
+            if (!$query->exists()) return false; // No name match at all — definitely not a dup
+
+            // Name matched — now check date_of_birth in extracted_data JSON
+            if (!empty($dob)) {
+                return (clone $base)
+                    ->where('name', 'like', "%{$lastName}%")
+                    ->where('name', 'like', "%{$firstName}%")
+                    ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(extracted_data, '$.date_of_birth')) = ?", [$dob])
+                    ->exists();
+            }
+
+            // If we have no DOB in the new document, fall back to name-only (conservative)
+            return true;
+
+        } elseif ($type === 'death') {
+            $firstName = trim($fields['first_name'] ?? '');
+            $lastName  = trim($fields['last_name']  ?? '');
+            $dod       = trim($fields['date_of_death'] ?? $fields['death_date'] ?? '');
+
+            if (empty($firstName) || empty($lastName)) return false;
+
+            $query = (clone $base)
+                ->where('name', 'like', "%{$lastName}%")
+                ->where('name', 'like', "%{$firstName}%");
+
+            if (!$query->exists()) return false;
+
+            if (!empty($dod)) {
+                return (clone $base)
+                    ->where('name', 'like', "%{$lastName}%")
+                    ->where('name', 'like', "%{$firstName}%")
+                    ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(extracted_data, '$.date_of_death')) = ?", [$dod])
+                    ->exists();
+            }
+
+            return true;
+
+        } elseif ($type === 'marriage') {
+            $hLastName = trim($fields['husband_last_name'] ?? '');
+            $wLastName = trim($fields['wife_last_name']   ?? '');
+            $dom       = trim($fields['date_of_marriage'] ?? $fields['marriage_date'] ?? '');
+
+            if (empty($hLastName) && empty($wLastName)) return false;
+
+            $query = (clone $base);
+            if (!empty($hLastName)) $query->where('name', 'like', "%{$hLastName}%");
+            if (!empty($wLastName)) $query->where('name', 'like', "%{$wLastName}%");
+
+            if (!$query->exists()) return false;
+
+            if (!empty($dom)) {
+                $dateQuery = (clone $base);
+                if (!empty($hLastName)) $dateQuery->where('name', 'like', "%{$hLastName}%");
+                if (!empty($wLastName)) $dateQuery->where('name', 'like', "%{$wLastName}%");
+                return $dateQuery
+                    ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(extracted_data, '$.date_of_marriage')) = ?", [$dom])
+                    ->exists();
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     private function buildFullName($fields, $type)
@@ -744,6 +797,9 @@ class DocumentController extends Controller
                         $normCertType = 'marriage';
                     }
 
+                    $ticketRecord = DB::table('tickets')->where('document_id', $id)->first();
+                    $ticketNumber = $ticketRecord ? $ticketRecord->ticket_number : null;
+
                     if (count($existing) > 0) {
                         // 2. UPDATE existing Master Record (Keep certNumber)
                         DB::table('issuances')->where('document_id', $id)->update([
@@ -755,6 +811,7 @@ class DocumentController extends Controller
                             'encoded_by' => $encodedBy,
                             'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
                             'file_path' => $issuanceFilePath,
+                            'ticket_number' => $ticketNumber,
                             'updated_at' => now()
                         ]);
                     } else {
@@ -770,7 +827,7 @@ class DocumentController extends Controller
                         
                         $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
                         $issuanceDate = date('m/d/Y');
-
+ 
                         DB::table('issuances')->insert([
                             'certNumber' => $certNumber,
                             'type' => $docType,
@@ -783,6 +840,7 @@ class DocumentController extends Controller
                             'document_id' => $id,
                             'extracted_data' => json_encode($extractedFields, JSON_UNESCAPED_UNICODE),
                             'file_path' => $issuanceFilePath,
+                            'ticket_number' => $ticketNumber,
                             'created_at' => now(),
                             'updated_at' => now()
                         ]);
@@ -1256,34 +1314,14 @@ class DocumentController extends Controller
             $normType = 'marriage';
         }
 
-        // Duplicate Check
-        $dupQuery = DB::table('issuances')
-            ->where('type', $normType)
-            ->whereNull('deleted_at');
+        // Two-factor duplicate check: name + date (skip if force=true)
+        $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
 
-        $hasDuplicate = false;
-        if ($normType === 'birth' || $normType === 'death') {
-            $firstName = trim($extractedFields['first_name'] ?? '');
-            $lastName = trim($extractedFields['last_name'] ?? '');
-            if (!empty($firstName) && !empty($lastName)) {
-                $dupQuery->where('name', 'like', "%{$lastName}%")
-                         ->where('name', 'like', "%{$firstName}%");
-                if ($dupQuery->exists()) $hasDuplicate = true;
-            }
-        } elseif ($normType === 'marriage') {
-            $hLastName = trim($extractedFields['husband_last_name'] ?? '');
-            $wLastName = trim($extractedFields['wife_last_name'] ?? '');
-            if (!empty($hLastName) || !empty($wLastName)) {
-                if (!empty($hLastName)) $dupQuery->where('name', 'like', "%{$hLastName}%");
-                if (!empty($wLastName)) $dupQuery->where('name', 'like', "%{$wLastName}%");
-                if ($dupQuery->exists()) $hasDuplicate = true;
-            }
-        }
-
-        if ($hasDuplicate) {
+        if (!$force && $this->hasTrueDuplicate($normType, $extractedFields)) {
             return response()->json([
-                'success' => false,
-                'error' => 'A record with this name already exists in the Master Registry. Direct creation is blocked.'
+                'success'   => false,
+                'duplicate' => true,
+                'error'     => 'A record with this name AND date already exists in the Master Registry. Confirm to override.',
             ], 422);
         }
 

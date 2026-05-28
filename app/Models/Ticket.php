@@ -18,15 +18,28 @@ class Ticket extends Model
         'status',
         'details',
         'token',
-        'document_id'
+        'document_id',
+        'expires_at',
+        'source',
+        'qr_code_path',
     ];
 
     protected $casts = [
-        'details' => 'array',
+        'details'    => 'array',
+        'expires_at' => 'datetime',
     ];
 
     public function document()
     {
         return $this->belongsTo(Document::class);
+    }
+
+    /**
+     * Whether this ticket has expired (past 5 PM on submission day).
+     */
+    public function isExpired(): bool
+    {
+        if (!$this->expires_at) return false;
+        return now()->gt($this->expires_at);
     }
 }

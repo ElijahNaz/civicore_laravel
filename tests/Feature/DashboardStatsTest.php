@@ -31,24 +31,50 @@ class DashboardStatsTest extends TestCase
     public function test_dashboard_stats_filters_out_pending_and_extracted_queue_documents()
     {
         // 1. Processed documents (status: processed, active, issued) - should be in totalDocs and processedDocs
-        DB::table('documents')->insert([
+        $docId1 = DB::table('documents')->insertGetId([
+            'name' => 'ProcessedBirth.pdf',
+            'type' => 'birth',
+            'date' => '2026-05-26',
+            'size' => '1024',
+            'status' => 'processed',
+            'deleted_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $docId2 = DB::table('documents')->insertGetId([
+            'name' => 'ActiveDeath.pdf',
+            'type' => 'death',
+            'date' => '2026-05-26',
+            'size' => '1024',
+            'status' => 'active',
+            'deleted_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('issuances')->insert([
             [
-                'name' => 'ProcessedBirth.pdf',
+                'document_id' => $docId1,
+                'certNumber' => 'BC-2026-001',
                 'type' => 'birth',
-                'date' => '2026-05-26',
-                'size' => '1024',
-                'status' => 'processed',
-                'deleted_at' => null,
+                'certificate_type' => 'birth',
+                'name' => 'John Doe',
+                'barangay' => 'Labac',
+                'issuanceDate' => '05/26/2026',
+                'status' => 'Active',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
-                'name' => 'ActiveDeath.pdf',
+                'document_id' => $docId2,
+                'certNumber' => 'DC-2026-001',
                 'type' => 'death',
-                'date' => '2026-05-26',
-                'size' => '1024',
-                'status' => 'active',
-                'deleted_at' => null,
+                'certificate_type' => 'death',
+                'name' => 'Jane Doe',
+                'barangay' => 'Labac',
+                'issuanceDate' => '05/26/2026',
+                'status' => 'Active',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]

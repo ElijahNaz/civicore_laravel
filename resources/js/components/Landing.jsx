@@ -91,10 +91,10 @@ export default function Landing() {
                             <motion.button
                                 whileHover={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.05)" }}
                                 whileTap={{ scale: 0.98 }}
-                                onClick={() => navigate('/services')}
+                                onClick={() => navigate('/ticket-request')}
                                 className="bg-transparent border border-slate-600 text-white px-10 py-5 rounded-2xl font-bold hover:border-[#d4a574]/50 hover:text-[#d4a574] transition-all uppercase tracking-[0.15em] text-sm flex items-center justify-center cursor-pointer"
                             >
-                                Services Info
+                                Online Request
                             </motion.button>
                         </div>
 

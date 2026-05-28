@@ -139,9 +139,13 @@ const Documents = () => {
                 const base = filename.replace(/\.[^/.]+$/, '');
                 return base.replace(/-preprocessed$/, '').trim();
             };
-            const uploadingFiltered = uploading.filter(u => 
-                !fetched.some(f => getBaseName(f.name) === getBaseName(u.name))
-            );
+            const uploadingFiltered = uploading.filter(u => {
+                const uTime = new Date(u.created_at).getTime();
+                return !fetched.some(f => {
+                    const fTime = new Date(f.created_at).getTime();
+                    return getBaseName(f.name) === getBaseName(u.name) && fTime >= (uTime - 120000);
+                });
+            });
 
             // Make sure the local files status updates duplicate indicators instantly
             const nextFiles = [...uploadingFiltered, ...fetched];
@@ -430,6 +434,49 @@ const Documents = () => {
                     refreshAll();
                     return { success: true };
                 }
+
+                // Handle duplicate conflict — ask staff to confirm force-override
+                if (res.status === 422 && data.duplicate) {
+                    return new Promise((resolve, reject) => {
+                        // Revert optimistic status while the modal is shown
+                        refreshDocuments(true);
+                        setConfirmModal({
+                            isOpen: true,
+                            title: '⚠️ Duplicate Detected',
+                            message: 'A similar record already exists in the Master Registry. Do you still want to approve and save this record as a duplicate?',
+                            type: 'warning',
+                            onConfirm: async () => {
+                                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f));
+                                try {
+                                    const forceRes = await fetch(`/api/documents/${fileId}/quick-approve`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ force: true }),
+                                        credentials: 'include',
+                                    });
+                                    const forceData = await forceRes.json();
+                                    if (forceData.success) {
+                                        refreshAll();
+                                        resolve({ success: true });
+                                    } else {
+                                        refreshDocuments(true);
+                                        reject(new Error(forceData.error || 'Force approval failed'));
+                                    }
+                                } catch (forceErr) {
+                                    refreshDocuments(true);
+                                    reject(forceErr);
+                                }
+                            },
+                            onCancel: () => {
+                                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                refreshDocuments(true);
+                                reject(new Error('duplicate_cancelled'));
+                            }
+                        });
+                    });
+                }
+
                 throw new Error(data.error || 'Approval failed');
             } catch (err) {
                 // Revert status on failure
