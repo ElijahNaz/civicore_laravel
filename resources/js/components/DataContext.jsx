@@ -268,7 +268,13 @@ export const DataProvider = ({ children }) => {
                     requested_by:    i.requested_by,
                     approved_by:     i.approved_by,
                     ticket_number:   i.ticket_number,
-                    created_at:      i.created_at
+                    created_at:      i.created_at,
+                    source:          'issuance',
+                    raw: {
+                        ...i,
+                        type: (i.type && i.type.toLowerCase() !== 'unknown') ? i.type : 'birth',
+                        source: 'issuance'
+                    }
                 }));
                 setIssuances(mapped);
                 sessionStorage.setItem('civicore_issuances', JSON.stringify(mapped));

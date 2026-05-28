@@ -160,6 +160,12 @@ class IssuanceController extends Controller
         if ($request->has('extracted_fields') && !$request->has('extracted_data')) {
             $data['extracted_data'] = $request->input('extracted_fields');
         }
+        if ($request->has('detectedType') && !$request->has('type')) {
+            $data['type'] = $request->input('detectedType');
+        }
+
+        // Always update updated_at timestamp
+        $data['updated_at'] = now();
 
         // Reconstruct name from extracted_data if it is null or empty (e.g. from empty personName in frontend)
         if (empty($data['name'])) {
@@ -188,13 +194,13 @@ class IssuanceController extends Controller
         // Keep certNumber updated from extracted fields tie if possible
         if (empty($data['certNumber'])) {
             $ext = $data['extracted_data'] ?? null;
-            if (is_array($ext) && isset($ext['cert_no'])) {
-                $data['certNumber'] = $ext['cert_no'];
+            if (is_array($ext)) {
+                if (isset($ext['registry_number'])) $data['certNumber'] = $ext['registry_number'];
+                elseif (isset($ext['cert_no'])) $data['certNumber'] = $ext['cert_no'];
             } elseif (is_string($ext)) {
                 $extDecoded = json_decode($ext, true);
-                if (isset($extDecoded['cert_no'])) {
-                    $data['certNumber'] = $extDecoded['cert_no'];
-                }
+                if (isset($extDecoded['registry_number'])) $data['certNumber'] = $extDecoded['registry_number'];
+                elseif (isset($extDecoded['cert_no'])) $data['certNumber'] = $extDecoded['cert_no'];
             }
         }
 
@@ -218,37 +224,17 @@ class IssuanceController extends Controller
         $sql = "UPDATE issuances SET " . implode(', ', $fields) . " WHERE id = ?";
         DB::update($sql, $params);
 
-        // --- Logic Fix: Regenerate PDF to keep it synced with the new data ---
+        // --- Logic Fix: Delete physical PDF to force regeneration on demand ---
+        // Instead of taking 100 seconds to synchronously regenerate the PDF with DOMPDF,
+        // we just delete the cached PDF file. The `getIssuanceFile` method will rebuild it
+        // on the fly next time the user clicks "View PDF".
         $record = DB::selectOne("SELECT * FROM issuances WHERE id = ?", [$id]);
-        if ($record && $record->document_id) {
-            $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
-            if ($doc) {
-                $docType = $record->type;
-                $extractedFields = json_decode($record->extracted_data, true) ?: [];
-                
-                // Overlay current database values (the updated ones)
-                // Note: We should probably update extracted_data in the DB first if name/barangay changed, 
-                // but usually the React app sends the full updated extracted_data.
-                // Let's assume the request might have updated individual fields OR the whole extracted_data.
-                
-                if ($request->has('extracted_data')) {
-                     $extractedFields = is_string($request->extracted_data) ? json_decode($request->extracted_data, true) : $request->extracted_data;
-                }
-
-                $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
-                
-                $pdf = app('dompdf.wrapper');
-                $pdf->setPaper('a4', 'portrait');
-                $pdf->loadView('pdf.composite_document', [
-                    'doc' => $doc, 
-                    'fields' => $extractedFields,
-                    'overlayFields' => $overlayFields
-                ]);
-                $pdfData = $pdf->output();
-
-                $filePath = $this->storeIssuancePdf($id, $docType, $pdfData);
-                DB::table('issuances')->where('id', $id)->update(['file_path' => $filePath]);
+        if ($record && property_exists($record, 'file_path') && $record->file_path) {
+            $path = storage_path("app/public/" . $record->file_path);
+            if (file_exists($path)) {
+                unlink($path);
             }
+            DB::table('issuances')->where('id', $id)->update(['file_path' => null]);
         }
 
         return response()->json(['success' => true]);

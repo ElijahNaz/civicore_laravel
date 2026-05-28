@@ -531,10 +531,10 @@ const Issuances = () => {
                 }
                 logActivity('Edited', certToClear);
                 refreshAll();
-                return { success: true };
+                return { success: true, message: `Successfully updated record for ${personName}` };
             }
             throw new Error('Update failed');
-        }, { silent: true });
+        });
     };
 
     const handleDelete = (cert) => {

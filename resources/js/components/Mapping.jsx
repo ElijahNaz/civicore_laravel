@@ -29,6 +29,14 @@ const getNormalizedType = (item) => {
     return 'birth';
 };
 
+const normalizeBrgy = (name) => {
+    if (!name) return '';
+    return name.toLowerCase()
+        .replace(/^(brgy\.?|barangay)\s+/i, '')
+        .replace(/[^a-z0-9]/gi, '')
+        .trim();
+};
+
 const Mapping = () => {
     const mapRef = useRef(null);
     const chartRef = useRef(null);
@@ -233,7 +241,7 @@ const Mapping = () => {
         });
 
         uniqueIssuances.forEach(item => {
-            const brgy = item.barangay;
+            const rawBrgy = item.barangay;
             const type = getNormalizedType(item);
             
             // Global counts
@@ -241,14 +249,26 @@ const Mapping = () => {
             else if (type === 'death') deathCount++;
             else if (type === 'marriage') marriageCount++;
 
-            if (brgy) {
+            if (rawBrgy) {
+                const normalizedRaw = normalizeBrgy(rawBrgy);
+                // Find the matching static barangay
+                let matchedBrgy = null;
+                for (const sb of staticBarangays) {
+                    if (normalizeBrgy(sb.name) === normalizedRaw || rawBrgy.toLowerCase().includes(normalizeBrgy(sb.name))) {
+                        matchedBrgy = sb.name;
+                        break;
+                    }
+                }
+                
+                const brgy = matchedBrgy || 'Unknown/Unmapped';
+
                 if (!brgyCounts[brgy]) brgyCounts[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
                 if (type === 'birth') brgyCounts[brgy].births++;
                 else if (type === 'death') brgyCounts[brgy].deaths++;
                 else if (type === 'marriage') brgyCounts[brgy].marriages++;
                 brgyCounts[brgy].total++;
 
-                if (brgyCounts[brgy].total > maxTotal) {
+                if (brgy !== 'Unknown/Unmapped' && brgyCounts[brgy].total > maxTotal) {
                     maxTotal = brgyCounts[brgy].total;
                     mostActiveBrgy = brgy;
                 }
@@ -481,6 +501,13 @@ const Mapping = () => {
         return list;
     };
 
+    const unmappedCount = uniqueIssuances.filter(i => {
+        const rb = i.barangay;
+        if (!rb) return true;
+        const norm = normalizeBrgy(rb);
+        return !staticBarangays.some(sb => normalizeBrgy(sb.name) === norm || rb.toLowerCase().includes(normalizeBrgy(sb.name)));
+    }).length;
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -663,8 +690,13 @@ const Mapping = () => {
                             {tab.label}
                         </button>
                     ))}
-                    <span className="ml-auto text-[9px] text-slate-400 font-bold uppercase tracking-widest pr-2 pb-2">
+                    <span className="ml-auto text-[9px] text-slate-400 font-bold uppercase tracking-widest pr-2 pb-2 flex items-center gap-2">
                         {quickFilter !== 'all' ? `Filtered · ${filteredApiData.length} records` : `All Time · ${filteredApiData.length} records`}
+                        {unmappedCount > 0 && (
+                            <span className="text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                {unmappedCount} Unmapped
+                            </span>
+                        )}
                     </span>
                 </div>
 
@@ -788,6 +820,11 @@ const Mapping = () => {
                             </span>
                             <span className="text-slate-400 font-medium">·</span>
                             <span className="text-slate-500 font-semibold">{filteredApiData.length} record{filteredApiData.length !== 1 ? 's' : ''}</span>
+                            {unmappedCount > 0 && (
+                                <span className="text-amber-500 font-semibold text-[10px] bg-amber-50 px-1.5 rounded-sm border border-amber-100 ml-1">
+                                    {unmappedCount} Unmapped
+                                </span>
+                            )}
                             <button
                                 onClick={clearFilter}
                                 className="ml-1 w-4 h-4 rounded-full bg-[#d4a574]/20 hover:bg-rose-100 hover:text-rose-500 flex items-center justify-center text-[11px] font-black text-[#d4a574] transition-all cursor-pointer"

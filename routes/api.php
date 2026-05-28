@@ -37,6 +37,11 @@ Route::middleware('api')->group(function () {
     Route::post('/documents/bulk-process', [DocumentController::class, 'bulkProcess']);
     Route::post('/public/tickets',         [TicketController::class, 'store']);
     Route::get('/public/tickets/{token}',  [TicketController::class, 'showByToken']);
+
+    // V1 Public API Routes
+    Route::post('/v1/tickets',             [TicketController::class, 'store']);
+    Route::get('/v1/tickets/{token}',      [TicketController::class, 'showByToken']);
+    Route::post('/v1/tickets/scan',        [TicketController::class, 'scanCheckIn']);
 });
 
 Route::middleware('web')->group(function () {
@@ -106,11 +111,18 @@ Route::middleware('web')->group(function () {
         Route::get('/activity-logs',     [ActivityLogController::class, 'index']);
         Route::post('/activity-logs',    [ActivityLogController::class, 'store']);
 
-        // Tickets / Queue
         Route::get('/tickets',                     [TicketController::class, 'index']);
         Route::put('/tickets/{id}/status',         [TicketController::class, 'updateStatus']);
         Route::post('/tickets/{id}/link-document', [TicketController::class, 'linkDocument']);
         Route::post('/tickets/walk-in',            [TicketController::class, 'storeWalkIn']);
+
+        // V1 Staff API Routes
+        Route::get('/v1/tickets',                  [TicketController::class, 'index']);
+        Route::get('/v1/staff/tickets/digital-stats', [TicketController::class, 'digitalStats']);
+        Route::patch('/v1/tickets/{id}/attach',    [TicketController::class, 'attachDocument']);
+        Route::patch('/v1/tickets/{id}/cancel',    [TicketController::class, 'cancelTicket']);
+        Route::post('/v1/tickets/{id}/issue',      [TicketController::class, 'issueDocument']);
+        Route::post('/v1/tickets/walk-in',         [TicketController::class, 'storeWalkIn']);
 
         // Document Archive/Undo (Restore) accessible to all authenticated users
         Route::get('/documents/archived',           [DocumentController::class, 'archived']);

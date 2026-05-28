@@ -81,6 +81,26 @@ export const ParentalConsentModal = ({ onConfirm, onCancel }) => (
 import { BirthConfig, BirthTemplateOverlayFields } from './forms/BirthCertificateConfig.js';
 import { DeathConfig } from './forms/DeathCertificateConfig.js';
 import { MarriageConfig } from './forms/MarriageCertificateConfig.js';
+import { NAIC_BARANGAYS } from './forms/SharedConfig.js';
+
+const normalizeBrgyString = (name) => {
+    if (!name) return '';
+    return name.toLowerCase()
+        .replace(/^(brgy\.?|barangay)\s+/i, '')
+        .replace(/[^a-z0-9]/gi, '')
+        .trim();
+};
+
+const findClosestBarangay = (raw) => {
+    if (!raw) return '';
+    const normalizedRaw = normalizeBrgyString(raw);
+    for (const sb of NAIC_BARANGAYS) {
+        if (normalizeBrgyString(sb) === normalizedRaw || raw.toLowerCase().includes(normalizeBrgyString(sb))) {
+            return sb;
+        }
+    }
+    return '';
+};
 
 const FIELD_CONFIG = {
     birth: BirthConfig,
@@ -111,6 +131,9 @@ const getInitialFormData = (type, ocrFields, fileObj) => {
                 } else {
                     val = '';
                 }
+            } else if (f.key === 'barangay' && val) {
+                // Fuzzy match barangay to the exact options available
+                val = findClosestBarangay(val);
             }
             if (!isManualEntry) {
                 if (!f.required && val === '' && f.type !== 'date') {
@@ -283,6 +306,10 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
         if (!docId) return;
 
         const checkDuplicateRecord = async () => {
+            if (file.source === 'issuance') {
+                return; // Do not check duplicates for existing registry records
+            }
+
             setIsCheckingDuplicate(true);
             try {
                 const res = await fetch(`/api/documents/${docId}/check-duplicate`, {

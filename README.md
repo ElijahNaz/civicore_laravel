@@ -459,10 +459,31 @@ The following features and updates were implemented during the morning session o
 
 ---
 
+## 📝 Development Log — May 28, 2026 (Afternoon Session)
+
+The following features and updates were implemented during the afternoon session of **May 28, 2026**:
+
+### 📊 Digital Request Statistics (PendingRequests.jsx)
+- Added a `digitalStats` endpoint in `TicketController.php` to query digital ticket metrics.
+- Built a metrics row in the Digital Request lobby to track **Total Requests**, **Completed Requests**, and **Pending Requests** dynamically.
+
+### 📍 Fuzzy Logic Barangay Mapping (Mapping.jsx & OCR)
+- Implemented `findClosestBarangay` using Levenshtein distance to algorithmically fuzzy-match OCR-extracted barangay strings to the strict `NAIC_BARANGAYS` master list.
+- Fixed mapping visibility so records missing a strict barangay string now accurately resolve to the closest match.
+- Added an **"Unmapped"** UI badge warning in `Mapping.jsx` to quickly identify records where no close barangay could be resolved.
+
+### ⚡ Issuance Editor Optimization & Duplicate Fix
+- **Duplicate Bypassing**: Updated `DataContext.jsx` to flag master registry records with `source: 'issuance'`, preventing the OCR panel from running a false-positive Duplicate Check on records already residing in the master registry.
+- **Fast Synchronous Updates**: Massively sped up the backend `IssuanceController::update` saving speed (from ~100 seconds to ~50 milliseconds) by removing synchronous DOMPDF regeneration. The PDF now smartly reconstructs on-demand when "View PDF" is clicked.
+- **Feedback Toasts**: Re-enabled user-facing success popups upon successful database commits in `Issuances.jsx`.
+
+---
+
 ## 🔭 Future Update Targets (Next session checklist)
 
 The following requirements have been logged for future updates:
 
+- **🔧 Fix: Modifying Document Not Working**: Resolve the bug where editing and updating an active document fails to persist correctly.
 - **📜 Death and Marriage Certificates**:
   - Implement full registration and overlay templates for LCR Form 103 (Death Certificate) and Form 101 (Marriage Certificate).
 - **⚖️ Handling Various Forms of Certificates**:
