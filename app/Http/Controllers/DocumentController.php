@@ -260,7 +260,7 @@ class DocumentController extends Controller
         $this->validateUploadedFile($file);
 
         // Enforce Daily Scan Limit (Token budget manager check) on upload
-        $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 500);
+        $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 1000);
         $todayDate = date('Y-m-d');
         $todayScans = DB::table('documents')
             ->whereIn('status', ['extracted', 'Processed', 'Issued'])

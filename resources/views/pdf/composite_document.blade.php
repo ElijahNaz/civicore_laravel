@@ -23,7 +23,7 @@
         }
         .field-value {
             position: absolute;
-            font-size: 8.5pt;
+            font-size: 8 pt;
             font-weight: bold;
             color: #000;
             white-space: nowrap;
