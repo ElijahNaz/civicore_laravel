@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react" alt="React Version">
   <img src="https://img.shields.io/badge/Python-3.10+-yellow?style=for-the-badge&logo=python" alt="Python Version">
   <img src="https://img.shields.io/badge/Tailwind-4.0-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind Version">
-  <img src="https://img.shields.io/badge/Last%20Updated-May%2026%2C%202026-brightgreen?style=for-the-badge" alt="Last Updated">
+  <img src="https://img.shields.io/badge/Last%20Updated-August%2010%2C%202026-brightgreen?style=for-the-badge" alt="Last Updated">
 </p>
 
 CiviCORE is a premium, high-performance document management system designed for Local Government Units (LGUs). It features **AI-powered Intelligent OCR** for automated data extraction from Birth, Marriage, and Death certificates, an **Interactive Document Scanner** with live edge tracing, **QR Code ticketing** for citizen request management, and a **Geospatial Analytics** dashboard for real-time demographic visualization across Naic barangays.
@@ -157,17 +157,18 @@ For convenience, a **One-Click Launcher** has been provided.
 
 ## ✅ Project Objectives & Completion Status
 
-These objectives define the full scope of the CiviCORE system. All items below have been implemented and verified as of **May 26, 2026**.
+These objectives define the full scope of the CiviCORE system. All items below have been implemented and verified as of **August 10, 2026**.
 
 | # | Objective | Status | Summary |
 |---|-----------|--------|---------|
 | **1a** | OCR-Based Searchability | ✅ **Completed** | Full OCR search with webcam camera overlay in the Issuances section. Uses EasyOCR + Tesseract Python engine. Scan a document with your camera or upload a file — extracted fields auto-fill the search bar. |
-| **1b** | Auto-Generation from Extracted Text | ✅ **Completed** | `template_profiles` system with pre-seeded coordinate overlays for LCR Form 102 (Birth) & Form 103 (Death). Interactive `TemplateDesigner` allows admins to calibrate field positions visually. |
+| **1b** | Auto-Generation from Extracted Text | ✅ **Completed** | `template_profiles` system with pre-seeded coordinate overlays for LCR Form 102 (Birth), Form 103 (Death), and Form 101 (Marriage). Interactive `TemplateDesigner` allows admins to calibrate field positions visually. |
 | **1c** | Geospatial Demographic Analytics | ✅ **Completed** | Interactive Leaflet map showing barangay-level distribution of Birth, Death, and Marriage records across Naic. Features: Heatmap Mode, Demographic Ratio Mode, Barangay Rankings, Transaction Velocity panel, and full Timeframe Filtering (Today / This Week / This Month / This Year / Custom Date Range). |
 | **1d** | Role-Based Access Control (RBAC) | ✅ **Completed** | `RequireSessionAuth`, `AdminRole`, and `SuperAdminRole` middleware enforce backend API access. Staff, Admin, and SuperAdmin privilege levels are enforced across all routes. |
 | **1e** | Document Request Approval Workflow | ✅ **Completed** | In-person request modal with automated Official Receipt (OR) number generation. SuperAdmin approval queue integrated into the Issuances view. Approved requests can then be printed. |
 | **1f** | Centralized Data Management | ✅ **Completed** | Archive Manager tab integrated into the Documents UI. Supports soft-delete, Restore, and Permanent Purge with full audit trail tracking. |
 | **1g** | QR Code-Based Ticketing | ✅ **Completed** | Public citizen request portal with sequential QR ticket generation. Live queue tracking for staff with status transitions (Pending → Serving → Completed). QR code links to real-time ticket status page. |
+| **1h** | Dedicated Reports & Analytics Export | ✅ **Completed** | Full Export Reports module (`/reports`) with CSV and Excel (.xlsx) data export capabilities, custom date-range filtering, status/type/barangay filters, and dynamic summary metrics. |
 
 ---
 
@@ -233,38 +234,16 @@ To achieve the highest OCR accuracy across multiple document layouts, CiviCORE i
 
 | Issue | Details | Workaround |
 |-------|---------|------------|
-| **Mobile Responsive UI Layouts** | Dashboard stats grid, mapping cards, welcome banner sizing, public landing page vertical scrolling, and Account settings are optimized for PC/large screens only. Mobile/tablet views have layout breakages, scroll locks, and oversized UI elements. | Tracked as a future development item to be resolved after PC interface is fully finalized. |
 | **OCR Stability on Low RAM** | On 4GB machines, running multiple EasyOCR workers may cause system instability. | Use Tesseract mode or limit to 1 queue worker (`RAM_PROFILE=4GB`). |
 | **Auto-Fill Sync Delay** | OCR results may not auto-populate template preview boxes on first load. | Manually edit any field to trigger a re-sync. |
 | **Template Alignment** | Form 102/103 field coordinates are approximate and may need printer calibration. | Use the Template Designer to visually fine-tune field positions. |
-| **Marriage Cert Overlay** | Municipal Form No. 101 (Marriage) overlay is not yet implemented. | Tracked as a future development item. |
 | **Type Detection on Low-Quality Scans** | Occasional misclassification. System now returns "Unknown" instead of a wrong guess. | User selects the correct template manually in the OCR panel. |
-| **Death & Marriage Stats Accuracy** | Geospatial and Dashboard stats may undercount Death/Marriage records due to inconsistent `type` field values. | Tracked as a future development item (see below). |
 
 ---
 
 ## 🔭 Future Development Plans
 
 The following items have been identified and documented for upcoming development cycles:
-
-### 📱 Mobile UI Layout Refinement (Problem 3 Deferral)
-- Optimize Dashboard stats grids and cards to use a 2x2 grid layout on mobile viewports.
-- Scale down welcome banners, headers, and motto text size dynamically on smaller viewports.
-- Fix scroll lock issues by changing `overflow-hidden` to `overflow-x-hidden` in layout wrappers to allow vertical swipe.
-- Redesign `Accounts.jsx` grid layouts (`lg:grid-cols-12`) to stack gracefully on mobile screens.
-
-### 🔧 Fix: Death Certificate Stats / Counting Accuracy
-- Normalize `type` field detection across `issuances` and `documents` tables (e.g., `"Death"` vs `"death certificate"` vs `"Death Certificate (LCR Form 103)"` all resolve to the same type).
-- Add a dedicated `certificate_type` enum column (`birth | death | marriage`) to `issuances` to ensure reliable classification.
-- Update `DashboardController.php` and `Mapping.jsx` stats aggregation to use the normalized field.
-
-### 🔧 Fix: Marriage Certificate Stats / Counting Accuracy
-- Apply the same `certificate_type` normalization as the death certificate fix.
-- Verify the Monthly Trajectory chart correctly accumulates marriage records.
-- Add a dedicated **Marriage Certs** stat card to the Dashboard (currently only Births and Deaths have their own cards).
-
-### 🔧 Marriage Certificate Overlay System
-- Implement the LCR Form 101 (Marriage Certificate) overlay template with full field mapping support in the `TemplateDesigner`.
 
 ### 📧 Upgrade: Email Driver — Mailtrap → Gmail SMTP
 - The current email/OTP verification system uses **Mailtrap** (a development/sandbox mail catcher). For production deployment, this will be replaced with a real **Gmail SMTP** (or other production mail provider) so citizens and staff actually receive verification and notification emails.
@@ -280,214 +259,49 @@ The following items have been identified and documented for upcoming development
 
 ---
 
-## 📝 Development Log — May 26, 2026
+## 📝 Development Log — August 10, 2026
 
-The following features were implemented in the morning session of **May 26, 2026**:
+The following major features, enhancements, and system updates were implemented on **August 10, 2026**:
 
-### 🎟️ QR Code Ticketing System (Component 1)
-- Created `tickets` database table with sequential ticket numbering (`T-2026-0001` format), client info, purpose, status, and unique QR tracking token.
-- Built `TicketController` with public submission, status tracking, and staff queue management endpoints.
-- Implemented `Ticketing.jsx` split interface:
-  - **Public Portal**: Citizens fill a form and receive a downloadable QR ticket.
-  - **Staff Dashboard**: Real-time queue view with status transition controls (Pending → Serving → Completed).
+### 📊 Dedicated Export Reports Page & Export Suite (`Reports.jsx`)
+- Built a dedicated **Reports & Analytics / Export Reports** view accessible via the main navigation sidebar (`/reports`).
+- Implemented dual **CSV** (`.csv`) and **Excel** (`.xlsx`) export engines for Civil Registry Issuances, Documents, and Digital Ticket Requests.
+- Supported detailed filtering capabilities:
+  - **Date Range**: Precise date range filtering using the newly built `DatePickerInput` component.
+  - **Certificate Type**: Filter by Birth (LCR Form 102), Death (LCR Form 103), or Marriage (LCR Form 101) certificates.
+  - **Status**: Filter by Issued, Approved, Pending, or Archived document states.
+  - **Barangay**: Filter by specific Naic barangay jurisdiction.
+- Real-time statistics summary displaying exported record counts, type distribution breakdown, and progress tracking prior to export.
 
-### 🗄️ Archive Management (Component 2)
-- Added Archive Manager tab to the Documents UI.
-- Staff can soft-delete records (move to archive), restore them, or permanently purge with confirmation.
-- Full audit trail maintained for all archive actions.
+### 📜 Death & Marriage Certificate Live Preview & Overlay Calibration
+- Resolved coordinate mapping, alignment shifts, and live PDF preview rendering for **LCR Form 103 (Death Certificate)** and **Form 101 (Marriage Certificate)** in `OcrFormPanel.jsx`, `Documents.jsx`, and `Issuances.jsx`.
+- Standardized multi-certificate template overlays to accurately align text, signature fields, and registry headers across all civil document formats.
 
-### 🔐 RBAC & Session Security (Component 3)
-- Implemented `RequireSessionAuth`, `AdminRole`, and `SuperAdminRole` middleware.
-- Protected sensitive API routes (template management, permanent deletion, user administration) under admin/superadmin middleware groups.
+### 🖼️ Reference Picture SVG Fallback & Document Viewer Enhancements
+- Created an SVG placeholder fallback system when reference document scans or previews are missing, corrupted, or unreachable across `AttachDocumentModal.jsx`, `OcrFormPanel.jsx`, and `ArchiveManager.jsx`.
+- Enhanced image preview modals with full interactive controls: zoom slider, rotation reset, full-screen view, and side-by-side reference picture comparison.
 
-### 🖨️ Print Approval Workflow & Automated Receipts (Component 5)
-- Changed the "Print" button in Issuances to a **"Request Print"** workflow.
-- Automated **Official Receipt (OR) number** generation — pre-filled on modal open, overridable by staff.
-- SuperAdmin approval queue: pending requests await approval before printing is authorized.
-- Dashboard "Total Issued Files" now accurately counts only records with `status = 'Issued'`.
+### 📷 Interactive Camera Edge & Light Scanner (`CameraModal.jsx`, `captureEngine.js`)
+- Comprehensive stability overhaul for webcam document scanning and real-time capture.
+- Developed a GCash-style live scanning overlay in `captureEngine.js` featuring:
+  - **Visual Edge Detection**: Real-time framing guides (green border when framed properly, red when misaligned).
+  - **Ambient Lighting Analysis**: Live brightness indicator to notify users if lighting is too low or overexposed.
+  - **Focus & Sharpness Check**: Pre-capture blur assessment.
+- Integrated one-tap auto-crop and frame stabilization to ensure high-accuracy OCR processing on webcam captures.
 
-### 📷 OCR-Based Camera Search (Component 5)
-- Added a **Scan Search** camera button next to the search bar in the Issuances Master Database view.
-- Clicking it opens a full-screen overlay with:
-  - Live webcam feed with capture button.
-  - File upload drag-and-drop alternative.
-- Captured image is sent to the Python OCR backend (`/api/issuances/ocr-search`).
-- Extracted fields (name, registry number, barangay) auto-fill the search bar and filter the list.
+### 📱 Mobile & Tablet Responsive Layout Overhaul
+- Converted all system modules (`Dashboard`, `Documents`, `Issuances`, `Ticketing`, `PendingRequests`, `Reports`, `Accounts`) into fully responsive layouts for mobile and tablet screens.
+- Replaced fixed grid columns and hardcoded pixel widths with dynamic responsive breakpoints (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`, flex-wrap, dynamic padding).
+- Eliminated vertical scroll locks and overflow cutoffs (`overflow-x-hidden`, responsive modal containers, touch-friendly action controls).
 
-### 🗺️ Geospatial Time Filtering (Component 4)
-- Replaced the basic dropdown with a full **Filter Bar** featuring:
-  - Quick-select pills: **All Time / Today / This Week / This Month / This Year**
-  - **Custom Date Range** picker with animated slide-in panel (From date → To date → Apply Range button).
-- Active filter badge below stat cards shows current period and live record count with inline clear button.
-- All map markers, stat cards, Monthly Trajectory chart, Barangay Rankings, and the Prints table react to the selected timeframe.
-- Upgraded header design: icon now uses a branded gradient background box matching the project's design language.
+### 🎟️ Digital Service Request Lobby & Queue Enhancements (`PendingRequests.jsx`)
+- Refactored the digital service request lobby with `AttachDocumentModal.jsx` for seamless document verification and attachment.
+- Added database migration support for `tickets` soft-deletes (`2026_08_09_225347_add_soft_deletes_to_tickets_table.php`).
+- Removed legacy unique index constraints on `issuances` to handle multi-request ticket processing without registry collisions.
+
+
 
 ---
 
-## License
+## 📜 License
 Developed by Team CiviCORE. [MIT License](https://opensource.org/licenses/MIT).
-
----
-
-## 📝 Development Log — May 26, 2026 (Afternoon Session)
-
-The following features were implemented in the afternoon session of **May 26, 2026**:
-
-### 📊 Issuance Dashboard — 3-Tab Analytics Panel
-- Replaced the static 4 stat cards in `Issuances.jsx` with a **3-tab unified dashboard panel**:
-  - **Tab 1 – Overview**: Upgraded stat cards (Master DB dark card + Birth/Death/Marriage with hover scale animations).
-  - **Tab 2 – Per Category**: SVG donut chart + progress bars per type + status breakdown grid (Issued / Approved / Active / Pending).
-  - **Tab 3 – Top Issued**: Top 5 barangays with gold/silver/bronze badges + Most Active Type badge + recently issued records list.
-
-### 🗺️ Mapping Section — Tabbed Stat Panel
-- Replaced the 5 static stat cards at the top of `Mapping.jsx` with a **2-tab clickable panel**:
-  - **Tab 1 – Records Overview**: Uploaded Docs / Birth Certs / Death Certs / Marriage Certs / Most Active Barangay (same as before, with upgraded card design and hover animations).
-  - **Tab 2 – Issued Per Category**: Shows how many Birth, Death, and Marriage records have been **formally issued** from the issuances table, with mini progress bars, percentage-of-total labels, Total Issued count, and Top Barangay by issuances. Respects the active time filter.
-
-### 🗺️ Mapping Section — "By Barangay" Right Panel Tab
-- Added a **3rd tab** ("By Barangay") to the right analytics panel in `Mapping.jsx`.
-- Shows ranked barangay list with:
-  - Gold/silver/bronze rank badges for top 3.
-  - Mini gradient progress bars relative to the highest-ranked barangay.
-  - Birth (B) / Death (D) / Marriage (M) breakdown per row.
-  - **Top 10 by default** with a **"↓ Show All X Barangays"** toggle button (only visible when >10 have records).
-  - Clicking any row pans the map and opens the barangay popup via `locateBarangay()`.
-
-### ✅ Input Validation — Unknown Document Type Guard
-- Added a **type detection banner** to `OcrFormPanel.jsx`: when OCR cannot auto-detect the document type, an amber warning banner appears at the top of the form.
-- Staff selects Birth / Death / Marriage manually via 3 pill buttons.
-- Banner turns **red** if the user attempts to save without selecting a type.
-- Save is blocked until a valid type is chosen.
-
-### ✍️ Signature Fields — Initial Implementation
-- Created `SignaturePad.jsx` — a canvas-based signature drawing component with:
-  - Draw with mouse or touch, Undo last stroke, Clear (resets to `n/a`), Done.
-  - Saves as **base64 PNG data URL** in the field value.
-  - Shows `n/a` badge when blank; shows existing signature as a preview image.
-- Updated `BirthCertificateConfig.js`: all 5 signature fields now use `type: 'signature'` so the form renders the pad instead of a plain text box.
-- Signature fields are **optional** — left blank automatically saves as `n/a`.
-
----
-
-## ⏳ Pending Tasks (Next Session)
-
-The following items are planned for the **next development session**:
-
-### ✍️ Signature Extraction from Scanned Documents
-**Goal**: When a civil registry document is uploaded and processed by OCR, automatically crop the signature regions from the scanned image and pre-populate the signature fields — instead of leaving them blank/`n/a`.
-
-**Approach**:
-- The `BirthTemplateOverlayFields` array in `BirthCertificateConfig.js` already contains the `x, y, w, h` coordinates (as fractions of image size) for every signature field position on LCR Form 102.
-- On the **backend** (`DocumentController.php` or the Python OCR server), after the image is uploaded:
-  1. Load the scanned image using **Intervention Image** (PHP) or **Pillow** (Python).
-  2. For each signature field, compute the pixel crop box: `px = x * imgWidth`, `py = y * imgHeight`, etc.
-  3. Apply a **threshold/binarize** filter to isolate the ink from the paper background (grayscale → adaptive threshold → invert).
-  4. Save each cropped region as a base64 PNG string.
-  5. Return the base64 strings alongside `extracted_fields` in the OCR API response.
-- On the **frontend** (`OcrFormPanel.jsx`), initialize signature field values from the returned base64 strings instead of `n/a`.
-- The `SignaturePad` component already supports displaying a base64 image as an existing signature — no changes needed there.
-
-**Files to modify**:
-- `ocr_server.py` — add signature region cropping in the extraction pipeline.
-- `app/Http/Controllers/DocumentController.php` — forward cropped signature data in the response.
-- `OcrFormPanel.jsx` — read signature base64 values from `ocrResult.extracted_fields` on init (already handled by the existing `ef[f.key]` fallback).
-- `BirthCertificateConfig.js` — coordinates already defined; may need slight calibration per scan DPI.
-
-**Open question**: Should signature extraction happen server-side (Python/PHP) or client-side (Canvas API using the already-loaded document image)? Client-side avoids a backend change but depends on CORS/image accessibility. Server-side is more reliable for skewed/low-DPI scans.
-
----
-
-### 🗺️ Mapping — Barangay Involvement (Advanced)
-- Consider adding barangay drill-down in the Mapping right panel: clicking a barangay row shows a breakdown panel with a mini chart of its Birth/Death/Marriage trend over time.
-
----
-
-## 📝 Development Log — May 26, 2026 (Night Session)
-
-The following features and updates were implemented during the night session of **May 26, 2026**:
-
-### 🎟️ Queue-Bypassing Manual Registration
-- **Direct Master Database Insertion:** Restructured manual registration to bypass the document processing queue entirely. It starts in local client state (`id = 'manual'`), and on save, POSTs directly to the backend to create the Master Registry issuance.
-- **Form Clean State:** Optional fields inside `OcrFormPanel.jsx` are kept completely empty `""` instead of being pre-filled with `"n/a"`, so users can type data without clearing placeholders.
-- **Cleanup Eliminator:** Exiting or closing the manual registration modal simply closes the view without leaving empty draft records/stubs in the database.
-
-### 🖼️ PDF Scan Reference Viewer & Route Restoration
-- Registered the missing `/api/documents/view/{id}` inline route in `routes/api.php` and mapped the document `file_path` field in `DataContext.jsx`. This displays original scan reference documents inline in the review panel instead of rendering the landing page layout.
-
-### ⚡ Real-Time Duplicate Validation Updates
-- Added real-time duplicate validation events from the OCR form panel to the document list component, updating the "⚠️ Duplicate" warning badge and blocking/unblocking direct approval controls dynamically.
-- Implemented backend checks on `quickApprove()` to throw clean validation errors on duplicate attempts.
-
-### 📧 SMTP Mailer Channel Switcher (Gmail & Mailtrap)
-- Configured dynamic SMTP mailer configuration switches within `VerificationController.php` allowing togglable account email verification routes (Mailtrap vs. Gmail credentials).
-
-### 📄 Optimized Single-Page PDF Splitting
-- Optimized the Python OCR server `/split` endpoint to only extract, convert, and process the first page (Page 1) of any PDF, preventing subsequent pages from using server resources or writing to disk.
-
----
-
-## 🔭 Future Update Targets (Next session checklist)
-
-The following requirements have been logged for future updates:
-
-
-- **Interactive Camera Edge & Light Scanner (GCash-style):** Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success) to guide users when to capture the document. fix the camera in the issuance section too, there will be many changes
--Fix UI In The Camera and make the cropping work and simplify it.
-- **Death & Marriage Certificate Templates:** Expand composite template layouts to support Death Certificates and Marriage Certificates. will update this death certificate for tomm so we can finally add it in the system and do a complete registration of that. then finalize how will the marriage certificate will work as there are things involve that what if the underage? what if the parents is not married? what if divorced? so it takes time to do it right. 
-
----
-
-## 📝 Development Log — May 28, 2026 (Morning Session)
-
-The following features and updates were implemented during the morning session of **May 28, 2026**:
-
-### ✍️ Form Caching & Input Persistence (OCR & Manual Panels)
-- **SessionStorage Field Caching**: Configured [OcrFormPanel.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/OcrFormPanel.jsx) to load and save draft form data, selected document type, and OCR text to `sessionStorage` drafts (`civicore_ocr_draft_${file.id}`, etc.) in real-time.
-- **Dirty-Tracking Saves**: Implemented a `isDirtyRef` so drafts are written only when the user makes changes to fields.
-- **Reset to Original Action**: Added a **Reset to Original** button (reload icon) in the form panel header. Clicking it prompts the user, clears cached drafts, and reverts fields back to backend defaults.
-- **Auto-Clearing Cache**: Programmed [OcrFormPanel.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/OcrFormPanel.jsx), [Documents.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Documents.jsx), and [Issuances.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Issuances.jsx) to clear the draft cache automatically upon a successful document save.
-
-### 🛡️ Double-Save Prevention & Modal Layout Fixes
-- **Submission Lock**: Implemented a transaction lock `savingRecordRef` in [Documents.jsx](file:///c:/laragon/www/civicore_laravel/resources/js/components/Documents.jsx) to prevent rapid double-clicks on confirmation warnings from spawning concurrent save processes.
-- **Direct Minimize**: Rewired the **Minimize to Tray** button to directly close the editor panel instead of triggering a validation/save cycle, since user edits are already persisted in `sessionStorage` drafts.
-- **Confirm Portal Overlay**: Layered both `ActionConfirmModal.jsx` and `PasswordConfirmModal.jsx` directly to `document.body` via React Portals, placing warning prompts on top of the fullscreen OCR panel.
-
-### 🔧 Fixes & Ticketing-Registry Connection Flow
-- **Issuance Save & Sync Fixed**: Resolved the 500 server error when updating master registry records by changing the database column size of `extracted_data` to `LONGTEXT` (to fit base64 signatures) and ensuring `name` constraints are met via frontend/backend name reconstruction.
-- **Ticketing-to-Registry Connection**: Added two-way linking between queue tickets and master registry issuances. Linked `ticket_number` now propagates automatically to `issuances` during OCR prefill-approvals or manual queue linking.
-
-
----
-
-## 📝 Development Log — May 28, 2026 (Afternoon Session)
-
-The following features and updates were implemented during the afternoon session of **May 28, 2026**:
-
-### 📊 Digital Request Statistics (PendingRequests.jsx)
-- Added a `digitalStats` endpoint in `TicketController.php` to query digital ticket metrics.
-- Built a metrics row in the Digital Request lobby to track **Total Requests**, **Completed Requests**, and **Pending Requests** dynamically.
-
-### 📍 Fuzzy Logic Barangay Mapping (Mapping.jsx & OCR)
-- Implemented `findClosestBarangay` using Levenshtein distance to algorithmically fuzzy-match OCR-extracted barangay strings to the strict `NAIC_BARANGAYS` master list.
-- Fixed mapping visibility so records missing a strict barangay string now accurately resolve to the closest match.
-- Added an **"Unmapped"** UI badge warning in `Mapping.jsx` to quickly identify records where no close barangay could be resolved.
-
-### ⚡ Issuance Editor Optimization & Duplicate Fix
-- **Duplicate Bypassing**: Updated `DataContext.jsx` to flag master registry records with `source: 'issuance'`, preventing the OCR panel from running a false-positive Duplicate Check on records already residing in the master registry.
-- **Fast Synchronous Updates**: Massively sped up the backend `IssuanceController::update` saving speed (from ~100 seconds to ~50 milliseconds) by removing synchronous DOMPDF regeneration. The PDF now smartly reconstructs on-demand when "View PDF" is clicked.
-- **Feedback Toasts**: Re-enabled user-facing success popups upon successful database commits in `Issuances.jsx`.
-
----
-
-## 🔭 Future Update Targets (Next session checklist)
-
-The following requirements have been logged for future updates:
-
-- **🔧 Fix: Modifying Document Not Working**: Resolve the bug where editing and updating an active document fails to persist correctly.
-- **📜 Death and Marriage Certificates**:
-  - Implement full registration and overlay templates for LCR Form 103 (Death Certificate) and Form 101 (Marriage Certificate).
-- **⚖️ Handling Various Forms of Certificates**:
-  - Establish specific processing logic for special certificate scenarios (e.g., minor cases, parents not married, divorced status, etc.).
-- **📷 Interactive Camera Edge & Light Scanner**: Enhance the webcam scanner feed with an overlay helper (green/red border lines indicating framing, lighting, and edge tracing success).
-- **⏰ Queue Time Slot / Appointment Scheduling**: Add appointment time slot selection to ticket requests, enabling citizens to visit the office at their scheduled time and establishing a complete queuing system.
- 
