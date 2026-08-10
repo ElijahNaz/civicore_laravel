@@ -9,6 +9,7 @@ import Landing          from './components/Landing.jsx';
 import Login            from './components/Login.jsx';
 import Dashboard        from './components/Dashboard.jsx';
 import Documents        from './components/Documents.jsx';
+import Reports          from './components/Reports.jsx';
 import ArchiveManager   from './components/ArchiveManager.jsx';
 import Issuances        from './components/Issuances.jsx';
 import Mapping          from './components/Mapping.jsx';
@@ -92,6 +93,13 @@ function App() {
                         <Route path="/documents" element={
                             <ProtectedRoute>
                                 <Layout><Documents /></Layout>
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Export Reports — Admin + SuperAdmin */}
+                        <Route path="/reports" element={
+                            <ProtectedRoute allowedRoles={['SuperAdmin', 'Admin']}>
+                                <Layout><Reports /></Layout>
                             </ProtectedRoute>
                         } />
 

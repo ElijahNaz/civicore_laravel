@@ -261,10 +261,11 @@ class DocumentController extends Controller
 
         // Enforce Daily Scan Limit (Token budget manager check) on upload
         $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 1000);
-        $todayDate = date('Y-m-d');
+        $start = \Carbon\Carbon::today(config('app.timezone'))->startOfDay();
+        $end = \Carbon\Carbon::today(config('app.timezone'))->endOfDay();
         $todayScans = DB::table('documents')
             ->whereIn('status', ['extracted', 'Processed', 'Issued'])
-            ->whereDate('updated_at', $todayDate)
+            ->whereBetween('updated_at', [$start, $end])
             ->count();
 
         if ($todayScans >= $dailyLimit) {
@@ -355,20 +356,22 @@ class DocumentController extends Controller
         }
 
         $magic = file_get_contents($path, false, null, 0, 16);
+        $magicHex = bin2hex($magic);
         $isValid = match ($extension) {
             'pdf' => str_starts_with($magic, '%PDF-'),
-            'png' => str_starts_with($magic, "\x89PNG\r\n\x1a\n"),
-            'jpg', 'jpeg' => substr($magic, 0, 2) === "\xFF\xD8",
-            'webp' => substr($magic, 0, 4) === 'RIFF' && substr($magic, 8, 4) === 'WEBP',
-            'tiff' => in_array(substr($magic, 0, 4), ["II*\x00", "MM\x00*"], true),
-            'bmp' => substr($magic, 0, 2) === 'BM',
-            'docx' => substr($magic, 0, 4) === 'PK\x03\x04',
-            'doc' => substr($magic, 0, 8) === "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1",
+            'png' => str_starts_with($magicHex, '89504e470d0a1a0a'),
+            'jpg', 'jpeg' => str_starts_with($magicHex, 'ffd8'),
+            'webp' => str_starts_with($magicHex, '52494646') && substr($magicHex, 16, 8) === '57454250',
+            'tiff' => str_starts_with($magicHex, '49492a00') || str_starts_with($magicHex, '4d4d002a'),
+            'bmp' => str_starts_with($magicHex, '424d'),
+            'docx' => str_starts_with($magicHex, '504b0304'),
+            'doc' => str_starts_with($magicHex, 'd0cf11e0a1b11ae1'),
             'txt', 'rtf' => true,
             default => false,
         };
 
         if (!$isValid) {
+            \Log::warning("File validation failed for extension '{$extension}'. Real MIME type guesser: " . $file->getMimeType() . ", Magic bytes (hex): " . $magicHex);
             abort(400, 'File content does not match the allowed type.');
         }
 
@@ -730,9 +733,12 @@ class DocumentController extends Controller
      */
     private function performSave($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType = null)
     {
-        // Re-calculate personName if it wasn't explicitly provided (safety for the main update call)
-        if (empty($personName)) {
-            $personName = $this->buildFullName($extractedFields, $detectedType);
+        // Re-calculate personName if it wasn't explicitly provided or if generic placeholder (safety for main update call)
+        if (empty($personName) || $personName === 'Document Data') {
+            $computedName = $this->buildFullName($extractedFields, $detectedType);
+            if (!empty($computedName)) {
+                $personName = $computedName;
+            }
         }
 
         return DB::transaction(function () use ($request, $id, $extractedFields, $ocrText, $personName, $barangay, $status, $parentalConsent, $detectedType) {
@@ -802,7 +808,7 @@ class DocumentController extends Controller
 
                     if (count($existing) > 0) {
                         // 2. UPDATE existing Master Record (Keep certNumber)
-                        DB::table('issuances')->where('document_id', $id)->update([
+                        $updateData = [
                             'type' => $docType,
                             'certificate_type' => $normCertType,
                             'name' => $personName,
@@ -813,7 +819,20 @@ class DocumentController extends Controller
                             'file_path' => $issuanceFilePath,
                             'ticket_number' => $ticketNumber,
                             'updated_at' => now()
-                        ]);
+                        ];
+
+                        // If a ticket is linked, set or_number and requested_by if they aren't already set
+                        $existingRecord = DB::table('issuances')->where('document_id', $id)->first();
+                        if ($existingRecord && $ticketNumber) {
+                            if (empty($existingRecord->or_number)) {
+                                $updateData['or_number'] = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+                            }
+                            if (empty($existingRecord->requested_by)) {
+                                $updateData['requested_by'] = $encodedBy;
+                            }
+                        }
+
+                        DB::table('issuances')->where('document_id', $id)->update($updateData);
                     } else {
                         // 3. INSERT new Master Record (Generate NEW certNumber)
                         $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
@@ -827,8 +846,8 @@ class DocumentController extends Controller
                         
                         $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
                         $issuanceDate = date('m/d/Y');
- 
-                        DB::table('issuances')->insert([
+
+                        $insertData = [
                             'certNumber' => $certNumber,
                             'type' => $docType,
                             'certificate_type' => $normCertType,
@@ -843,7 +862,14 @@ class DocumentController extends Controller
                             'ticket_number' => $ticketNumber,
                             'created_at' => now(),
                             'updated_at' => now()
-                        ]);
+                        ];
+
+                        if ($ticketNumber) {
+                            $insertData['or_number'] = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+                            $insertData['requested_by'] = $encodedBy;
+                        }
+ 
+                        DB::table('issuances')->insert($insertData);
                     }
                 }
             }
@@ -987,8 +1013,21 @@ class DocumentController extends Controller
         }
 
         if (empty($doc->file_path) || !\Storage::disk('public')->exists($doc->file_path)) {
-            \Log::error("File path missing for document ID: " . $id);
-            return response()->json(['error' => 'File content not found'], 404);
+            $docTypeTitle = ucfirst($doc->type ?? 'Civil Registry') . ' Record';
+            $personNameStr = htmlspecialchars($doc->personName ?? 'Manual Entry');
+            $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800" fill="none">
+                <rect width="600" height="800" fill="#f8fafc"/>
+                <rect x="40" y="40" width="520" height="720" rx="20" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+                <circle cx="300" cy="330" r="48" fill="#e0e7ff"/>
+                <path d="M285 330H315M300 315V345" stroke="#4f46e5" stroke-width="4" stroke-linecap="round"/>
+                <text x="300" y="420" font-family="sans-serif" font-size="20" font-weight="900" fill="#0f172a" text-anchor="middle">' . $docTypeTitle . '</text>
+                <text x="300" y="450" font-family="sans-serif" font-size="15" font-weight="bold" fill="#475569" text-anchor="middle">' . $personNameStr . '</text>
+                <text x="300" y="485" font-family="sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Manual Registration • Scanned Document File Not Attached</text>
+            </svg>';
+            return response($svg, 200, [
+                'Content-Type' => 'image/svg+xml',
+                'Content-Disposition' => 'inline; filename="manual_placeholder.svg"'
+            ]);
         }
 
         $fullPath = \Storage::disk('public')->path($doc->file_path);
@@ -1347,6 +1386,170 @@ class DocumentController extends Controller
 
         // This method does dynamic template compilation and handles Master registry insert
         return $this->performSave($request, $newId, $extractedFields, '', $personName, $barangay, 'Processed', $parentalConsent, $docType);
+    }
+
+    /**
+     * Export Civil Registry Documents Report in CSV or Excel format
+     */
+    public function exportReport(Request $request)
+    {
+        $type = strtolower(trim($request->query('type', 'all')));
+        $format = strtolower(trim($request->query('format', 'csv')));
+        $barangay = trim($request->query('barangay', 'all'));
+        $status = trim($request->query('status', 'all'));
+        $dateFrom = $request->query('date_from', '');
+        $dateTo = $request->query('date_to', '');
+
+        $conditions = ["deleted_at IS NULL"];
+        $params = [];
+
+        if (!empty($type) && $type !== 'all') {
+            $conditions[] = "LOWER(type) = ?";
+            $params[] = $type;
+        }
+
+        if (!empty($barangay) && $barangay !== 'all') {
+            $conditions[] = "barangay = ?";
+            $params[] = $barangay;
+        }
+
+        if (!empty($status) && $status !== 'all') {
+            $conditions[] = "LOWER(status) = ?";
+            $params[] = strtolower($status);
+        }
+
+        if (!empty($dateFrom)) {
+            $conditions[] = "DATE(created_at) >= ?";
+            $params[] = $dateFrom;
+        }
+
+        if (!empty($dateTo)) {
+            $conditions[] = "DATE(created_at) <= ?";
+            $params[] = $dateTo;
+        }
+
+        $whereClause = " WHERE " . implode(" AND ", $conditions);
+
+        $query = "SELECT id, name, type, date, status, personName, barangay, extracted_fields, encoded_by, created_at
+                  FROM documents" . $whereClause . " ORDER BY id DESC LIMIT 5000";
+
+        $records = DB::select($query, $params);
+
+        // Standard Report Headers
+        $headers = [
+            'ID',
+            'Registry Number',
+            'Document Type',
+            'Person Name / Spouse Names',
+            'Sex / Gender',
+            'Event Date',
+            'Barangay',
+            'City / Municipality',
+            'Province',
+            'Status',
+            'Father / Husband Name',
+            'Mother / Wife Name',
+            'Encoded By',
+            'Date Registered'
+        ];
+
+        $rows = [];
+
+        foreach ($records as $doc) {
+            $ef = [];
+            if (!empty($doc->extracted_fields)) {
+                $ef = is_string($doc->extracted_fields) ? json_decode($doc->extracted_fields, true) : (array) $doc->extracted_fields;
+            }
+
+            $docType = ucfirst($doc->type ?? 'Birth');
+            $regNo = $ef['registry_number'] ?? $ef['registry_no'] ?? 'N/A';
+            $personName = !empty($doc->personName) ? $doc->personName : 'N/A';
+            $sex = $ef['sex'] ?? 'N/A';
+
+            // Event Date
+            $eventDate = $doc->date ?? 'N/A';
+            if (strtolower($docType) === 'marriage') {
+                $eventDate = $ef['date_of_marriage'] ?? $doc->date ?? 'N/A';
+            } elseif (strtolower($docType) === 'death') {
+                $eventDate = $ef['date_of_death'] ?? $doc->date ?? 'N/A';
+            } else {
+                $dobDay = $ef['dob_day'] ?? '';
+                $dobMonth = $ef['dob_month'] ?? '';
+                $dobYear = $ef['dob_year'] ?? '';
+                if ($dobDay || $dobMonth || $dobYear) {
+                    $eventDate = trim("{$dobMonth} {$dobDay}, {$dobYear}", ", ");
+                }
+            }
+
+            $brgy = $doc->barangay ?? $ef['barangay'] ?? 'N/A';
+            $city = $ef['city_municipality'] ?? $ef['place_of_birth_city'] ?? 'Naic';
+            $province = $ef['province'] ?? 'Cavite';
+            $statusVal = ucfirst($doc->status ?? 'Processed');
+
+            // Relative / Spouse fields
+            $fatherOrHusband = 'N/A';
+            $motherOrWife = 'N/A';
+
+            if (strtolower($docType) === 'marriage') {
+                $hFirst = $ef['husband_first_name'] ?? '';
+                $hLast = $ef['husband_last_name'] ?? '';
+                $wFirst = $ef['wife_first_name'] ?? '';
+                $wLast = $ef['wife_last_name'] ?? '';
+                $fatherOrHusband = trim("{$hFirst} {$hLast}");
+                $motherOrWife = trim("{$wFirst} {$wLast}");
+            } else {
+                $fFirst = $ef['father_first_name'] ?? '';
+                $fLast = $ef['father_last_name'] ?? '';
+                $mFirst = $ef['mother_first_name'] ?? $ef['mother_maiden_first_name'] ?? '';
+                $mLast = $ef['mother_last_name'] ?? $ef['mother_maiden_last_name'] ?? '';
+                $fatherOrHusband = trim("{$fFirst} {$fLast}");
+                $motherOrWife = trim("{$mFirst} {$mLast}");
+            }
+
+            $encodedBy = $doc->encoded_by ?? 'System Staff';
+            $registeredAt = date('Y-m-d H:i', strtotime($doc->created_at));
+
+            $rows[] = [
+                $doc->id,
+                $regNo,
+                $docType,
+                $personName,
+                $sex,
+                $eventDate,
+                $brgy,
+                $city,
+                $province,
+                $statusVal,
+                $fatherOrHusband ?: 'N/A',
+                $motherOrWife ?: 'N/A',
+                $encodedBy,
+                $registeredAt
+            ];
+        }
+
+        $filename = "civil_registry_report_" . date('Y_m_d_His') . ($format === 'excel' ? '.xls' : '.csv');
+        $delimiter = $format === 'excel' ? "\t" : ",";
+
+        $output = "\xEF\xBB\xBF"; // UTF-8 BOM for Microsoft Excel compatibility
+        $output .= implode($delimiter, array_map(function($h) use ($delimiter) {
+            return '"' . str_replace('"', '""', $h) . '"';
+        }, $headers)) . "\r\n";
+
+        foreach ($rows as $row) {
+            $output .= implode($delimiter, array_map(function($cell) use ($delimiter) {
+                return '"' . str_replace('"', '""', (string)$cell) . '"';
+            }, $row)) . "\r\n";
+        }
+
+        $mimeType = $format === 'excel' ? 'application/vnd.ms-excel' : 'text/csv';
+
+        return response($output, 200, [
+            'Content-Type' => $mimeType . '; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0'
+        ]);
     }
 }
 

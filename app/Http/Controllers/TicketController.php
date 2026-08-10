@@ -51,6 +51,19 @@ class TicketController extends Controller
         return [$filename, base64_encode($svg)];
     }
 
+    private function currentUserName(Request $request): string
+    {
+        $userId = $request->session()->get('user_id');
+        $user = $userId ? \App\Models\User::find($userId) : null;
+
+        return $user ? $user->name : $request->session()->get('user_name', 'System');
+    }
+
+    private function generateOfficialReceiptNumber(): string
+    {
+        return 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+    }
+
     // ─── Public: Online Ticket Submission ───────────────────────────────────
 
     /**
@@ -69,6 +82,44 @@ class TicketController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($request->email || $request->phone) {
+            $identifierQuery = function ($query) use ($request) {
+                $query->where(function($q) use ($request) {
+                    if ($request->email) {
+                        $q->where('email', $request->email);
+                    }
+                    if ($request->phone) {
+                        $q->orWhere('phone', $request->phone);
+                    }
+                });
+            };
+
+            // Max 1 request per day
+            $todayCount = Ticket::whereDate('created_at', Carbon::today(config('app.timezone')))
+                ->where($identifierQuery)
+                ->count();
+
+            if ($todayCount >= 1) {
+                return response()->json([
+                    'success' => false,
+                    'error' => "You have already submitted a request today. You are limited to 1 request per day."
+                ], 429);
+            }
+
+            // Max 3 requests per week
+            $sevenDaysAgo = Carbon::now(config('app.timezone'))->subDays(7);
+            $weekCount = Ticket::where('created_at', '>=', $sevenDaysAgo)
+                ->where($identifierQuery)
+                ->count();
+
+            if ($weekCount >= 3) {
+                return response()->json([
+                    'success' => false,
+                    'error' => "You have reached the limit of 3 requests per week. Please wait before requesting another."
+                ], 429);
+            }
         }
 
         try {
@@ -112,6 +163,16 @@ class TicketController extends Controller
                         \Log::warning('Ticket email failed: ' . $mailErr->getMessage());
                     }
                 }
+
+                DB::table('activity_logs')->insert([
+                    'user_name' => 'System',
+                    'action' => 'Ticket Created',
+                    'record_type' => 'Ticket',
+                    'record_id' => $ticket->id,
+                    'details' => "Online ticket {$ticket->ticket_number} created for {$ticket->client_name}",
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
 
                 return response()->json([
                     'success'       => true,
@@ -167,7 +228,9 @@ class TicketController extends Controller
                 [$qrPath, $qrBase64] = $this->generateQr($token);
 
                 // Assign lobby sequence number starting at 101
-                $todayCount = Ticket::whereDate('created_at', Carbon::today())
+                $start = Carbon::today(config('app.timezone'))->startOfDay();
+                $end = Carbon::today(config('app.timezone'))->endOfDay();
+                $todayCount = Ticket::whereBetween('created_at', [$start, $end])
                     ->whereNotNull('queue_number')
                     ->count();
                 $queueNumber = $todayCount + 101;
@@ -199,6 +262,16 @@ class TicketController extends Controller
                         \Log::warning('Walk-in ticket email failed: ' . $mailErr->getMessage());
                     }
                 }
+
+                DB::table('activity_logs')->insert([
+                    'user_name' => $this->currentUserName($request),
+                    'action' => 'Walk-In Ticket Created',
+                    'record_type' => 'Ticket',
+                    'record_id' => $ticket->id,
+                    'details' => "Walk-in ticket {$ticket->ticket_number} created for {$ticket->client_name}",
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
 
                 return response()->json([
                     'success'     => true,
@@ -324,10 +397,11 @@ class TicketController extends Controller
                 WHEN queue_status = 'serving' THEN 1
                 WHEN queue_status = 'waiting' THEN 2
                 WHEN request_status = 'pending' THEN 3
-                WHEN request_status = 'ready_for_pickup' THEN 4
-                WHEN request_status = 'completed' THEN 5
-                WHEN request_status = 'cancelled' THEN 6
-                ELSE 7
+                WHEN request_status = 'waiting_for_approval' THEN 4
+                WHEN request_status = 'ready_for_pickup' THEN 5
+                WHEN request_status = 'completed' THEN 6
+                WHEN request_status = 'cancelled' THEN 7
+                ELSE 8
             END
         ")->orderBy('created_at', 'asc')->get();
 
@@ -336,7 +410,7 @@ class TicketController extends Controller
             $ticket->qr_code_url = $ticket->qr_code_path
                 ? Storage::disk('public')->url($ticket->qr_code_path)
                 : null;
-            
+
             $compatStatus = 'Pending';
             if ($ticket->request_status === 'completed') {
                 $compatStatus = 'Completed';
@@ -359,18 +433,23 @@ class TicketController extends Controller
      */
     public function digitalStats()
     {
-        $today = date('Y-m-d');
-        
-        $pendingInbox = Ticket::where('request_status', 'pending')->count();
-            
-        $attachedToday = Ticket::where('request_status', 'document_attached')
-            ->whereDate('updated_at', $today)
+        $start = Carbon::today(config('app.timezone'))->startOfDay();
+        $end = Carbon::today(config('app.timezone'))->endOfDay();
+
+        $pendingInbox = Ticket::where('request_status', 'pending')
+            ->where('source', 'online')
             ->count();
-            
+
+        $attachedToday = Ticket::where('request_status', 'ready_for_pickup')
+            ->where('source', 'online')
+            ->whereBetween('updated_at', [$start, $end])
+            ->count();
+
         $completedToday = Ticket::where('request_status', 'completed')
-            ->whereDate('updated_at', $today)
+            ->where('source', 'online')
+            ->whereBetween('updated_at', [$start, $end])
             ->count();
-            
+
         return response()->json([
             'pending_inbox' => $pendingInbox,
             'attached_today' => $attachedToday,
@@ -460,7 +539,8 @@ class TicketController extends Controller
     public function attachDocument(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
-            'document_id' => 'required|exists:documents,id'
+            'document_id' => 'required|exists:documents,id',
+            'print_remarks' => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -477,7 +557,22 @@ class TicketController extends Controller
         $ticket->request_status = 'ready_for_pickup';
         $ticket->save();
 
-        $this->syncIssuanceWithTicket($ticket, $request->document_id);
+        $this->syncIssuanceWithTicket(
+            $ticket,
+            $request->document_id,
+            $this->currentUserName($request),
+            $request->print_remarks
+        );
+
+        DB::table('activity_logs')->insert([
+            'user_name' => $this->currentUserName($request),
+            'action' => 'Document Attached',
+            'record_type' => 'Ticket',
+            'record_id' => $ticket->id,
+            'details' => "Document ID {$request->document_id} attached to ticket {$ticket->ticket_number}. Ticket ready for printing.",
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
 
         return response()->json(['success' => true, 'ticket' => $ticket]);
     }
@@ -504,12 +599,23 @@ class TicketController extends Controller
         }
 
         $ticket->request_status = 'cancelled';
-        
+
+        // Also cancel issuance if it exists
+        $issuance = \Illuminate\Support\Facades\DB::table('issuances')
+            ->where('ticket_number', $ticket->ticket_number)
+            ->first();
+            
+        if ($issuance && $issuance->status !== 'completed') {
+            \Illuminate\Support\Facades\DB::table('issuances')
+                ->where('id', $issuance->id)
+                ->update(['status' => 'cancelled', 'updated_at' => now()]);
+        }
+
         // We can optionally store the cancellation reason in the details JSON
         $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
         $details['cancellation_reason'] = $request->reason;
         $ticket->details = $details;
-        
+
         $ticket->save();
 
         if ($request->send_email && $ticket->email) {
@@ -521,6 +627,16 @@ class TicketController extends Controller
             }
         }
 
+        DB::table('activity_logs')->insert([
+            'user_name' => $this->currentUserName($request),
+            'action' => 'Ticket Rejected/Cancelled',
+            'record_type' => 'Ticket',
+            'record_id' => $ticket->id,
+            'details' => "Ticket {$ticket->ticket_number} cancelled. Reason: {$request->reason}",
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
         return response()->json(['success' => true, 'ticket' => $ticket]);
     }
 
@@ -528,7 +644,7 @@ class TicketController extends Controller
      * Auto-generates or updates an Issuance in the Print Approval Queue
      * using the citizen's form input from the Ticket.
      */
-    private function syncIssuanceWithTicket(Ticket $ticket, $documentId)
+    private function syncIssuanceWithTicket(Ticket $ticket, $documentId, ?string $requestedBy = null, ?string $printRemarks = null)
     {
         $document = DB::table('documents')->where('id', $documentId)->first();
         if (!$document) return;
@@ -550,14 +666,19 @@ class TicketController extends Controller
 
         $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
         $existingFields = json_decode($document->extracted_fields, true) ?: [];
-        
+
         // Merge! The citizen's input takes precedence.
         $mergedFields = array_merge($existingFields, $details);
         $mergedData = json_encode($mergedFields, JSON_UNESCAPED_UNICODE);
-        
-        $personName = $ticket->client_name;
 
-        $existing = DB::table('issuances')->where('document_id', $documentId)->first();
+        $personName = $ticket->client_name;
+        $orNumber = $this->generateOfficialReceiptNumber();
+        $requestedBy = $requestedBy ?: 'System';
+
+        $existing = DB::table('issuances')
+            ->where('document_id', $documentId)
+            ->where('ticket_number', $ticket->ticket_number)
+            ->first();
 
         if ($existing) {
             DB::table('issuances')
@@ -566,19 +687,22 @@ class TicketController extends Controller
                     'ticket_number' => $ticket->ticket_number,
                     'extracted_data' => $mergedData,
                     'name' => $personName,
-                    'status' => 'Pending Approval',
+                    'status' => 'Approved',
+                    'or_number' => $existing->or_number ?: $orNumber,
+                    'print_remarks' => $printRemarks,
+                    'requested_by' => $requestedBy,
                     'updated_at' => Carbon::now()
                 ]);
         } else {
             $prefix = ($docType === 'death') ? 'DC' : (($docType === 'marriage' || $docType === 'marriage_license') ? 'ML' : 'BC');
             $year = date('Y');
-            
+
             $results = DB::select("SELECT MAX(id) as max_id FROM issuances");
             $nextNum = 1;
             if (count($results) > 0 && $results[0]->max_id !== null) {
                 $nextNum = intval($results[0]->max_id) + 1;
             }
-            
+
             $certNumber = $prefix . '-' . $year . '-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
             $issuanceDate = date('m/d/Y');
 
@@ -589,10 +713,13 @@ class TicketController extends Controller
                 'name' => $personName,
                 'barangay' => $document->barangay ?: 'N/A',
                 'issuanceDate' => $issuanceDate,
-                'status' => 'Pending Approval',
+                'status' => 'Approved',
                 'encoded_by' => 'System',
                 'document_id' => $documentId,
                 'extracted_data' => $mergedData,
+                'or_number' => $orNumber,
+                'print_remarks' => $printRemarks,
+                'requested_by' => $requestedBy,
                 'ticket_number' => $ticket->ticket_number,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now()
@@ -658,7 +785,9 @@ class TicketController extends Controller
                 }
 
                 // Allocate daily lobby queue number starting at 101
-                $todayCount = Ticket::whereDate('verified_at', Carbon::today())
+                $start = Carbon::today(config('app.timezone'))->startOfDay();
+                $end = Carbon::today(config('app.timezone'))->endOfDay();
+                $todayCount = Ticket::whereBetween('verified_at', [$start, $end])
                     ->whereNotNull('queue_number')
                     ->count();
                 $queueNumber = $todayCount + 101;
@@ -704,6 +833,157 @@ class TicketController extends Controller
         $ticket->issued_at      = Carbon::now();
         $ticket->save();
 
+        // Sync corresponding issuance status and ensure or_number/requested_by are generated/populated
+        $userId = $request->session()->get('user_id');
+        $dbUser = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $dbUser ? $dbUser->name : $request->session()->get('user_name', 'System');
+
+        $issuancesQuery = DB::table('issuances');
+        if ($ticket->ticket_number) {
+            $issuancesQuery->where('ticket_number', $ticket->ticket_number);
+            if ($ticket->document_id) {
+                $issuancesQuery->orWhere('document_id', $ticket->document_id);
+            }
+        } elseif ($ticket->document_id) {
+            $issuancesQuery->where('document_id', $ticket->document_id);
+        }
+
+        $issuances = $issuancesQuery->get();
+
+        foreach ($issuances as $issuance) {
+            $updateData = [
+                'status' => 'Issued',
+                'encoded_by' => $userName,
+                'updated_at' => Carbon::now()
+            ];
+
+            if (empty($issuance->or_number)) {
+                $updateData['or_number'] = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+            }
+
+            if (empty($issuance->requested_by)) {
+                $updateData['requested_by'] = $userName;
+            }
+
+            if (empty($issuance->ticket_number) && $ticket->ticket_number) {
+                $updateData['ticket_number'] = $ticket->ticket_number;
+            }
+
+            DB::table('issuances')
+                ->where('id', $issuance->id)
+                ->update($updateData);
+        }
+
         return response()->json(['success' => true, 'ticket' => $ticket]);
+    }
+
+    /**
+     * Get archived tickets (soft-deleted or cancelled)
+     */
+    public function archived(Request $request)
+    {
+        $deleted = Ticket::onlyTrashed()->with('document')->get();
+        $declined = Ticket::where('request_status', 'cancelled')->with('document')->get();
+
+        $all = $deleted->map(function ($t) {
+            $t->archive_status = 'deleted';
+            return $t;
+        })->concat($declined->map(function ($t) {
+            $t->archive_status = 'declined';
+            return $t;
+        }));
+
+        $all->transform(function ($ticket) {
+            $ticket->qr_code_url = $ticket->qr_code_path
+                ? \Storage::disk('public')->url($ticket->qr_code_path)
+                : null;
+
+            $compatStatus = 'Pending';
+            if ($ticket->request_status === 'completed') {
+                $compatStatus = 'Completed';
+            } elseif ($ticket->request_status === 'cancelled') {
+                $compatStatus = 'Cancelled';
+            } elseif ($ticket->queue_status === 'serving') {
+                $compatStatus = 'Serving';
+            }
+            $ticket->status = $compatStatus;
+
+            return $ticket;
+        });
+
+        return response()->json($all);
+    }
+
+    /**
+     * Soft delete a ticket
+     */
+    public function destroy(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $ticket = Ticket::find($id);
+        if (!$ticket) {
+            return response()->json(['error' => 'Ticket not found'], 404);
+        }
+        if ($request->filled('reason')) {
+            $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
+            $details['deletion_reason'] = $request->reason;
+            $details['cancellation_reason'] = $request->reason;
+            $ticket->details = $details;
+            $ticket->request_status = 'cancelled';
+            $ticket->queue_status = 'not_in_lobby';
+            $ticket->save();
+        }
+        $ticket->delete();
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Restore a soft-deleted or cancelled ticket
+     */
+    public function restore($id)
+    {
+        $ticket = Ticket::withTrashed()->find($id);
+        if (!$ticket) {
+            return response()->json(['error' => 'Ticket not found'], 404);
+        }
+
+        if ($ticket->trashed()) {
+            $ticket->restore();
+        }
+
+        if ($ticket->request_status === 'cancelled') {
+            $ticket->request_status = 'pending';
+            $ticket->queue_status = 'not_in_lobby';
+            $ticket->save();
+        }
+
+        return response()->json(['success' => true, 'ticket' => $ticket]);
+    }
+
+    /**
+     * Permanently purge a ticket
+     */
+    public function purge($id)
+    {
+        $ticket = Ticket::withTrashed()->find($id);
+        if (!$ticket) {
+            return response()->json(['error' => 'Ticket not found'], 404);
+        }
+
+        if ($ticket->trashed()) {
+            $ticket->forceDelete();
+        } else {
+            $ticket->delete();
+            $ticket->forceDelete();
+        }
+
+        return response()->json(['success' => true]);
     }
 }

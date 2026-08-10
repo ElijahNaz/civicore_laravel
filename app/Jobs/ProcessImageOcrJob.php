@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class ProcessImageOcrJob implements ShouldQueue
 {
@@ -34,6 +35,11 @@ class ProcessImageOcrJob implements ShouldQueue
         $this->languages = $languages;
     }
 
+    public function middleware()
+    {
+        return [(new WithoutOverlapping('gemini-ocr-lock'))->releaseAfter(60)];
+    }
+
     public function handle(): void
     {
         if ($this->batch() && $this->batch()->cancelled()) {
@@ -41,7 +47,7 @@ class ProcessImageOcrJob implements ShouldQueue
         }
 
         // Add delay to prevent hitting Gemini API rate limits
-        sleep(15);
+        sleep(10);
 
         Log::info("ProcessImageOcrJob starting for doc {$this->documentId}, image: {$this->imagePath}");
 

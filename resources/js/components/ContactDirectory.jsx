@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { EnvelopeIcon, PhoneIcon } from '@heroicons/react/24/outline';
 import SkeletonLoader from './SkeletonLoader';
 
 export default function ContactDirectory() {
@@ -59,7 +60,9 @@ export default function ContactDirectory() {
                         className="p-10 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#d4a574]/50 transition-all flex flex-col items-center gap-6 group relative overflow-hidden"
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[50px] -z-0" />
-                        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">📧</div>
+                        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform text-white group-hover:text-indigo-400">
+                            <EnvelopeIcon className="w-8 h-8" />
+                        </div>
                         <div className="z-10 text-center">
                             <div className="text-[12px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-2">Email Address</div>
                             <div className="text-white font-black text-2xl tracking-tight group-hover:text-[#d4a574] transition-colors underline decoration-[#d4a574]/30 underline-offset-8">naicmcr@gmail.com</div>
@@ -74,7 +77,9 @@ export default function ContactDirectory() {
                         className="p-10 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#d4a574]/50 transition-all flex flex-col items-center gap-6 group relative overflow-hidden"
                     >
                         <div className="absolute top-0 left-0 w-32 h-32 bg-[#d4a574]/5 blur-[50px] -z-0" />
-                        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">📱</div>
+                        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform text-white group-hover:text-[#d4a574]">
+                            <PhoneIcon className="w-8 h-8" />
+                        </div>
                         <div className="z-10 text-center">
                             <div className="text-[12px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-2">Phone Support</div>
                             <div className="text-white font-black text-2xl tracking-tight group-hover:text-[#d4a574] transition-colors">+(046) 423 1721</div>

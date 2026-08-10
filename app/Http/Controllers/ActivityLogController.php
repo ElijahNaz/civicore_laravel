@@ -37,10 +37,15 @@ class ActivityLogController extends Controller
     /**
      * Get recent activity logs for the history tab
      */
-    public function index()
+    public function index(Request $request)
     {
-        $logs = DB::table('activity_logs')
-            ->orderBy('created_at', 'desc')
+        $query = DB::table('activity_logs');
+
+        if ($request->has('record_type') && !empty($request->record_type)) {
+            $query->where('record_type', $request->record_type);
+        }
+
+        $logs = $query->orderBy('created_at', 'desc')
             ->limit(500)
             ->get();
 

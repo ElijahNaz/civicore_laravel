@@ -69,6 +69,7 @@ Route::middleware('web')->group(function () {
         Route::post('/verification/verify', [VerificationController::class, 'verify']);
 
         // Documents
+        Route::get('/documents/export',             [DocumentController::class, 'exportReport']);
         Route::get('/documents',                    [DocumentController::class, 'index']);
         Route::get('/documents/history',            [DocumentController::class, 'history']);
         Route::post('/documents',                   [DocumentController::class, 'store']);
@@ -101,7 +102,7 @@ Route::middleware('web')->group(function () {
         Route::post('/issuances/{id}/undo',               [IssuanceController::class, 'undo']);
         Route::post('/issuances/{id}/issue',              [IssuanceController::class, 'markAsIssued']);
         Route::get('/issuances/next-cert-number/{type}',  [IssuanceController::class, 'nextCertNumber']);
-        Route::post('/issuances/{id}/request-print',      [IssuanceController::class, 'requestPrint']);
+
         Route::post('/issuances/ocr-search',              [IssuanceController::class, 'ocrSearch']);
 
         // Barangays
@@ -115,6 +116,10 @@ Route::middleware('web')->group(function () {
         Route::put('/tickets/{id}/status',         [TicketController::class, 'updateStatus']);
         Route::post('/tickets/{id}/link-document', [TicketController::class, 'linkDocument']);
         Route::post('/tickets/walk-in',            [TicketController::class, 'storeWalkIn']);
+        Route::get('/tickets/archived',            [TicketController::class, 'archived']);
+        Route::post('/tickets/{id}/restore',       [TicketController::class, 'restore']);
+        Route::delete('/tickets/{id}/purge',       [TicketController::class, 'purge']);
+        Route::delete('/tickets/{id}',             [TicketController::class, 'destroy']);
 
         // V1 Staff API Routes
         Route::get('/v1/tickets',                  [TicketController::class, 'index']);
@@ -151,8 +156,7 @@ Route::middleware('web')->group(function () {
                 Route::post('/create-account',              [UserController::class, 'createAccount']);
                 Route::put('/users/{id}',                   [UserController::class, 'update']);
                 Route::delete('/users/{id}',                [UserController::class, 'destroy']);
-                Route::post('/issuances/{id}/approve-print', [IssuanceController::class, 'approvePrint']);
-                Route::post('/issuances/{id}/reject-print',  [IssuanceController::class, 'rejectPrint']);
+
             });
         });
     });

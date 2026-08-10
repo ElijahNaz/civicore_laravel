@@ -8,7 +8,7 @@ import {
     UsersIcon,
     MapPinIcon,
     MegaphoneIcon,
-    Squares2X2Icon,
+    TableCellsIcon,
     TicketIcon,
     TrashIcon
 } from '@heroicons/react/24/outline';
@@ -32,6 +32,7 @@ const Layout = ({ children }) => {
         { path: '/dashboard', icon: ChartBarIcon, label: 'Dashboard', roles: ['SuperAdmin', 'Admin'] },
         { path: '/tickets', icon: TicketIcon, label: 'Tickets Queue', roles: ['SuperAdmin', 'Admin'] },
         { path: '/documents', icon: ArrowUpTrayIcon, label: 'Upload Document', roles: ['SuperAdmin', 'Admin'] },
+        { path: '/reports', icon: TableCellsIcon, label: 'Export Reports', roles: ['SuperAdmin', 'Admin'] },
         { path: '/issuances', icon: ClipboardDocumentCheckIcon, label: 'Issuance', roles: ['SuperAdmin', 'Admin'] },
         { path: '/archive', icon: TrashIcon, label: 'Archive Manager', roles: ['SuperAdmin', 'Admin'] },
         { path: '/mapping', icon: MapPinIcon, label: 'Mapping', roles: ['SuperAdmin'] },
@@ -161,8 +162,8 @@ const Layout = ({ children }) => {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 bg-transparent h-screen pt-14 md:pt-0 relative z-10 w-full overflow-hidden">
                 {/* Top Bar - Desktop */}
-                <header className="hidden md:flex items-center justify-between h-[5rem] px-8 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm/50 backdrop-blur-md bg-white/90">
-                    <h1 id="pageTitle" className="text-2xl font-bold text-slate-800 tracking-tight">
+                <header className="hidden md:flex items-center justify-between h-[3.75rem] px-6 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm/50 backdrop-blur-md bg-white/90">
+                    <h1 id="pageTitle" className="text-xl font-bold text-slate-800 tracking-tight">
                         {menuItems.find(m => m.path === location.pathname)?.label || 'Dashboard'}
                     </h1>
 
@@ -203,7 +204,7 @@ const Layout = ({ children }) => {
                 </header>
 
                 {/* Page Content */}
-                <div className="flex-1 p-4 md:p-8 overflow-x-hidden overflow-y-auto relative w-full h-[calc(100vh-5rem)]">
+                <div className="flex-1 p-3 md:p-5 overflow-x-hidden overflow-y-auto relative w-full h-[calc(100vh-3.75rem)]">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={location.pathname}

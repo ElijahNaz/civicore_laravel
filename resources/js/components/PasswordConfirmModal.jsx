@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LockClosedIcon, XMarkIcon, ShieldCheckIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon, XMarkIcon, ShieldCheckIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
 const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) => {
@@ -94,7 +94,7 @@ const PasswordConfirmModal = ({ isOpen, onConfirm, onCancel, title, message }) =
                                     {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                                 </button>
                             </div>
-                            {error && <p className="text-xs font-bold text-rose-500 mt-2 flex items-center gap-1">⚠ {error}</p>}
+                            {error && <p className="text-xs font-bold text-rose-500 mt-2 flex items-center gap-1.5"><ExclamationTriangleIcon className="w-4 h-4 text-rose-500 shrink-0" /> {error}</p>}
                         </div>
 
                         <div className="flex gap-3 pt-2">

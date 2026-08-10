@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ClockIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -111,7 +112,7 @@ export default function Landing() {
                             </div>
                         ) : config?.opening_hours ? (
                             <motion.div variants={itemVars} className="mt-8 flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-4 max-w-sm">
-                                <span className="text-xl">🕒</span>
+                                <ClockIcon className="w-5 h-5 text-[#d4a574]" />
                                 <div>
                                     <div className="text-[10px] text-[#d4a574] font-bold uppercase tracking-widest leading-none mb-1">Operating Hours</div>
                                     <div className="text-white font-medium text-sm">{config.opening_hours}</div>
@@ -135,7 +136,7 @@ export default function Landing() {
                                     <div key={ann.id} className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 relative overflow-hidden group">
                                         <div className="absolute top-0 left-0 w-1 h-full bg-rose-500 opacity-80"></div>
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-rose-400 text-sm">📢</span>
+                                            <MegaphoneIcon className="w-4 h-4 text-rose-400" />
                                             <span className="text-[10px] text-rose-300 font-bold uppercase tracking-widest">
                                                 Active Alert • {new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                             </span>

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Announcement;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class AnnouncementController extends Controller
 {
@@ -52,6 +53,20 @@ class AnnouncementController extends Controller
             'is_active' => $request->input('is_active', true),
         ]);
 
+        $userId = $request->session()->get('user_id');
+        $actor = $userId ? User::find($userId) : null;
+        $actorName = $actor ? $actor->name : 'System';
+
+        DB::table('activity_logs')->insert([
+            'user_name' => $actorName,
+            'action' => 'Created Announcement',
+            'record_type' => 'Announcement',
+            'record_id' => $announcement->id,
+            'details' => 'Created announcement: ' . $announcement->message,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         return response()->json(['success' => true, 'announcement' => $announcement]);
     }
 
@@ -81,6 +96,20 @@ class AnnouncementController extends Controller
         
         $announcement->save();
 
+        $userId = $request->session()->get('user_id');
+        $actor = $userId ? User::find($userId) : null;
+        $actorName = $actor ? $actor->name : 'System';
+
+        DB::table('activity_logs')->insert([
+            'user_name' => $actorName,
+            'action' => 'Updated Announcement',
+            'record_type' => 'Announcement',
+            'record_id' => $announcement->id,
+            'details' => 'Updated announcement: ' . $announcement->message,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         return response()->json(['success' => true, 'announcement' => $announcement]);
     }
 
@@ -90,7 +119,26 @@ class AnnouncementController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        Announcement::destroy($id);
+        $announcement = Announcement::find($id);
+        if ($announcement) {
+            $message = $announcement->message;
+            $announcement->delete();
+
+            $userId = $request->session()->get('user_id');
+            $actor = $userId ? User::find($userId) : null;
+            $actorName = $actor ? $actor->name : 'System';
+
+            DB::table('activity_logs')->insert([
+                'user_name' => $actorName,
+                'action' => 'Deleted Announcement',
+                'record_type' => 'Announcement',
+                'record_id' => $id,
+                'details' => 'Deleted announcement: ' . $message,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
         return response()->json(['success' => true]);
     }
 }

@@ -291,8 +291,47 @@ class IssuanceController extends Controller
         $userId = $request->session()->get('user_id');
         $dbUser = $userId ? \App\Models\User::find($userId) : null;
         $userName = $dbUser ? $dbUser->name : $request->session()->get('user_name', 'System');
+
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        $updateData = [
+            'status' => 'Issued',
+            'encoded_by' => $userName,
+            'updated_at' => now(),
+        ];
+
+        if (empty($record->or_number)) {
+            $updateData['or_number'] = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+        }
+
+        if (empty($record->requested_by)) {
+            $updateData['requested_by'] = $userName;
+        }
+
+        DB::table('issuances')->where('id', $id)->update($updateData);
         
-        DB::update("UPDATE issuances SET status = 'Issued', encoded_by = ? WHERE id = ?", [$userName, $id]);
+        // Sync corresponding active ticket to completed status
+        if ($record) {
+            $ticketQuery = \App\Models\Ticket::where(function($q) use ($record) {
+                if (!empty($record->document_id)) {
+                    $q->where('document_id', $record->document_id);
+                }
+                if (!empty($record->ticket_number)) {
+                    $q->orWhere('ticket_number', $record->ticket_number);
+                }
+            })->whereNotIn('request_status', ['completed', 'cancelled']);
+
+            $ticket = $ticketQuery->first();
+            if ($ticket) {
+                $ticket->request_status = 'completed';
+                $ticket->queue_status = 'not_in_lobby';
+                $ticket->issued_at = now();
+                $ticket->save();
+            }
+        }
         
         return response()->json(['success' => true]);
     }
@@ -376,121 +415,7 @@ class IssuanceController extends Controller
         return 'Certificate_' . $certNumber . '.pdf';
     }
 
-    /**
-     * Request print approval for an issuance
-     */
-    public function requestPrint(Request $request, $id)
-    {
-        $request->validate([
-            'or_number' => 'nullable|string|max:255',
-            'print_remarks' => 'nullable|string|max:1000',
-        ]);
 
-        $record = DB::table('issuances')->where('id', $id)->first();
-        if (!$record) {
-            return response()->json(['error' => 'Issuance not found'], 404);
-        }
-
-        // Resolve user name from session
-        $userId = $request->session()->get('user_id');
-        $user = $userId ? \App\Models\User::find($userId) : null;
-        $userName = $user ? $user->name : 'System';
-
-        $orNumber = $request->or_number;
-        if (empty($orNumber)) {
-            $orNumber = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
-        }
-
-        DB::table('issuances')->where('id', $id)->update([
-            'status' => 'Pending Approval',
-            'or_number' => $orNumber,
-            'print_remarks' => $request->print_remarks,
-            'requested_by' => $userName,
-            'updated_at' => now(),
-        ]);
-
-        // Insert activity log
-        DB::table('activity_logs')->insert([
-            'user_name' => $userName,
-            'action' => 'Requested Print',
-            'record_type' => 'Issuance',
-            'record_id' => $id,
-            'details' => "Requested print for {$record->type} certificate (OR: {$orNumber}) of {$record->name}",
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response()->json(['success' => true]);
-    }
-
-    /**
-     * Approve a print request
-     */
-    public function approvePrint(Request $request, $id)
-    {
-        $record = DB::table('issuances')->where('id', $id)->first();
-        if (!$record) {
-            return response()->json(['error' => 'Issuance not found'], 404);
-        }
-
-        // Resolve user name from session
-        $userId = $request->session()->get('user_id');
-        $user = $userId ? \App\Models\User::find($userId) : null;
-        $userName = $user ? $user->name : 'System';
-
-        DB::table('issuances')->where('id', $id)->update([
-            'status' => 'Approved',
-            'approved_by' => $userName,
-            'updated_at' => now(),
-        ]);
-
-        // Insert activity log
-        DB::table('activity_logs')->insert([
-            'user_name' => $userName,
-            'action' => 'Approved Print',
-            'record_type' => 'Issuance',
-            'record_id' => $id,
-            'details' => "Approved print for {$record->type} certificate of {$record->name}",
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response()->json(['success' => true]);
-    }
-
-    /**
-     * Reject a print request
-     */
-    public function rejectPrint(Request $request, $id)
-    {
-        $record = DB::table('issuances')->where('id', $id)->first();
-        if (!$record) {
-            return response()->json(['error' => 'Issuance not found'], 404);
-        }
-
-        // Resolve user name from session
-        $userId = $request->session()->get('user_id');
-        $user = $userId ? \App\Models\User::find($userId) : null;
-        $userName = $user ? $user->name : 'System';
-
-        DB::table('issuances')->where('id', $id)->update([
-            'status' => 'Active', // reset to base state
-            'updated_at' => now(),
-        ]);
-
-        // Insert activity log
-        DB::table('activity_logs')->insert([
-            'user_name' => $userName,
-            'action' => 'Rejected Print',
-            'record_type' => 'Issuance',
-            'record_id' => $id,
-            'details' => "Rejected print for {$record->type} certificate of {$record->name}",
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response()->json(['success' => true]);
-    }
 
     /**
      * Process OCR on an uploaded image to search issuances

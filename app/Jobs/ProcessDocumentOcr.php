@@ -99,11 +99,12 @@ class ProcessDocumentOcr implements ShouldQueue, ShouldBeUnique
             }
 
             // 2. Enforce Daily Scan Limit (Token budget manager check)
-            $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 500);
-            $todayDate = date('Y-m-d');
+            $dailyLimit = (int) env('DAILY_SCAN_LIMIT', 1000);
+            $start = \Carbon\Carbon::today(config('app.timezone'))->startOfDay();
+            $end = \Carbon\Carbon::today(config('app.timezone'))->endOfDay();
             $todayScans = DB::table('documents')
                 ->whereIn('status', ['extracted', 'Processed', 'Issued'])
-                ->whereDate('updated_at', $todayDate)
+                ->whereBetween('updated_at', [$start, $end])
                 ->count();
 
             if ($todayScans >= $dailyLimit) {

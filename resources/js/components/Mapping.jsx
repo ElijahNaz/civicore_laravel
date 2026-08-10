@@ -12,7 +12,12 @@ import {
     MagnifyingGlassIcon,
     ArrowsPointingOutIcon,
     FireIcon,
-    CalendarDaysIcon
+    CalendarDaysIcon,
+    UserIcon,
+    DocumentTextIcon,
+    UsersIcon,
+    ChartBarIcon,
+    ClipboardDocumentCheckIcon
 } from '@heroicons/react/24/outline';
 import SkeletonLoader from './SkeletonLoader.jsx';
 import Avatar from 'boring-avatars';
@@ -36,6 +41,39 @@ const normalizeBrgy = (name) => {
         .replace(/[^a-z0-9]/gi, '')
         .trim();
 };
+
+const staticBarangays = [
+    { coords: [14.320, 120.7652], name: 'Gomez-Zamora (Pob.)' },
+    { coords: [14.3179, 120.76559], name: 'Capt. C. Nazareno (Pob.)' },
+    { coords: [14.3225, 120.7673], name: 'Ibayo Silangan' },
+    { coords: [14.32358, 120.76485], name: 'Ibayo Estacion' },
+    { coords: [14.31728, 120.76345], name: 'Kanluran' },
+    { coords: [14.31462, 120.7706], name: 'Makina' },
+    { coords: [14.32049, 120.75696], name: 'Sapa' },
+    { coords: [14.3251, 120.75574], name: 'Bucana Malaki' },
+    { coords: [14.3232, 120.7598], name: 'Bucana Sasahan' },
+    { coords: [14.3211, 120.7535], name: 'Bagong Karsada' },
+    { coords: [14.3198, 120.7627], name: 'Balsahan' },
+    { coords: [14.3175, 120.7512], name: 'Bancaan' },
+    { coords: [14.29245, 120.75202], name: 'Muzon' },
+    { coords: [14.3217999, 120.761], name: 'Latoria' },
+    { coords: [14.3126, 120.7373], name: 'Labac' },
+    { coords: [14.3148, 120.7476], name: 'Mabolo' },
+    { coords: [14.31058, 120.7709], name: 'San Roque' },
+    { coords: [14.3145, 120.7685], name: 'Santulan' },
+    { coords: [14.2795, 120.78071], name: 'Molino' },
+    { coords: [14.2976, 120.7909], name: 'Calubcob' },
+    { coords: [14.2939, 120.8007], name: 'Halang' },
+    { coords: [14.3078, 120.7683], name: 'Malainen Bago' },
+    { coords: [14.3000, 120.7700], name: 'Malainen Luma' },
+    { coords: [14.2850, 120.8097], name: 'Palangue 1' },
+    { coords: [14.2620, 120.8297], name: 'Palangue 2 & 3' },
+    { coords: [14.3166, 120.7689], name: 'Humbac' },
+    { coords: [14.3348, 120.7717], name: 'Munting Mapino' },
+    { coords: [14.3146, 120.7930], name: 'Sabang' },
+    { coords: [14.3438, 120.7808], name: 'Timalan Balsahan' },
+    { coords: [14.33699, 120.7790], name: 'Timalan Concepcion' }
+];
 
 const Mapping = () => {
     const mapRef = useRef(null);
@@ -173,39 +211,6 @@ const Mapping = () => {
         }
         markersRef.current = {};
 
-        const staticBarangays = [
-            { coords: [14.320, 120.7652], name: 'Gomez-Zamora (Pob.)' },
-            { coords: [14.3179, 120.76559], name: 'Capt. C. Nazareno (Pob.)' },
-            { coords: [14.3225, 120.7673], name: 'Ibayo Silangan' },
-            { coords: [14.32358, 120.76485], name: 'Ibayo Estacion' },
-            { coords: [14.31728, 120.76345], name: 'Kanluran' },
-            { coords: [14.31462, 120.7706], name: 'Makina' },
-            { coords: [14.32049, 120.75696], name: 'Sapa' },
-            { coords: [14.3251, 120.75574], name: 'Bucana Malaki' },
-            { coords: [14.3232, 120.7598], name: 'Bucana Sasahan' },
-            { coords: [14.3211, 120.7535], name: 'Bagong Karsada' },
-            { coords: [14.3198, 120.7627], name: 'Balsahan' },
-            { coords: [14.3175, 120.7512], name: 'Bancaan' },
-            { coords: [14.29245, 120.75202], name: 'Muzon' },
-            { coords: [14.3217999, 120.761], name: 'Latoria' },
-            { coords: [14.3126, 120.7373], name: 'Labac' },
-            { coords: [14.3148, 120.7476], name: 'Mabolo' },
-            { coords: [14.31058, 120.7709], name: 'San Roque' },
-            { coords: [14.3145, 120.7685], name: 'Santulan' },
-            { coords: [14.2795, 120.78071], name: 'Molino' },
-            { coords: [14.2976, 120.7909], name: 'Calubcob' },
-            { coords: [14.2939, 120.8007], name: 'Halang' },
-            { coords: [14.3078, 120.7683], name: 'Malainen Bago' },
-            { coords: [14.3000, 120.7700], name: 'Malainen Luma' },
-            { coords: [14.2850, 120.8097], name: 'Palangue 1' },
-            { coords: [14.2620, 120.8297], name: 'Palangue 2 & 3' },
-            { coords: [14.3166, 120.7689], name: 'Humbac' },
-            { coords: [14.3348, 120.7717], name: 'Munting Mapino' },
-            { coords: [14.3146, 120.7930], name: 'Sabang' },
-            { coords: [14.3438, 120.7808], name: 'Timalan Balsahan' },
-            { coords: [14.33699, 120.7790], name: 'Timalan Concepcion' }
-        ];
-
         const brgyCounts = {};
         let birthCount = 0;
         let deathCount = 0;
@@ -241,7 +246,7 @@ const Mapping = () => {
         });
 
         uniqueIssuances.forEach(item => {
-            const rawBrgy = item.barangay;
+            const rawBrgy = item.barangay || 'Ibayo Silangan';
             const type = getNormalizedType(item);
             
             // Global counts
@@ -474,7 +479,7 @@ const Mapping = () => {
         const brgyCountsLocal = {};
         
         uniqueIssuances.forEach(i => {
-            const brgy = i.barangay;
+            const brgy = i.barangay || 'Ibayo Silangan';
             if (brgy) {
                 if (!brgyCountsLocal[brgy]) brgyCountsLocal[brgy] = { births: 0, deaths: 0, marriages: 0, total: 0 };
                 const type = getNormalizedType(i);
@@ -502,7 +507,7 @@ const Mapping = () => {
     };
 
     const unmappedCount = uniqueIssuances.filter(i => {
-        const rb = i.barangay;
+        const rb = i.barangay || 'Ibayo Silangan';
         if (!rb) return true;
         const norm = normalizeBrgy(rb);
         return !staticBarangays.some(sb => normalizeBrgy(sb.name) === norm || rb.toLowerCase().includes(normalizeBrgy(sb.name)));
@@ -674,8 +679,8 @@ const Mapping = () => {
                 {/* Tab switcher */}
                 <div className="flex items-center border-b border-slate-100 px-4 pt-3">
                     {[
-                        { key: 'records', label: 'Records Overview', icon: '📂' },
-                        { key: 'issued', label: 'Issued Per Category', icon: '📋' },
+                        { key: 'records', label: 'Records Overview', icon: <ChartBarIcon className="w-4 h-4" /> },
+                        { key: 'issued', label: 'Issued Per Category', icon: <ClipboardDocumentCheckIcon className="w-4 h-4" /> },
                     ].map(tab => (
                         <button
                             key={tab.key}
@@ -746,14 +751,15 @@ const Mapping = () => {
                         // Most issued barangay (from issuances only)
                         const brgyIssuedCounts = {};
                         filteredApiData.forEach(i => {
-                            if (i.barangay) brgyIssuedCounts[i.barangay] = (brgyIssuedCounts[i.barangay] || 0) + 1;
+                            const brgyName = i.barangay || 'Ibayo Silangan';
+                            brgyIssuedCounts[brgyName] = (brgyIssuedCounts[brgyName] || 0) + 1;
                         });
                         const mostIssuedBrgy = Object.entries(brgyIssuedCounts).sort((a,b) => b[1]-a[1])[0];
 
                         const categories = [
-                            { label: 'Birth Issued',    count: issuedBirth,    color: 'text-[#d4a574]', barColor: 'bg-[#d4a574]',     bg: 'bg-[#d4a574]/10  border-[#d4a574]/20',  emoji: '👶' },
-                            { label: 'Death Issued',    count: issuedDeath,    color: 'text-rose-500',  barColor: 'bg-rose-500',       bg: 'bg-rose-50 border-rose-100',            emoji: '📋' },
-                            { label: 'Marriage Issued', count: issuedMarriage, color: 'text-indigo-500', barColor: 'bg-indigo-500',    bg: 'bg-indigo-50 border-indigo-100',         emoji: '💍' },
+                            { label: 'Birth Issued',    count: issuedBirth,    color: 'text-[#d4a574]', barColor: 'bg-[#d4a574]',     bg: 'bg-[#d4a574]/10  border-[#d4a574]/20',  emoji: <UserIcon className="w-6 h-6 text-[#d4a574]" /> },
+                            { label: 'Death Issued',    count: issuedDeath,    color: 'text-rose-500',  barColor: 'bg-rose-500',       bg: 'bg-rose-50 border-rose-100',            emoji: <DocumentTextIcon className="w-6 h-6 text-rose-500" /> },
+                            { label: 'Marriage Issued', count: issuedMarriage, color: 'text-indigo-500', barColor: 'bg-indigo-500',    bg: 'bg-indigo-50 border-indigo-100',         emoji: <UsersIcon className="w-6 h-6 text-indigo-500" /> },
                         ];
 
                         return (
@@ -1025,7 +1031,9 @@ const Mapping = () => {
                                                     <span className="text-[9px] font-bold text-[#d4a574]">{brgy.births}B</span>
                                                     <span className="text-[9px] font-bold text-rose-400">{brgy.deaths}D</span>
                                                     <span className="text-[9px] font-bold text-indigo-400">{brgy.marriages}M</span>
-                                                    <span className="ml-auto text-[9px] font-bold text-slate-400 group-hover/brgy:text-[#d4a574] transition-colors">📍 Locate</span>
+                                                    <span className="ml-auto text-[9px] font-bold text-slate-400 group-hover/brgy:text-[#d4a574] transition-colors flex items-center gap-0.5">
+                                                        <MapPinIcon className="w-3 h-3 text-[#d4a574]" /> Locate
+                                                    </span>
                                                 </div>
                                             </button>
                                         ))}

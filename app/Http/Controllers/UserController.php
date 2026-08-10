@@ -129,10 +129,22 @@ class UserController extends Controller
             'email'      => 'required|email|unique:users,email',
             'password'   => 'required|string|min:7',
             'role'       => 'required|in:Admin,SuperAdmin',
+            'avatar'     => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()->first()], 400);
+        }
+
+        $avatarBinary = null;
+        if ($request->has('avatar')) {
+            $avatarData = $request->input('avatar');
+            if ($avatarData) {
+                if (strpos($avatarData, 'data:image') === 0) {
+                    $avatarData = substr($avatarData, strpos($avatarData, ',') + 1);
+                }
+                $avatarBinary = base64_decode($avatarData);
+            }
         }
 
         $user = User::create([
@@ -143,6 +155,11 @@ class UserController extends Controller
             'password'   => Hash::make($request->input('password')),
             'role'       => $request->input('role'),
         ]);
+
+        if ($avatarBinary !== null) {
+            $user->avatar = $avatarBinary;
+            $user->save();
+        }
 
         return response()->json([
             'success' => true,

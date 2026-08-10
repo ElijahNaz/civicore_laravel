@@ -329,7 +329,7 @@ function Dashboard() {
                     { label: 'TOTAL RECORD', val: stats.totalDocs, icon: ShieldCheckIcon, color: 'text-white', bg: 'bg-indigo-600', border: 'border-indigo-700', sub: 'Master' },
                     { label: 'UPLOAD PENDING', val: stats.pendingDocs, icon: DocumentTextIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Action Needed' },
                     { label: 'TOTAL ISSUED FILES', val: stats.totalIssuances, icon: ClipboardDocumentCheckIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Finalized' },
-                    { label: 'Active Users', val: stats.totalUsers, icon: UsersIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Current' }
+                    { label: 'TOTAL Users', val: stats.totalUsers, icon: UsersIcon, color: 'text-slate-950', bg: 'bg-white', border: 'border-slate-300', sub: 'Current' }
                 ].map((s, i) => (
                     <motion.div
                         key={i}
@@ -358,20 +358,15 @@ function Dashboard() {
                 className="grid grid-cols-1 md:grid-cols-3 gap-6"
             >
                 {[
-                    { label: 'Birth Certificates', val: stats.birthsCount || 0, icon: HeartIcon, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', sub: 'Total Birth Records' },
-                    { label: 'Death Certificates', val: stats.deathsCount || 0, icon: XCircleIcon, color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200', sub: 'Total Death Records' },
-                    { label: 'Marriage Certificates', val: stats.marriagesCount || 0, icon: SparklesIcon, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', sub: 'Total Marriage Records' }
+                    { label: 'Birth Certificates', val: stats.birthsCount || 0, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', sub: 'Total Birth Records' },
+                    { label: 'Death Certificates', val: stats.deathsCount || 0, color: 'text-rose-700', bg: 'bg-rose-50 border-rose-200', sub: 'Total Death Records' },
+                    { label: 'Marriage Certificates', val: stats.marriagesCount || 0, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', sub: 'Total Marriage Records' }
                 ].map((s, i) => (
                     <motion.div
                         key={i}
                         variants={itemVariants}
-                        className={`${s.bg} rounded-[2rem] p-6 border-2 shadow-xs relative group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-out`}
+                        className={`${s.bg} rounded-[2rem] p-6 border-2 shadow-xs relative group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-out flex flex-col justify-center`}
                     >
-                        <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-slate-200/50 shadow-xs">
-                                <s.icon className={`w-5 h-5 ${s.color}`} />
-                            </div>
-                        </div>
                         <div className="space-y-1 relative z-10">
                             <h3 className={`text-4xl font-black tracking-tight text-slate-950 tabular-nums leading-none`}>{s.val}</h3>
                             <p className={`text-xs font-bold uppercase tracking-widest mt-2 ${s.color}`}>{s.label}</p>

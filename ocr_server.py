@@ -1246,6 +1246,8 @@ def process_ocr_gemini(data: dict):
         
         JSON Structure to follow (use null for empty or unreadable fields):
         {
+          "is_valid_document": true,
+          "document_validation_error": null,
           "registry_number": null,
           "province": null,
           "city_municipality": null,
@@ -1267,6 +1269,7 @@ def process_ocr_gemini(data: dict):
     elif doc_type_clean == 'death':
         prompt = """
         You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Death).
+        CRITICAL SAFETY REQUIREMENT: You MUST verify if the provided image is an official Philippine Civil Registry Document (Birth, Death, or Marriage Certificate). If the image is NOT a civil registry document (for example: a photo of a person, animal, vehicle, landscape, random text, meme, or blank paper), set "is_valid_document": false and set "document_validation_error" to a clear message describing why it was rejected.
         Please extract the data from this image and return it in a clean JSON format.
         Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
         
@@ -1281,6 +1284,8 @@ def process_ocr_gemini(data: dict):
         
         JSON Structure to follow (use null for empty or unreadable fields):
         {
+          "is_valid_document": true,
+          "document_validation_error": null,
           "registry_number": null,
           "province": null,
           "city_municipality": null,
@@ -1318,6 +1323,7 @@ def process_ocr_gemini(data: dict):
         # Default/Birth
         prompt = """
         You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Live Birth).
+        CRITICAL SAFETY REQUIREMENT: You MUST verify if the provided image is an official Philippine Civil Registry Document (Birth, Death, or Marriage Certificate). If the image is NOT a civil registry document (for example: a photo of a person, animal, vehicle, landscape, random text, meme, or blank paper), set "is_valid_document": false and set "document_validation_error" to a clear message describing why it was rejected.
         There may be different varieties of this form (e.g., older forms from 1958, newer forms from 1993, or others).
         Please extract the data from this image and return it in a clean JSON format.
         Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
@@ -1339,6 +1345,8 @@ def process_ocr_gemini(data: dict):
         
         JSON Structure to follow (use null for empty or unreadable fields):
         {
+          "is_valid_document": true,
+          "document_validation_error": null,
           "registry_number": null, "province": null, "city_municipality": null, "barangay": null,
           "first_name": null, "middle_name": null, "last_name": null, "sex": null,
           "dob_day": null, "dob_month": null, "dob_year": null,
@@ -1431,6 +1439,18 @@ def process_ocr_gemini(data: dict):
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse JSON from Gemini response: {str(e)}. Response was: {clean_text}")
     
+    if extracted_data.get("is_valid_document") is False:
+        err_msg = extracted_data.get("document_validation_error") or "The uploaded image does not appear to be an official Civil Registry document (Birth, Death, or Marriage certificate)."
+        print(f"Document Validation Failed: {err_msg}")
+        return {
+            "success": False,
+            "error": "Invalid Document Uploaded",
+            "detail": err_msg,
+            "is_valid_document": False,
+            "extracted_fields": {},
+            "image_token_cost": 258
+        }
+
     # Extract signature crops
     signatures = crop_and_binarize_signatures(file_path, doc_type)
     for k, v in signatures.items():

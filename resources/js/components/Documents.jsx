@@ -6,7 +6,8 @@ import {
     CloudArrowUpIcon, DocumentIcon, TrashIcon, CheckCircleIcon,
     ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon,
     PencilSquareIcon, ShieldExclamationIcon, ShieldCheckIcon, DocumentCheckIcon,
-    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon, StopIcon, PlayIcon
+    EyeIcon, ArrowDownTrayIcon, CameraIcon, BoltIcon, ArrowPathIcon, StopIcon, PlayIcon,
+    UserIcon, DocumentTextIcon, UsersIcon
 } from '@heroicons/react/24/outline';
 import OcrFormPanel from './OcrFormPanel.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -14,7 +15,7 @@ import { useModal } from './ModalContext.jsx';
 import { useData } from './DataContext.jsx';
 import CameraModal from './CameraModal.jsx';
 import ActionConfirmModal from './ActionConfirmModal.jsx';
-import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
+import ExportReportModal from './ExportReportModal.jsx';
 
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
@@ -210,6 +211,7 @@ const Documents = () => {
 
     const [previewFile, setPreviewFile] = useState(null); // file to preview
     const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, onConfirm: null, title: '', message: '', type: 'info' });
 
     const toggleSelect = (id) => {
@@ -264,6 +266,7 @@ const Documents = () => {
         runBackgroundTask(taskName, async () => {
             let successCount = 0;
             let lastId = null;
+            let lastError = null;
 
             for (const uploadItem of acceptedFiles) {
                 const sourceFile = uploadItem?.file || uploadItem;
@@ -297,9 +300,12 @@ const Documents = () => {
                     if (data.success) {
                         successCount++;
                         lastId = data.id;
+                    } else {
+                        lastError = data.error || data.message || 'Server rejected the upload';
                     }
                 } catch (err) {
                     console.error(`Failed to upload ${sourceFile?.name || 'file'}`, err);
+                    lastError = err.message || 'Network error';
                 }
             }
 
@@ -311,7 +317,7 @@ const Documents = () => {
                 return { success: true, message, id: lastId };
             }
             refreshDocuments(true);
-            throw new Error('Upload failed');
+            throw new Error(lastError || 'Upload failed');
         }, { silent: true });
     }, [selectedDocType, refreshAll, runBackgroundTask, refreshDocuments]);
 
@@ -442,7 +448,7 @@ const Documents = () => {
                         refreshDocuments(true);
                         setConfirmModal({
                             isOpen: true,
-                            title: '⚠️ Duplicate Detected',
+                            title: 'Duplicate Detected',
                             message: 'A similar record already exists in the Master Registry. Do you still want to approve and save this record as a duplicate?',
                             type: 'warning',
                             onConfirm: async () => {
@@ -591,12 +597,25 @@ const Documents = () => {
         });
     };
 
+    const buildPersonName = (fields, type) => {
+        if (!fields) return '';
+        if (type === 'marriage') {
+            const h = [fields.husband_last_name, fields.husband_first_name].filter(Boolean).join(', ');
+            const w = [fields.wife_last_name, fields.wife_first_name].filter(Boolean).join(', ');
+            const joined = [h, w].filter(Boolean).join(' & ');
+            return joined || fields.personName || '';
+        }
+        const nameParts = [fields.last_name ? `${fields.last_name},` : '', fields.first_name, fields.middle_name].filter(Boolean).join(' ');
+        return nameParts || fields.personName || '';
+    };
+
     const executeSave = async ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {
         if (!activeOcr) return;
         const file = activeOcr.file;
         const fileId = file.id;
-        const personName = fields.full_name || fields.husbands_name || fields.wifes_name || 'Document Data';
-        const barangay = fields.barangay || '';
+        const computedName = buildPersonName(fields, detectedType);
+        const personName = computedName || file.personName || file.name || 'Document Data';
+        const barangay = fields.barangay || file.barangay || '';
 
         if (minimizeRequested) {
             setActiveOcr(null);
@@ -737,12 +756,53 @@ const Documents = () => {
         });
     };
 
+    const handleRequestToPrint = async (file) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Request to Print',
+            message: `Generate a printing ticket for "${file.personName || file.name}"? This will send it directly to the Waiting queue.`,
+            type: 'info',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                runBackgroundTask(`Print Request: ${file.personName || file.name}`, async () => {
+                    try {
+                        const purpose = file.type || file.detected_type || 'birth';
+                        const ticketRes = await fetch('/api/v1/tickets', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                            body: JSON.stringify({
+                                client_name: file.personName || file.name || 'Walk-in Client',
+                                purpose: purpose,
+                                source: 'walk-in'
+                            })
+                        });
+                        const ticketData = await ticketRes.json();
+                        if (!ticketRes.ok || !ticketData.success) throw new Error(ticketData.message || 'Failed to create ticket');
+
+                        const attachRes = await fetch(`/api/v1/tickets/${ticketData.ticket.id}/attach`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                            body: JSON.stringify({ document_id: file.id })
+                        });
+                        const attachData = await attachRes.json();
+                        if (!attachRes.ok || !attachData.success) throw new Error(attachData.message || 'Failed to attach document');
+
+                        return { success: true, message: `Ticket ${ticketData.ticket.ticket_number} created in Waiting queue.` };
+                    } catch (err) {
+                        throw err;
+                    }
+                });
+            },
+            onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        });
+    };
+
 
 
     const docTypes = [
-        { type: 'birth', icon: '👶', name: 'Birth Certificate', desc: 'Live birth records' },
-        { type: 'death', icon: '📋', name: 'Death Certificate', desc: 'Registry of deaths' },
-        { type: 'marriage', icon: '💍', name: 'Marriage License', desc: 'Marriage contracts' },
+        { type: 'birth', icon: <UserIcon className="w-5 h-5 text-[#d4a574]" />, name: 'Birth Certificate', desc: 'Live birth records' },
+        { type: 'death', icon: <DocumentTextIcon className="w-5 h-5 text-rose-500" />, name: 'Death Certificate', desc: 'Registry of deaths' },
+        { type: 'marriage', icon: <UsersIcon className="w-5 h-5 text-indigo-500" />, name: 'Marriage License', desc: 'Marriage contracts' },
     ];
 
     const statusBadge = (file) => {
@@ -838,16 +898,17 @@ const Documents = () => {
                     className="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-3 py-1 rounded-full border uppercase tracking-tight bg-amber-50 text-amber-700 border-amber-200 shadow-[0_0_12px_-4px_rgba(245,158,11,0.3)] animate-pulse"
                     title="Potential duplicate in Master Registry"
                 >
-                    ⚠️ Duplicate
+                    <ExclamationTriangleIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    Duplicate
                 </motion.span>
             );
         }
 
         let labelStr = status;
-        if (s === 'processed') labelStr = '✓ Saved';
-        else if (s === 'extracted') labelStr = '⚡ Done';
-        else if (s === 'failed') labelStr = '✕ Failed';
-        else if (s === 'stopped') labelStr = '⏹ Stopped';
+        if (s === 'processed') labelStr = 'Saved';
+        else if (s === 'extracted') labelStr = 'Done';
+        else if (s === 'failed') labelStr = 'Failed';
+        else if (s === 'stopped') labelStr = 'Stopped';
 
         const terminalCls = {
             processed: 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-[0_0_12px_-4px_rgba(16,185,129,0.3)]',
@@ -951,6 +1012,11 @@ const Documents = () => {
                 )}
             </AnimatePresence>
 
+            <ExportReportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+            />
+
             <ActionConfirmModal
                 isOpen={confirmModal.isOpen}
                 title={confirmModal.title}
@@ -993,7 +1059,7 @@ const Documents = () => {
                 {activePrefill && (
                     <div className="bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-lg shadow-indigo-900/10 flex items-center justify-between animate-in slide-in-from-top duration-300">
                         <div className="flex items-center gap-3">
-                            <span className="text-xl">🎫</span>
+                            <span className="text-xl font-bold">Ticket</span>
                             <div>
                                 <p className="text-sm font-black">Active Request: Serving {activePrefill.ticket_number}</p>
                                 <p className="text-xs text-indigo-200">
@@ -1038,7 +1104,7 @@ const Documents = () => {
                                             ? `${tColors.split(' ')[0]} ${tColors.split(' ')[1]} shadow-sm`
                                             : 'border-transparent bg-slate-50 hover:bg-slate-100'
                                             }`}>
-                                        <div className={`text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm ${isSelected ? `ring-1 ${tColors.split(' ')[3]}` : ''}`}>
+                                        <div className={`w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm ${isSelected ? `ring-1 ${tColors.split(' ')[3]}` : ''}`}>
                                             {doc.icon}
                                         </div>
                                         <div>
@@ -1083,7 +1149,7 @@ const Documents = () => {
                                     onClick={handleManualRegistration}
                                     className="w-full flex items-center justify-center gap-2 py-3 bg-[#0f172a] text-[#d4a574] rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors shadow-sm active:scale-95 transition-all"
                                 >
-                                    ✍️ Manual Registration
+                                    Manual Registration
                                 </button>
                             </div>
                         </div>
@@ -1097,7 +1163,7 @@ const Documents = () => {
                         className="lg:col-span-2 bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 flex flex-col overflow-hidden"
                     >
                         {/* Tab Switcher */}
-                        <div className="flex bg-slate-100/50 p-1.5 gap-1 border-b border-slate-100">
+                        <div className="flex items-center bg-slate-100/50 p-1.5 gap-1 border-b border-slate-100">
                             {[
                                 { id: 'queue', label: 'Document Queue', count: queueFiles.length, icon: BoltIcon, show: true },
                                 { id: 'history', label: 'Submission History', count: historyFiles.length, icon: CheckCircleIcon, show: true }
@@ -1117,6 +1183,15 @@ const Documents = () => {
                                     </span>
                                 </button>
                             ))}
+
+                            <button
+                                onClick={() => setShowExportModal(true)}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/15 transition-all active:scale-95 cursor-pointer ml-2"
+                                title="Export Civil Registry Reports"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4" />
+                                <span className="hidden sm:inline">Export Report</span>
+                            </button>
                         </div>
 
                         {activeTab === 'queue' ? (
@@ -1316,7 +1391,7 @@ const Documents = () => {
                                             onChange={e => setHistoryFilters(prev => ({ ...prev, dateRange: e.target.value }))}
                                             className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm"
                                         >
-                                            <option value="all">📅 Any Date</option>
+                                            <option value="all">Any Date</option>
                                             <option value="today">Today</option>
                                             <option value="yesterday">Yesterday</option>
                                             <option value="week">Past 7 Days</option>
@@ -1329,7 +1404,7 @@ const Documents = () => {
                                             onChange={e => setHistoryFilters(prev => ({ ...prev, type: e.target.value }))}
                                             className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm capitalize"
                                         >
-                                            <option value="all">📂 All Types</option>
+                                            <option value="all">All Types</option>
                                             <option value="birth">Birth Certificate</option>
                                             <option value="death">Death Certificate</option>
                                             <option value="marriage">Marriage License</option>
@@ -1341,7 +1416,7 @@ const Documents = () => {
                                             onChange={e => setHistoryFilters(prev => ({ ...prev, staff: e.target.value }))}
                                             className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm"
                                         >
-                                            <option value="all">👤 All Staff</option>
+                                            <option value="all">All Staff</option>
                                             {staffList.map(name => (
                                                 <option key={name} value={name}>{name}</option>
                                             ))}
@@ -1353,7 +1428,7 @@ const Documents = () => {
                                             onChange={e => setHistoryFilters(prev => ({ ...prev, barangay: e.target.value }))}
                                             className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm"
                                         >
-                                            <option value="all">🏘️ All Barangays</option>
+                                            <option value="all">All Barangays</option>
                                             {barangayList.map(brgy => (
                                                 <option key={brgy} value={brgy}>{brgy}</option>
                                             ))}
@@ -1464,13 +1539,21 @@ const Documents = () => {
                                                                             Persistent Record
                                                                         </span>
                                                                     ) : (
-                                                                        <button
-                                                                            onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
-                                                                            className="px-3 py-1.5 text-[10px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-lg shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-1.5"
-                                                                        >
-                                                                            <DocumentCheckIcon className="w-4 h-4" />
-                                                                            View Details
-                                                                        </button>
+                                                                        <div className="flex gap-2">
+                                                                            <button
+                                                                                onClick={() => handleRequestToPrint(file)}
+                                                                                className="px-3 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg transition-all"
+                                                                            >
+                                                                                Request to Print
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setActiveOcr({ file, ocrResult: { extracted_fields: file.extracted_fields, detected_type: file.detected_type, text: file.ocr_text } })}
+                                                                                className="px-3 py-1.5 text-[10px] font-bold text-white bg-[#d4a574] hover:bg-[#c29463] rounded-lg shadow-sm transition-all active:scale-95 whitespace-nowrap flex items-center gap-1.5"
+                                                                            >
+                                                                                <DocumentCheckIcon className="w-4 h-4" />
+                                                                                View Details
+                                                                            </button>
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             </td>

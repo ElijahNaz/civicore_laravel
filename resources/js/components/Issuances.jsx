@@ -7,7 +7,9 @@ import {
     AdjustmentsHorizontalIcon, EyeIcon,
     TrashIcon, CheckCircleIcon, ClockIcon, ArrowDownTrayIcon,
     PencilSquareIcon, ShieldCheckIcon, XMarkIcon, ArrowPathIcon,
-    ChevronDownIcon, ChevronUpIcon, CameraIcon
+    ChevronDownIcon, ChevronUpIcon, CameraIcon,
+    UserIcon, DocumentTextIcon, UsersIcon,
+    ChartBarIcon, PresentationChartLineIcon, TrophyIcon
 } from '@heroicons/react/24/outline';
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -35,7 +37,7 @@ const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload, openRequestM
         : `/api/documents/view/${cert.realId}`;
 
     const isPendingApproval = cert.status === 'Pending Approval';
-    const isApprovedOrIssued = cert.status === 'Approved' || cert.status === 'Issued';
+    const isApproved = cert.status === 'Approved';
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-900/90 backdrop-blur-md animate-in fade-in duration-300">
@@ -54,32 +56,21 @@ const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload, openRequestM
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {isPendingApproval ? (
+                    {isApproved || cert.status === 'Issued' ? (
                         <button
-                            disabled
-                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 rounded-xl border border-amber-500/20 opacity-60 cursor-not-allowed"
+                            onClick={onPrint}
+                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
                         >
-                            <ClockIcon className="w-4 h-4" />
-                            Awaiting Approval
+                            <PrinterIcon className="w-4 h-4" />
+                            {cert.status === 'Issued' ? 'Reprint Record' : 'Print Record'}
                         </button>
-                    ) : isApprovedOrIssued ? (
+                    ) : (
                         <button
                             onClick={onPrint}
                             className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 rounded-xl transition-all border border-emerald-500/30 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/5"
                         >
                             <PrinterIcon className="w-4 h-4" />
                             Print Record
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => {
-                                onClose();
-                                openRequestModal(cert);
-                            }}
-                            className="flex items-center gap-2.5 px-6 py-2.5 text-[11px] font-black uppercase tracking-widest text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500 rounded-xl transition-all border border-amber-500/30 active:scale-95 cursor-pointer shadow-lg shadow-amber-500/5"
-                        >
-                            <PrinterIcon className="w-4 h-4" />
-                            Request Print Approval
                         </button>
                     )}
                     <button
@@ -205,6 +196,7 @@ const Issuances = () => {
     const [orNumber, setOrNumber] = useState('');
     const [printRemarks, setPrintRemarks] = useState('');
     const [isSubmittingPrintRequest, setIsSubmittingPrintRequest] = useState(false);
+    const [selectedTicketId, setSelectedTicketId] = useState('');
 
     // Tickets and approvals
     const [tickets, setTickets] = useState([]);
@@ -281,7 +273,11 @@ const Issuances = () => {
     const fetchTickets = async () => {
         setTicketsLoading(true);
         try {
-            const res = await axios.get('/api/tickets');
+            const res = await axios.get('/api/tickets', {
+                params: {
+                    _: Date.now()
+                }
+            });
             setTickets(res.data || []);
         } catch (e) {
             console.error("Error fetching tickets:", e);
@@ -407,7 +403,9 @@ const Issuances = () => {
 
         setOrNumber(autoOr);
         setPrintRemarks('');
+        setSelectedTicketId('');
         setRequestingPrintCert(cert);
+        fetchTickets();
     };
 
     const submitPrintRequest = async () => {
@@ -416,7 +414,8 @@ const Issuances = () => {
         try {
             const res = await axios.post(`/api/issuances/${requestingPrintCert.realId}/request-print`, {
                 or_number: orNumber,
-                print_remarks: printRemarks
+                print_remarks: printRemarks,
+                ticket_id: selectedTicketId || undefined
             });
             if (res.data.success) {
                 showAlert({ title: 'Request Submitted', message: 'Print request submitted for SuperAdmin approval.', type: 'success' });
@@ -437,16 +436,14 @@ const Issuances = () => {
             message: `Authorize printing of ${cert.type} certificate for ${cert.name}?`,
             type: 'success',
             action: async () => {
-                try {
+                await runBackgroundTask(`Approving print for: ${cert.name}`, async () => {
                     const res = await axios.post(`/api/issuances/${cert.realId}/approve-print`);
                     if (res.data.success) {
-                        showAlert({ title: 'Request Approved', message: 'Print request authorized.', type: 'success' });
                         refreshAll();
+                        return { success: true, message: 'Print request authorized.' };
                     }
-                } catch (err) {
-                    console.error(err);
-                    showAlert({ title: 'Error', message: 'Failed to approve print request.', type: 'danger' });
-                }
+                    throw new Error('Failed to approve print request.');
+                });
             }
         });
     };
@@ -457,16 +454,14 @@ const Issuances = () => {
             message: `Deny print request for ${cert.name}? The record will return to Active status.`,
             type: 'danger',
             action: async () => {
-                try {
+                await runBackgroundTask(`Rejecting print for: ${cert.name}`, async () => {
                     const res = await axios.post(`/api/issuances/${cert.realId}/reject-print`);
                     if (res.data.success) {
-                        showAlert({ title: 'Request Rejected', message: 'Print request denied.', type: 'info' });
                         refreshAll();
+                        return { success: true, message: 'Print request denied.' };
                     }
-                } catch (err) {
-                    console.error(err);
-                    showAlert({ title: 'Error', message: 'Failed to reject print request.', type: 'danger' });
-                }
+                    throw new Error('Failed to reject print request.');
+                });
             }
         });
     };
@@ -802,88 +797,115 @@ const Issuances = () => {
                         openRequestModal={openRequestModal}
                     />
                 )}
-                {requestingPrintCert && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
-                        >
-                            <div className="p-8">
-                                {/* Header */}
-                                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-6 mx-auto border border-amber-100">
-                                    <PrinterIcon className="w-8 h-8" />
-                                </div>
+                {requestingPrintCert && (() => {
+                    const activeLinkedTicket = tickets.find(t => 
+                        t.document_id && 
+                        Number(t.document_id) === Number(requestingPrintCert.raw?.document_id) &&
+                        t.request_status !== 'completed' &&
+                        t.request_status !== 'cancelled'
+                    );
+                    return (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden"
+                            >
+                                <div className="p-8">
+                                    {/* Header */}
+                                    <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 mb-6 mx-auto border border-amber-100">
+                                        <PrinterIcon className="w-8 h-8" />
+                                    </div>
 
-                                <h3 className="text-2xl font-black text-slate-800 text-center tracking-tight mb-2">Request Print Approval</h3>
-                                <p className="text-slate-500 text-center text-sm font-medium leading-relaxed mb-6">
-                                    An Official Receipt (OR) Number is required to request print authorization for <strong className="text-slate-800">{requestingPrintCert.name}</strong>.
-                                </p>
+                                    <h3 className="text-2xl font-black text-slate-800 text-center tracking-tight mb-2">
+                                        {requestingPrintCert.status === 'Issued' ? 'Request Reprint Approval' : 'Request Print Approval'}
+                                    </h3>
+                                    <p className="text-slate-500 text-center text-sm font-medium leading-relaxed mb-6">
+                                        An Official Receipt (OR) Number is required to request print authorization for <strong className="text-slate-800">{requestingPrintCert.name}</strong>.
+                                    </p>
 
-                                {/* Linked Queue Ticket Notification */}
-                                {(() => {
-                                    const ticket = tickets.find(t => t.document_id && Number(t.document_id) === Number(requestingPrintCert.raw?.document_id));
-                                    if (ticket) {
-                                        return (
-                                            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center text-xs font-black shrink-0 shadow-md shadow-indigo-200">
-                                                    Ticket
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-indigo-900 font-black leading-none">{ticket.ticket_number}</p>
-                                                    <p className="text-[10px] text-indigo-500 mt-1 font-bold uppercase tracking-wider">Live Citizen Waiting: {ticket.client_name}</p>
-                                                </div>
+                                    {/* Linked Queue Ticket Notification */}
+                                    {activeLinkedTicket && (
+                                        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center text-xs font-black shrink-0 shadow-md shadow-indigo-200">
+                                                Ticket
                                             </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
+                                            <div>
+                                                <p className="text-xs text-indigo-900 font-black leading-none">{activeLinkedTicket.ticket_number}</p>
+                                                <p className="text-[10px] text-indigo-500 mt-1 font-bold uppercase tracking-wider">Live Citizen Waiting: {activeLinkedTicket.client_name}</p>
+                                            </div>
+                                        </div>
+                                    )}
 
-                                {/* Input Fields */}
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Official Receipt (OR) Number</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Enter receipt number (e.g. OR-8888)..."
-                                            value={orNumber}
-                                            onChange={(e) => setOrNumber(e.target.value)}
-                                            className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-bold text-slate-700"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Remarks / Purpose (Optional)</label>
-                                        <textarea
-                                            placeholder="Enter any notes or remarks..."
-                                            value={printRemarks}
-                                            onChange={(e) => setPrintRemarks(e.target.value)}
-                                            rows="3"
-                                            className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-medium text-slate-600 resize-none"
-                                        />
+                                    {/* Input Fields */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Official Receipt (OR) Number</label>
+                                            <input
+                                                type="text"
+                                                placeholder="Enter receipt number (e.g. OR-8888)..."
+                                                value={orNumber}
+                                                onChange={(e) => setOrNumber(e.target.value)}
+                                                className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-bold text-slate-700"
+                                            />
+                                        </div>
+
+                                        {!activeLinkedTicket && (
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Link Queue Ticket (Optional)</label>
+                                                <select
+                                                    value={selectedTicketId}
+                                                    onChange={(e) => setSelectedTicketId(e.target.value)}
+                                                    className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-bold text-slate-700 cursor-pointer"
+                                                >
+                                                    <option value="">-- Select Active Ticket to Link --</option>
+                                                    {tickets.filter(t => 
+                                                        !t.document_id && 
+                                                        t.request_status !== 'completed' && 
+                                                        t.request_status !== 'cancelled'
+                                                    ).map(t => (
+                                                        <option key={t.id} value={t.id}>
+                                                            {t.ticket_number} - {t.client_name} ({t.purpose})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Remarks / Purpose (Optional)</label>
+                                            <textarea
+                                                placeholder="Enter any notes or remarks..."
+                                                value={printRemarks}
+                                                onChange={(e) => setPrintRemarks(e.target.value)}
+                                                rows="3"
+                                                className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-white placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 transition-all shadow-sm font-medium text-slate-600 resize-none"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="p-4 bg-slate-50 flex gap-3">
-                                <button
-                                    onClick={() => setRequestingPrintCert(null)}
-                                    disabled={isSubmittingPrintRequest}
-                                    className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={submitPrintRequest}
-                                    disabled={!orNumber || isSubmittingPrintRequest}
-                                    className="flex-1 px-6 py-3.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-                                >
-                                    {isSubmittingPrintRequest ? 'Submitting...' : 'Submit Request'}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
+                                <div className="p-4 bg-slate-50 flex gap-3">
+                                    <button
+                                        onClick={() => setRequestingPrintCert(null)}
+                                        disabled={isSubmittingPrintRequest}
+                                        className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-700 bg-white border border-slate-200 rounded-2xl transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={submitPrintRequest}
+                                        disabled={!orNumber || isSubmittingPrintRequest}
+                                        className="flex-1 px-6 py-3.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                    >
+                                        {isSubmittingPrintRequest ? 'Submitting...' : 'Submit Request'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    );
+                })()}
                 {isScanSearchOpen && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
                         <motion.div
@@ -1005,9 +1027,9 @@ const Issuances = () => {
                 <div className="flex items-center justify-between px-6 pt-5 pb-0 border-b border-slate-100">
                     <div className="flex space-x-1">
                         {[
-                            { key: 'overview', label: 'Overview', emoji: '📊' },
-                            { key: 'categories', label: 'Per Category', emoji: '📈' },
-                            { key: 'top', label: 'Top Issued', emoji: '🏆' },
+                            { key: 'overview', label: 'Overview', Icon: ChartBarIcon },
+                            { key: 'categories', label: 'Per Category', Icon: PresentationChartLineIcon },
+                            { key: 'top', label: 'Top Issued', Icon: TrophyIcon },
                         ].map(tab => (
                             <button
                                 key={tab.key}
@@ -1018,7 +1040,7 @@ const Issuances = () => {
                                         : 'border-transparent text-slate-400 hover:text-slate-600'
                                 }`}
                             >
-                                <span>{tab.emoji}</span>
+                                <tab.Icon className="w-4 h-4" />
                                 {tab.label}
                             </button>
                         ))}
@@ -1049,7 +1071,9 @@ const Issuances = () => {
                                     <p className="text-[#d4a574] text-[10px] font-black uppercase tracking-widest mb-1">Birth Records</p>
                                     <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'birth').length}</h3>
                                     <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Live Birth Certs</p>
-                                    <div className="absolute bottom-4 right-4 text-2xl">👶</div>
+                                    <div className="absolute bottom-4 right-4 text-slate-300">
+                                        <UserIcon className="w-10 h-10" />
+                                    </div>
                                 </div>
                                 {/* Death Records */}
                                 <div className="relative bg-white border border-rose-100 p-6 rounded-2xl shadow-sm overflow-hidden group hover:scale-[1.02] hover:shadow-md transition-all duration-300">
@@ -1057,7 +1081,9 @@ const Issuances = () => {
                                     <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mb-1">Death Records</p>
                                     <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase() === 'death').length}</h3>
                                     <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Death Certificates</p>
-                                    <div className="absolute bottom-4 right-4 text-2xl">📋</div>
+                                    <div className="absolute bottom-4 right-4 text-slate-300">
+                                        <DocumentTextIcon className="w-10 h-10" />
+                                    </div>
                                 </div>
                                 {/* Marriage Records */}
                                 <div className="relative bg-white border border-indigo-100 p-6 rounded-2xl shadow-sm overflow-hidden group hover:scale-[1.02] hover:shadow-md transition-all duration-300">
@@ -1065,7 +1091,9 @@ const Issuances = () => {
                                     <p className="text-indigo-500 text-[10px] font-black uppercase tracking-widest mb-1">Marriage Records</p>
                                     <h3 className="text-4xl font-black text-slate-800 tracking-tighter">{certificates.filter(c => (c.type || '').toLowerCase().includes('marriage')).length}</h3>
                                     <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-wider">Marriage Certificates</p>
-                                    <div className="absolute bottom-4 right-4 text-2xl">💍</div>
+                                    <div className="absolute bottom-4 right-4 text-slate-300">
+                                        <UsersIcon className="w-10 h-10" />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1084,9 +1112,9 @@ const Issuances = () => {
                     const pendingApprovalCount = certificates.filter(c => c.status === 'Pending Approval').length;
 
                     const categories = [
-                        { label: 'Birth Certificates', count: birthCount, color: '#d4a574', bg: 'bg-[#d4a574]/10', bar: 'bg-[#d4a574]', emoji: '👶' },
-                        { label: 'Death Certificates', count: deathCount, color: '#f43f5e', bg: 'bg-rose-50', bar: 'bg-rose-500', emoji: '📋' },
-                        { label: 'Marriage Certificates', count: marriageCount, color: '#6366f1', bg: 'bg-indigo-50', bar: 'bg-indigo-500', emoji: '💍' },
+                        { label: 'Birth Certificates', count: birthCount, color: '#d4a574', bg: 'bg-[#d4a574]/10', bar: 'bg-[#d4a574]', emoji: 'BR' },
+                        { label: 'Death Certificates', count: deathCount, color: '#f43f5e', bg: 'bg-rose-50', bar: 'bg-rose-500', emoji: 'DC' },
+                        { label: 'Marriage Certificates', count: marriageCount, color: '#6366f1', bg: 'bg-indigo-50', bar: 'bg-indigo-500', emoji: 'MC' },
                     ];
 
                     // SVG Donut Chart calculations
@@ -1214,7 +1242,7 @@ const Issuances = () => {
                     const mostActiveTypeColor = mostActiveType === 'Birth' ? 'text-[#d4a574] bg-[#d4a574]/10 border-[#d4a574]/20'
                         : mostActiveType === 'Death' ? 'text-rose-500 bg-rose-50 border-rose-100'
                         : 'text-indigo-500 bg-indigo-50 border-indigo-100';
-                    const mostActiveTypeEmoji = mostActiveType === 'Birth' ? '👶' : mostActiveType === 'Death' ? '📋' : '💍';
+                    const mostActiveTypeEmoji = mostActiveType === 'Birth' ? 'BR' : mostActiveType === 'Death' ? 'DC' : 'MC';
 
                     // Most recently issued
                     const recentIssued = [...certificates]
@@ -1289,7 +1317,7 @@ const Issuances = () => {
                                                         : (cert.type || '').toLowerCase() === 'death' ? 'bg-rose-50 text-rose-500'
                                                         : 'bg-indigo-50 text-indigo-500'
                                                     }`}>
-                                                        {(cert.type || '').toLowerCase() === 'birth' ? '👶' : (cert.type || '').toLowerCase() === 'death' ? '📋' : '💍'}
+                                                        {(cert.type || '').toLowerCase() === 'birth' ? 'BR' : (cert.type || '').toLowerCase() === 'death' ? 'DC' : 'MC'}
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-bold text-slate-800 truncate">{cert.name}</p>
@@ -1317,7 +1345,6 @@ const Issuances = () => {
             {/* ── Main Section Tab Bar ──────────────────────────────────────────────── */}
             <motion.div variants={itemVariants} className="flex space-x-1 bg-slate-100 p-1.5 rounded-xl w-fit">
                 <button onClick={() => setActiveTab('database')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'database' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Master Database</button>
-                <button onClick={() => setActiveTab('approvals')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'approvals' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Print Approvals Queue</button>
                 <button onClick={() => setActiveTab('ready')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'ready' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ready to Print</button>
                 <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'history' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Activity Log History</button>
             </motion.div>
@@ -1409,7 +1436,6 @@ const Issuances = () => {
                                         <th className="p-4">Type</th>
                                         <th className="p-4">Recipient Name</th>
                                         <th className="p-4">Barangay</th>
-                                        <th className="p-4">Ticket</th>
                                         <th className="p-4">Status</th>
                                         <th className="p-4">Encoded By</th>
                                         <th className="p-4 pr-6 text-right">Actions</th>
@@ -1436,15 +1462,6 @@ const Issuances = () => {
                                                 <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
                                                 <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
                                                 <td className="p-4">
-                                                    {cert.ticket_number ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#d4a574]/15 text-[#b37a4c] font-black text-xs border border-[#d4a574]/30">
-                                                            {cert.ticket_number}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-xs font-medium">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="p-4">
                                                     <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase border ${cert.status === 'Pending Approval' ? 'bg-amber-50 text-amber-600 border-amber-200' :
                                                             cert.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
                                                                 cert.status === 'Issued' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
@@ -1457,14 +1474,10 @@ const Issuances = () => {
                                                         <button onClick={() => handleAction('View', cert)} title="View Document" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><EyeIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => handleEdit(cert)} title="Edit Record" className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg transition-all border border-amber-100 cursor-pointer"><PencilSquareIcon className="w-4 h-4" /></button>
 
-                                                        {cert.status === 'Pending Approval' ? (
-                                                            <button disabled title="Awaiting Print Approval" className="p-2 text-amber-500 bg-amber-50 rounded-lg border border-amber-100 opacity-60 cursor-not-allowed"><ClockIcon className="w-4 h-4" /></button>
-                                                        ) : cert.status === 'Approved' ? (
-                                                            <button onClick={() => handleAction('Print', cert)} title="Print (Approved)" className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-100 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
-                                                        ) : cert.status === 'Issued' ? (
-                                                            <button onClick={() => handleAction('Print', cert)} title="Print again (Reprint)" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><PrinterIcon className="w-4 h-4 animate-pulse" /></button>
+                                                        {cert.status === 'Issued' ? (
+                                                            <button onClick={() => handleAction('Print', cert)} title="Reprint" className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"><PrinterIcon className="w-4 h-4 animate-pulse" /></button>
                                                         ) : (
-                                                            <button onClick={() => openRequestModal(cert)} title="Request Print Approval" className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg transition-all border border-amber-100 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleAction('Print', cert)} title="Print" className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-100 cursor-pointer"><PrinterIcon className="w-4 h-4" /></button>
                                                         )}
 
                                                         <button onClick={() => handleAction('Download', cert)} title="Download" className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-all border border-blue-100 cursor-pointer"><ArrowDownTrayIcon className="w-4 h-4" /></button>
@@ -1478,150 +1491,6 @@ const Issuances = () => {
                             </table>
                         </div>
                     </>
-                ) : activeTab === 'approvals' ? (
-                    <div className="p-0">
-                        <div className="p-6 border-b border-slate-100 bg-slate-50/10">
-                            {/* Top Row: Title & Action */}
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                                <div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 shadow-sm border border-amber-100">
-                                            <ClockIcon className="w-5 h-5 animate-pulse" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">Print Approvals Queue</h3>
-                                            <p className="text-[11px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Awaiting SuperAdmin authorization for physical printing</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-200/50">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest tabular-nums italic">
-                                            {certificates.filter(c => c.status === 'Pending Approval').length} Pending Requests
-                                        </span>
-                                    </div>
-                                    <button
-                                        onClick={() => { refreshAll(); fetchTickets(); }}
-                                        className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
-                                    >
-                                        <ArrowPathIcon className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                                        Refresh Queue
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Search Field */}
-                            <div className="relative max-w-md w-full pt-2">
-                                <MagnifyingGlassIcon className="absolute left-3 top-[calc(50%+4px)] -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search by Cert No, Name or Barangay..."
-                                    value={approvalsSearch}
-                                    onChange={(e) => setApprovalsSearch(e.target.value)}
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-black border-b border-slate-200">
-                                        <th className="p-4 pl-6">Ref/Cert No.</th>
-                                        <th className="p-4">Recipient Name</th>
-                                        <th className="p-4">Type</th>
-                                        <th className="p-4">Barangay</th>
-                                        <th className="p-4">Ticket Number</th>
-                                        <th className="p-4">OR Number</th>
-                                        <th className="p-4">Requested By</th>
-                                        <th className="p-4">Remarks</th>
-                                        <th className="p-4 pr-6 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {certificates.filter(c => c.status === 'Pending Approval').filter(cert => {
-                                        const term = approvalsSearch.toLowerCase();
-                                        return cert.number.toLowerCase().includes(term) ||
-                                            cert.name.toLowerCase().includes(term) ||
-                                            cert.barangay.toLowerCase().includes(term);
-                                    }).length === 0 ? (
-                                        <tr>
-                                            <td colSpan="9" className="p-12 text-center text-slate-400">
-                                                <ClockIcon className="w-12 h-12 mx-auto mb-2 opacity-20 text-slate-400" />
-                                                <p className="font-semibold text-slate-600">No print requests awaiting approval</p>
-                                                <p className="text-xs text-slate-400 mt-1">Pending in-person requests will appear in this list.</p>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        certificates.filter(c => c.status === 'Pending Approval').filter(cert => {
-                                            const term = approvalsSearch.toLowerCase();
-                                            return cert.number.toLowerCase().includes(term) ||
-                                                cert.name.toLowerCase().includes(term) ||
-                                                cert.barangay.toLowerCase().includes(term);
-                                        }).map((cert) => {
-                                            const ticket = tickets.find(t => t.document_id && Number(t.document_id) === Number(cert.raw?.document_id));
-                                            return (
-                                                <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="p-4 pl-6">
-                                                        <span className="font-bold text-slate-800 text-sm tracking-tight">{cert.number}</span>
-                                                    </td>
-                                                    <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
-                                                    <td className="p-4">
-                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                                                            {cert.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
-                                                    <td className="p-4">
-                                                        {ticket ? (
-                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#d4a574]/15 text-[#b37a4c] font-black text-xs border border-[#d4a574]/30 animate-pulse">
-                                                                {ticket.ticket_number}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-slate-400 text-xs font-medium">—</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className="text-slate-700 font-bold text-xs bg-slate-100/80 px-2 py-1 rounded border border-slate-200">
-                                                            {cert.raw?.or_number || '—'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-slate-500 text-xs font-semibold">{cert.raw?.requested_by || '—'}</td>
-                                                    <td className="p-4 text-slate-500 text-xs max-w-[200px] truncate" title={cert.raw?.print_remarks}>
-                                                        {cert.raw?.print_remarks || <span className="text-slate-400 italic">No remarks</span>}
-                                                    </td>
-                                                    <td className="p-4 pr-6 text-right">
-                                                        {user.role === 'SuperAdmin' ? (
-                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                <button
-                                                                    onClick={() => handleApprovePrint(cert)}
-                                                                    title="Approve Print Request"
-                                                                    className="p-2 text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center border border-emerald-400/20 active:scale-95"
-                                                                >
-                                                                    <CheckCircleIcon className="w-4 h-4" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleRejectPrint(cert)}
-                                                                    title="Reject & Deny Request"
-                                                                    className="p-2 text-white bg-rose-500 hover:bg-rose-600 rounded-xl transition-all shadow-md shadow-rose-200 cursor-pointer flex items-center justify-center border border-rose-400/20 active:scale-95"
-                                                                >
-                                                                    <XMarkIcon className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="inline-flex px-2 py-1 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-400 border border-slate-200">
-                                                                Awaiting SuperAdmin
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 ) : activeTab === 'ready' ? (
                     <div className="p-0">
                         <div className="p-6 border-b border-slate-100 bg-slate-50/10">
@@ -1676,7 +1545,7 @@ const Issuances = () => {
                                         <th className="p-4">Type</th>
                                         <th className="p-4">Barangay</th>
                                         <th className="p-4">OR Number</th>
-                                        <th className="p-4">Approved By</th>
+                                        <th className="p-4">Attached By</th>
                                         <th className="p-4 pr-6 text-right">Actions</th>
                                     </tr>
                                 </thead>

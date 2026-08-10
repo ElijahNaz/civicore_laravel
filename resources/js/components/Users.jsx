@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { UsersIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from './LoadingSpinner';
 import SkeletonLoader from './SkeletonLoader';
 
@@ -60,7 +61,7 @@ function Users() {
                     <div className="flex items-center justify-center py-8"><SkeletonLoader type="table" rows={5} /></div>
                 ) : users.length === 0 ? (
                     <motion.div className="text-center py-8 text-gray-500" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}>
-                        <div className="text-4xl mb-2">👥</div>
+                        <UsersIcon className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                         <p>No users found</p>
                     </motion.div>
                 ) : (

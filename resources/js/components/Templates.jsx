@@ -9,7 +9,10 @@ import {
     DocumentIcon,
     ArrowPathIcon,
     DocumentTextIcon,
-    SparklesIcon
+    SparklesIcon,
+    UserIcon,
+    UsersIcon,
+    FolderIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import axios from 'axios';
@@ -95,7 +98,9 @@ function Templates() {
                 </div>
             ) : templates.length === 0 ? (
                 <motion.div className="text-center py-20 bg-white/60 backdrop-blur-xl rounded-[2.5rem] border-2 border-dashed border-slate-200" variants={itemVariants}>
-                    <div className="text-6xl mb-4 grayscale opacity-20">📂</div>
+                    <div className="mb-4 flex justify-center opacity-20 text-slate-300">
+                        <FolderIcon className="w-16 h-16" />
+                    </div>
                     <h3 className="text-xl font-bold text-slate-800">No Templates Found</h3>
                     <p className="text-slate-400 text-sm mt-2 max-w-sm mx-auto">Add PDF files to the <code>/Templates</code> directory to see them here.</p>
                 </motion.div>
@@ -114,9 +119,9 @@ function Templates() {
                                 <div className="relative z-10 flex flex-col h-full">
                                     <div className="flex items-center justify-between mb-6">
                                         <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 shadow-sm border border-indigo-100/50">
-                                            {template.file_path.includes('birth') ? '👶' : 
-                                             template.file_path.includes('death') ? '📋' : 
-                                             template.file_path.includes('marriage') ? '💍' : '📄'}
+                                            {template.file_path.includes('birth') ? <UserIcon className="w-6 h-6" /> : 
+                                             template.file_path.includes('death') ? <DocumentTextIcon className="w-6 h-6" /> : 
+                                             template.file_path.includes('marriage') ? <UsersIcon className="w-6 h-6" /> : <DocumentIcon className="w-6 h-6" />}
                                         </div>
                                         <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${template.config ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                             {template.config ? 'Configured' : 'Needs Config'}

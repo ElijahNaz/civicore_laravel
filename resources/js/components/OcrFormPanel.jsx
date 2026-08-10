@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     DocumentCheckIcon, XMarkIcon, ChevronDoubleDownIcon,
     ExclamationTriangleIcon, ShieldExclamationIcon,
-    CloudArrowUpIcon, SparklesIcon, ArrowPathIcon
+    CloudArrowUpIcon, SparklesIcon, ArrowPathIcon,
+    PencilSquareIcon, DocumentPlusIcon, DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import { useData } from './DataContext.jsx';
 import SignaturePad from './SignaturePad.jsx';
@@ -183,6 +184,8 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
     });
     
     const effectiveType = manualType || detectedType;
+    const isManualEntry = !file?.file_path || file?.name === 'Manual Entry' || file?.id === 'manual';
+    const isEditMode = !isManualEntry && (file?.status === 'processed' || file?.status === 'extracted' || file?.source === 'issuance' || isViewOnly);
 
     const formatNumber = (num) => {
         if (num === undefined || num === null) return '0';
@@ -598,45 +601,99 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                     )}
                 </AnimatePresence>
 
-                <div className="flex items-center justify-between px-8 py-7 border-b border-slate-100 bg-slate-50/90 backdrop-blur-md">
+                <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/90 backdrop-blur-md">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shadow-sm">
-                            <DocumentCheckIcon className="w-6 h-6 text-emerald-600" />
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
+                            isManualEntry 
+                                ? 'bg-[#d4a574]/15 border border-[#d4a574]/30 text-[#d4a574]'
+                                : isEditMode
+                                    ? 'bg-indigo-50 border border-indigo-100 text-indigo-600'
+                                    : 'bg-emerald-50 border border-emerald-100 text-emerald-600'
+                        }`}>
+                            {isManualEntry || isEditMode ? (
+                                <PencilSquareIcon className="w-6 h-6" />
+                            ) : (
+                                <DocumentCheckIcon className="w-6 h-6" />
+                            )}
                         </div>
                         <div>
-                            <h3 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none">Extracted Document Data</h3>
+                            <h3 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none">
+                                {isManualEntry 
+                                    ? 'Manual Civil Registry Encoding' 
+                                    : isEditMode 
+                                        ? 'Modify Civil Registry Record' 
+                                        : 'Extracted Document Data'}
+                            </h3>
                             <p className="text-xs font-semibold text-slate-400 mt-1.5 flex items-center gap-1.5 backdrop-blur-sm flex-wrap">
-                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                <span className="truncate max-w-[250px]">{file?.name}</span>
-                                {(file?.metadata?.image_token_cost || ocrResult?.image_token_cost) && (
+                                {isManualEntry ? (
+                                    <span>Direct manual entry for Birth, Death, or Marriage certificate registration</span>
+                                ) : isEditMode ? (
+                                    <>
+                                        <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider">
+                                            Doc #{file?.id}
+                                        </span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                        <span className="font-bold text-slate-700">{file?.personName || file?.name}</span>
+                                    </>
+                                ) : (
                                     <>
                                         <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-[10px] font-black text-indigo-600 uppercase tracking-wide">
-                                            Token Cost: {formatNumber(currentCost)} tokens
-                                        </span>
+                                        <span className="truncate max-w-[250px]">{file?.name}</span>
+                                        {(file?.metadata?.image_token_cost || ocrResult?.image_token_cost) && (
+                                            <>
+                                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-[10px] font-black text-indigo-600 uppercase tracking-wide">
+                                                    Token Cost: {formatNumber(currentCost)} tokens
+                                                </span>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-3">
+                        {(isManualEntry || isEditMode) && !isViewOnly && (
+                            <div className="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl">
+                                {['birth', 'death', 'marriage'].map(t => (
+                                    <button
+                                        key={t}
+                                        type="button"
+                                        onClick={() => {
+                                            isDirtyRef.current = true;
+                                            setManualType(t);
+                                            setFormData(getInitialFormData(t, {}, file));
+                                        }}
+                                        className={`px-3.5 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                                            effectiveType === t
+                                                ? 'bg-[#0f172a] text-[#d4a574] shadow-md'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {!isViewOnly && !isManualEntry && (
+                            <button
+                                onClick={handleReset}
+                                title="Reset to Original"
+                                className="text-slate-400 hover:text-amber-600 p-2 rounded-xl hover:bg-amber-50 transition-all cursor-pointer"
+                            >
+                                <ArrowPathIcon className="w-6 h-6" />
+                            </button>
+                        )}
                         {!isViewOnly && (
-                            <>
-                                <button
-                                    onClick={handleReset}
-                                    title="Reset to Original"
-                                    className="text-slate-400 hover:text-amber-600 p-2 rounded-xl hover:bg-amber-50 transition-all cursor-pointer"
-                                >
-                                    <ArrowPathIcon className="w-6 h-6" />
-                                </button>
-                                <button
-                                    onClick={onMinimize || onClose}
-                                    title="Minimize to Tray"
-                                    className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
-                                >
-                                    <ChevronDoubleDownIcon className="w-6 h-6" />
-                                </button>
-                            </>
+                            <button
+                                onClick={onMinimize || onClose}
+                                title="Minimize to Tray"
+                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
+                            >
+                                <ChevronDoubleDownIcon className="w-6 h-6" />
+                            </button>
                         )}
                         <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer group">
                             <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
@@ -645,7 +702,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                 </div>
 
                 {/* Unknown Type Warning Banner */}
-                {(detectedType === 'unknown' || !manualType) && !isViewOnly && (
+                {(detectedType === 'unknown' || !manualType) && !isViewOnly && !isManualEntry && (
                     <div className={`px-8 py-4 border-b flex items-center gap-4 ${errors._type ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${errors._type ? 'bg-rose-100' : 'bg-amber-100'}`}>
                             <ExclamationTriangleIcon className={`w-5 h-5 ${errors._type ? 'text-rose-600' : 'text-amber-600'}`} />
@@ -675,7 +732,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                             : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                                     }`}
                                 >
-                                    {t === 'birth' ? '👶' : t === 'death' ? '📋' : '💍'} {t}
+                                    {t}
                                 </button>
                             ))}
                         </div>
@@ -708,30 +765,33 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-5">
                         <div className="flex p-1 bg-slate-100 rounded-xl w-fit gap-1 flex-wrap">
-                            <button
-                                onClick={() => setViewMode('text')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'text' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Full Extracted Text
-                            </button>
+                            {!isManualEntry && (
+                                <button
+                                    onClick={() => setViewMode('text')}
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'text' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    Full Extracted Text
+                                </button>
+                            )}
                             <button
                                 onClick={() => setViewMode('fields')}
                                 className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'fields' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                Structured Fields
+                                {isManualEntry ? 'Structured Form Entry' : isEditMode ? 'Edit Form Fields' : 'Structured Fields'}
                             </button>
                             <button
                                 onClick={() => setViewMode('template')}
                                 className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'template' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                Template Preview
+                                {isManualEntry || isEditMode ? 'Live Certificate Preview' : 'Template Preview'}
                             </button>
                             {duplicateData && (
                                 <button
                                     onClick={() => setViewMode('compare')}
-                                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'compare' ? 'bg-amber-600 text-white shadow-sm font-black' : 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse'}`}
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${viewMode === 'compare' ? 'bg-amber-600 text-white shadow-sm font-black' : 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse flex items-center gap-1.5'}`}
                                 >
-                                    ⚠️ Compare Side-by-Side
+                                    <ExclamationTriangleIcon className="w-4 h-4 text-amber-700 shrink-0" />
+                                    Compare Side-by-Side
                                 </button>
                             )}
                         </div>
@@ -967,7 +1027,23 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                                     let derivedValue = '';
                                                     const k = item.key?.toLowerCase() || '';
 
-                                                    if (k.includes('child name')) {
+                                                    if (k.includes('husband name') || k.includes('groom')) {
+                                                        derivedValue = [formData.husband_first_name, formData.husband_middle_name, formData.husband_last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('wife name') || k.includes('bride')) {
+                                                        derivedValue = [formData.wife_first_name, formData.wife_middle_name, formData.wife_last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('date of marriage')) {
+                                                        derivedValue = formData.date_of_marriage || '';
+                                                    } else if (k.includes('place of marriage')) {
+                                                        derivedValue = formData.place_of_marriage || '';
+                                                    } else if (k.includes('deceased') || k.includes('name of deceased') || k.includes('person name')) {
+                                                        derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
+                                                    } else if (k.includes('date of death')) {
+                                                        derivedValue = formData.date_of_death || '';
+                                                    } else if (k.includes('place of death')) {
+                                                        derivedValue = formData.place_of_death || '';
+                                                    } else if (k.includes('cause of death')) {
+                                                        derivedValue = formData.cause_of_death || '';
+                                                    } else if (k.includes('child name')) {
                                                         derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
                                                     } else if (k.includes('mother name')) {
                                                         derivedValue = [formData.mother_first_name, formData.mother_middle_name, formData.mother_last_name].filter(Boolean).join(' ');
@@ -1013,7 +1089,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                     </div>
                                 ) : (
                                     <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                                        <div className="text-4xl mb-4 grayscale opacity-40">📄</div>
+                                        <DocumentTextIcon className="w-10 h-10 text-slate-300 mx-auto mb-4" />
                                         <p className="text-sm font-bold text-slate-700">No Overlay Configured</p>
                                         <p className="text-xs text-slate-500 mt-2 max-w-xs mx-auto">
                                             To see a professional preview, please configure the <b>{effectiveType}</b> template in the Template Registry.
@@ -1121,12 +1197,18 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                     {isSaving ? (
                                         <>
                                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Uploading...
+                                            {isManualEntry ? 'Saving & Registering...' : isEditMode ? 'Saving Record Modifications...' : 'Uploading...'}
                                         </>
                                     ) : (
                                         <>
-                                            <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
-                                            Save & Sync Changes
+                                            {isManualEntry ? (
+                                                <CloudArrowUpIcon className="w-6 h-6 text-[#d4a574]" />
+                                            ) : isEditMode ? (
+                                                <PencilSquareIcon className="w-6 h-6 text-emerald-400" />
+                                            ) : (
+                                                <DocumentCheckIcon className="w-6 h-6 text-emerald-400" />
+                                            )}
+                                            {isManualEntry ? 'Save & Register Record' : isEditMode ? 'Save Record Modifications' : 'Save & Sync Changes'}
                                         </>
                                     )}
                                 </button>

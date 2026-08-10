@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { CheckCircleIcon, ShieldCheckIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 
 export default function AboutPortal() {
     return (
@@ -19,13 +20,13 @@ export default function AboutPortal() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-6">
                             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5">
                                 <div className="text-white font-bold text-lg mb-2 flex items-center gap-2">
-                                    <span className="text-[#d4a574]">✅</span> Legal Integrity
+                                    <CheckCircleIcon className="w-6 h-6 text-[#d4a574]" /> Legal Integrity
                                 </div>
                                 <div className="text-slate-500 text-sm">Ensuring the accuracy, validity, and absolute integrity of all municipal civil records.</div>
                             </div>
                             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5">
                                 <div className="text-white font-bold text-lg mb-2 flex items-center gap-2">
-                                    <span className="text-[#d4a574]">🛡️</span> Civic Rights
+                                    <ShieldCheckIcon className="w-6 h-6 text-[#d4a574]" /> Civic Rights
                                 </div>
                                 <div className="text-slate-500 text-sm">Protecting the core identities and legal statuses of every citizen residing within our municipality.</div>
                             </div>
@@ -38,9 +39,9 @@ export default function AboutPortal() {
                             <motion.span
                                 animate={{ scale: [1, 1.05, 1] }}
                                 transition={{ repeat: Infinity, duration: 4 }}
-                                className="text-[12rem] filter grayscale opacity-20 group-hover:grayscale-0 group-hover:opacity-40 transition-all duration-700"
+                                className="text-[12rem] filter grayscale opacity-20 group-hover:grayscale-0 group-hover:opacity-40 transition-all duration-700 flex items-center justify-center"
                             >
-                                📜
+                                <DocumentTextIcon className="w-64 h-64 text-slate-300" />
                             </motion.span>
                         </div>
                         <motion.div

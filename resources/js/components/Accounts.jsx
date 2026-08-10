@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
     UserIcon, ShieldCheckIcon, AdjustmentsHorizontalIcon,
     AtSymbolIcon, TagIcon, PlusIcon, KeyIcon, TrashIcon, CheckCircleIcon,
-    ExclamationTriangleIcon, EyeIcon, EyeSlashIcon, XMarkIcon, CameraIcon
+    ExclamationTriangleIcon, EyeIcon, EyeSlashIcon, XMarkIcon, CameraIcon, EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { useModal } from './ModalContext.jsx';
 import SkeletonLoader from './SkeletonLoader.jsx';
@@ -16,7 +16,23 @@ const Accounts = () => {
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-    const [newUserFormData, setNewUserFormData] = useState({ first_name: '', middle_name: '', last_name: '', email: '', role: 'Admin', password: '' });
+    const [newUserFormData, setNewUserFormData] = useState({ first_name: '', middle_name: '', last_name: '', email: '', role: 'Admin', password: '', avatar: null });
+    const [newUserAvatarPreview, setNewUserAvatarPreview] = useState(null);
+    const [isNewUserAvatarLibraryOpen, setIsNewUserAvatarLibraryOpen] = useState(false);
+    const newUserFileInputRef = useRef(null);
+
+    const handleNewUserAvatarChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setNewUserAvatarPreview(reader.result);
+                setNewUserFormData(prev => ({ ...prev, avatar: reader.result }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const [showNewUserPassword, setShowNewUserPassword] = useState(false);
     const [isAddingUser, setIsAddingUser] = useState(false);
     const [requireVerification, setRequireVerification] = useState(false);
@@ -96,8 +112,8 @@ const Accounts = () => {
         user.role.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const fetchUsers = async () => {
-        setIsLoading(true);
+    const fetchUsers = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const res = await fetch('/api/users', { credentials: 'include' });
             const data = await res.json();
@@ -109,7 +125,7 @@ const Accounts = () => {
                     joined: new Date(u.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                 }));
                 setUsers(updatedUsers);
-                sessionStorage.setItem('cache_users', JSON.stringify(updatedUsers));
+                sessionStorage.setItem('civicore_accounts_users', JSON.stringify(updatedUsers));
             }
         } catch (e) {
             console.error("Error fetching users:", e);
@@ -185,9 +201,11 @@ const Accounts = () => {
             });
             const data = await res.json();
             if (data.success) {
-                await fetchUsers(true);
+                await fetchUsers(false);
                 setIsAddUserModalOpen(false);
-                setNewUserFormData({ first_name: '', middle_name: '', last_name: '', email: '', role: 'Admin', password: '' });
+                setNewUserFormData({ first_name: '', middle_name: '', last_name: '', email: '', role: 'Admin', password: '', avatar: null });
+                setNewUserAvatarPreview(null);
+                setIsNewUserAvatarLibraryOpen(false);
                 setShowNewUserPassword(false);
                 setVerificationStep('form');
                 setOtpCode('');
@@ -337,7 +355,12 @@ const Accounts = () => {
     };
 
     useEffect(() => {
-        fetchUsers();
+        const cachedUsers = sessionStorage.getItem('civicore_accounts_users');
+        if (cachedUsers) {
+            setUsers(JSON.parse(cachedUsers));
+            setIsLoading(false);
+        }
+        fetchUsers(!cachedUsers);
     }, []);
 
     // Set first user as default selection when data loads
@@ -756,6 +779,66 @@ const Accounts = () => {
                                 </div>
                             ) : (
                                 <form onSubmit={handleAddUser} className="p-6 space-y-4">
+                                    {/* New User Avatar Picker */}
+                                    <div className="flex flex-col items-center mb-6">
+                                        <div className="relative group cursor-pointer" onClick={() => newUserFileInputRef.current.click()}>
+                                            <Avatar
+                                                name={newUserFormData.first_name || 'New'}
+                                                src={newUserAvatarPreview}
+                                                size="24"
+                                                className="shadow-xl border-4 border-white transition-all group-hover:brightness-90 group-hover:scale-[1.02] rounded-[1.5rem]"
+                                            />
+                                            <div className="absolute -bottom-2 -right-2 bg-white border border-slate-200 p-2.5 rounded-2xl shadow-xl flex items-center justify-center text-slate-600 transition-all group-hover:scale-110 group-hover:text-[#d4a574] z-20">
+                                                <CameraIcon className="w-4 h-4 font-black" />
+                                            </div>
+                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all rounded-[1.5rem] flex items-center justify-center">
+                                                <span className="text-white text-[9px] font-black uppercase tracking-widest bg-black/40 px-2.5 py-1 rounded-full backdrop-blur-md">Upload</span>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsNewUserAvatarLibraryOpen(!isNewUserAvatarLibraryOpen)}
+                                            className="mt-4 text-[10px] font-black text-[#d4a574] uppercase tracking-widest flex items-center gap-2 hover:opacity-80 transition-opacity"
+                                        >
+                                            <AdjustmentsHorizontalIcon className="w-4 h-4" />
+                                            {isNewUserAvatarLibraryOpen ? 'Close Library' : 'Browse Library'}
+                                        </button>
+
+                                        {isNewUserAvatarLibraryOpen && (
+                                            <div className="mt-6 w-full bg-slate-50 border border-slate-200/60 rounded-3xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-1">Curated Characters</p>
+                                                <div className="grid grid-cols-5 gap-3">
+                                                    {AVATAR_LIBRARY.map((item) => (
+                                                        <button
+                                                            key={item.id}
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setNewUserAvatarPreview(`LIBRARY_PICK:${item.seed}`);
+                                                                setNewUserFormData({ ...newUserFormData, avatar: `LIBRARY_PICK:${item.seed}` });
+                                                            }}
+                                                            className={`relative p-1 rounded-xl transition-all hover:scale-110 ${newUserAvatarPreview === `LIBRARY_PICK:${item.seed}`
+                                                                    ? 'ring-2 ring-[#d4a574] ring-offset-2 bg-white'
+                                                                    : 'grayscale hover:grayscale-0 opacity-60 hover:opacity-100'
+                                                                }`}
+                                                        >
+                                                            <Avatar name={item.seed} src={`LIBRARY_PICK:${item.seed}`} size="8" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <input
+                                            type="file"
+                                            ref={newUserFileInputRef}
+                                            onChange={handleNewUserAvatarChange}
+                                            className="hidden"
+                                            accept="image/*"
+                                        />
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
@@ -836,16 +919,17 @@ const Accounts = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setVerificationChannel('mailtrap')}
-                                                    className={`py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${verificationChannel === 'mailtrap' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                                    className={`py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all flex items-center justify-center gap-1 ${verificationChannel === 'mailtrap' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                                                 >
-                                                    📬 Mailtrap (Dev)
+                                                    <EnvelopeIcon className="w-3.5 h-3.5" />
+                                                    Mailtrap (Dev)
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setVerificationChannel('gmail')}
                                                     className={`py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${verificationChannel === 'gmail' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
                                                 >
-                                                    📧 Gmail (Prod)
+                                                    Gmail (Prod)
                                                 </button>
                                             </div>
                                         </div>
