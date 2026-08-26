@@ -1404,7 +1404,7 @@ def process_ocr_gemini(data: dict):
         try:
             client = genai.Client(api_key=key)
             response = client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-3.6-flash',
                 contents=[img, prompt],
                 config={
                     "response_mime_type": "application/json"
@@ -1416,6 +1416,7 @@ def process_ocr_gemini(data: dict):
                 current_key_index = key_idx
             break  # success!
         except Exception as e:
+            print(f"DEBUG GEMINI ERROR: {e}")
             err_str = str(e)
             if '429' in err_str or '503' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
                 if attempt < len(keys_to_try) - 1:
@@ -1490,7 +1491,7 @@ def process_ocr_gemini(data: dict):
         "success": True,
         "detected_type": doc_type,
         "extracted_fields": extracted_data,
-        "engine_used": "gemini-1.5-flash",
+        "engine_used": "gemini-3.6-flash",
         "quick_fill_used": True,
         "image_token_cost": image_token_cost
     }
