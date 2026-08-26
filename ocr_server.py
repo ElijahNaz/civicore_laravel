@@ -1404,7 +1404,7 @@ def process_ocr_gemini(data: dict):
         try:
             client = genai.Client(api_key=key)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-1.5-flash',
                 contents=[img, prompt],
                 config={
                     "response_mime_type": "application/json"
@@ -1490,7 +1490,7 @@ def process_ocr_gemini(data: dict):
         "success": True,
         "detected_type": doc_type,
         "extracted_fields": extracted_data,
-        "engine_used": "gemini-2.5-flash",
+        "engine_used": "gemini-1.5-flash",
         "quick_fill_used": True,
         "image_token_cost": image_token_cost
     }

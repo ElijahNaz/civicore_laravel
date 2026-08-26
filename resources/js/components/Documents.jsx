@@ -16,6 +16,8 @@ import { useData } from './DataContext.jsx';
 import CameraModal from './CameraModal.jsx';
 import ActionConfirmModal from './ActionConfirmModal.jsx';
 import ExportReportModal from './ExportReportModal.jsx';
+import { preprocessUploadFile } from '../utils/uploadPreprocess.js';
+
 
 // ── Document Preview Modal (via Portal) ──────────────────────────────────────
 const DocumentPreviewModal = ({ file, onClose }) => {
