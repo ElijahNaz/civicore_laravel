@@ -6,6 +6,19 @@ import os from 'os';
 
 function getLocalIp() {
     const interfaces = os.networkInterfaces();
+    
+    // 1. Hunt specifically for the Wi-Fi adapter first
+    for (const name of Object.keys(interfaces)) {
+        if (name.toLowerCase().includes('wi-fi') || name.toLowerCase().includes('wireless')) {
+            for (const iface of interfaces[name]) {
+                if ((iface.family === 'IPv4' || iface.family === 4) && !iface.internal) {
+                    return iface.address;
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to the original method if Wi-Fi isn't found
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
             if ((iface.family === 'IPv4' || iface.family === 4) && !iface.internal) {
@@ -13,6 +26,7 @@ function getLocalIp() {
             }
         }
     }
+    
     return 'localhost';
 }
 
@@ -20,8 +34,11 @@ const localIp = getLocalIp();
 
 export default defineConfig({
     server: {
-        host: localIp,
+        host: '0.0.0.0',
         port: 5173,
+        hmr:{
+            host: localIp
+        }
     },
     plugins: [
         tailwindcss(),
