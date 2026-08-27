@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    DocumentCheckIcon, XMarkIcon, ChevronDoubleDownIcon,
+    DocumentCheckIcon, XMarkIcon,
     ExclamationTriangleIcon, ShieldExclamationIcon,
     CloudArrowUpIcon, SparklesIcon, ArrowPathIcon,
     PencilSquareIcon, DocumentPlusIcon, DocumentTextIcon
@@ -452,6 +452,11 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
     const typeMismatch = ocrResult?.type_mismatch;
     const mismatchMessage = ocrResult?.mismatch_message;
 
+    const sourceDocumentId = file?.document_id || file?.source_document_id;
+    const originalDocumentUrl = sourceDocumentId
+        ? `/api/documents/view/${sourceDocumentId}?raw=1`
+        : file?.file_url || null;
+
     const age = effectiveType === 'birth' ? computeAge(formData.date_of_birth) : null;
     const isMinor = age !== null && age < 18;
 
@@ -686,15 +691,6 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                 <ArrowPathIcon className="w-6 h-6" />
                             </button>
                         )}
-                        {!isViewOnly && (
-                            <button
-                                onClick={onMinimize || onClose}
-                                title="Minimize to Tray"
-                                className="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 transition-all cursor-pointer"
-                            >
-                                <ChevronDoubleDownIcon className="w-6 h-6" />
-                            </button>
-                        )}
                         <button onClick={onClose} className="text-slate-400 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all cursor-pointer group">
                             <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
                         </button>
@@ -740,7 +736,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                 )}
 
                 <div className="flex-1 flex overflow-hidden">
-                    {file.file_path && viewMode !== 'compare' && (
+                    {originalDocumentUrl && viewMode !== 'compare' && (
                         <div className="w-[35%] border-r border-slate-100 bg-slate-50 p-4 flex flex-col">
                             <div className="flex items-center justify-between mb-3 shrink-0">
                                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Original Document</span>
@@ -748,7 +744,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                             </div>
                             <div className="flex-1 rounded-xl bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center">
                                 <img
-                                    src={`/api/documents/view/${file.id || file.file_id || file.document_id || file.realId}?raw=1&t=${new Date().getTime()}`}
+                                    src={`${originalDocumentUrl}&t=${new Date().getTime()}`}
                                     className="w-full h-full object-contain"
                                     alt="Original Scan"
                                     onError={(e) => {

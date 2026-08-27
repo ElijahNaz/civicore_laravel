@@ -83,3 +83,60 @@
         100% { left: 100%;  width: 60%; opacity: 0.5; }
     }
 }
+
+@media print {
+    @page {
+        margin: 0mm;
+    }
+
+    html,
+    body {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    #printable-document,
+    #printable-document * {
+        visibility: visible !important;
+    }
+
+    .issuance-preview-header,
+    .issuance-preview-modal button,
+    .issuance-preview-modal a {
+        display: none !important;
+    }
+
+    #printable-document {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+
+    .issuance-print-document iframe,
+    .issuance-print-image {
+        display: block !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: none !important;
+        object-fit: contain !important;
+        border: 0 !important;
+    }
+}

@@ -25,31 +25,39 @@ class IssuanceController extends Controller
         if (!empty($type) || !empty($search)) {
             $conditions = [];
             if (!empty($type)) {
-                $conditions[] = "type = ?";
+                $conditions[] = "i.type = ?";
                 $params[] = $type;
             }
             if (!empty($search)) {
-                $conditions[] = "(name LIKE ? OR certNumber LIKE ?)";
+                $conditions[] = "(i.name LIKE ? OR i.certNumber LIKE ?)";
                 $searchTerm = "%{$search}%";
                 $params[] = $searchTerm;
                 $params[] = $searchTerm;
             }
-            $whereClause = " WHERE " . implode(" AND ", $conditions) . " AND deleted_at IS NULL";
+            $whereClause = " WHERE " . implode(" AND ", $conditions) . " AND i.deleted_at IS NULL";
         } else {
-            $whereClause = " WHERE deleted_at IS NULL";
+            $whereClause = " WHERE i.deleted_at IS NULL";
         }
         
         // Get total count
-        $countQuery = "SELECT COUNT(*) as total FROM issuances" . $whereClause;
+        $countQuery = "SELECT COUNT(*) as total FROM issuances i LEFT JOIN documents d ON d.id = i.document_id" . $whereClause;
         $totalResult = DB::select($countQuery, $params);
         $total = $totalResult[0]->total;
         
         // Get paginated results
-        $query = "SELECT id, certNumber, type, name, barangay, issuanceDate, status, encoded_by, document_id, extracted_data, or_number, print_remarks, requested_by, approved_by, ticket_number, created_at, updated_at, deleted_at FROM issuances" . $whereClause . " ORDER BY id DESC LIMIT ? OFFSET ?";
+        $query = "SELECT i.id, i.certNumber, i.type, i.name, i.barangay, i.issuanceDate, i.status, i.encoded_by, i.document_id, i.extracted_data, i.or_number, i.print_remarks, i.requested_by, i.approved_by, i.ticket_number, i.created_at, i.updated_at, i.deleted_at, d.file_path AS source_file_path FROM issuances i LEFT JOIN documents d ON d.id = i.document_id" . $whereClause . " ORDER BY i.id DESC LIMIT ? OFFSET ?";
         $params[] = $perPage;
         $params[] = ($page - 1) * $perPage;
         
         $issuances = DB::select($query, $params);
+        foreach ($issuances as $issuance) {
+            $issuance->file_url = $issuance->document_id
+                ? url('/api/documents/view/' . $issuance->document_id . '?raw=1')
+                : null;
+            $issuance->download_url = $issuance->document_id
+                ? url('/api/documents/download/' . $issuance->document_id . '?raw=1')
+                : null;
+        }
         
         return response()->json([
             'data' => $issuances,
@@ -67,13 +75,21 @@ class IssuanceController extends Controller
      */
     public function show($id)
     {
-        $issuances = DB::select("SELECT * FROM issuances WHERE id = ?", [$id]);
+        $issuances = DB::select("SELECT i.*, d.file_path AS source_file_path FROM issuances i LEFT JOIN documents d ON d.id = i.document_id WHERE i.id = ?", [$id]);
         
         if (count($issuances) === 0) {
             return response()->json(['error' => 'Not found'], 404);
         }
         
-        return response()->json($issuances[0]);
+        $issuance = $issuances[0];
+        $issuance->file_url = $issuance->document_id
+            ? url('/api/documents/view/' . $issuance->document_id . '?raw=1')
+            : null;
+        $issuance->download_url = $issuance->document_id
+            ? url('/api/documents/download/' . $issuance->document_id . '?raw=1')
+            : null;
+
+        return response()->json($issuance);
     }
 
     /**
@@ -224,19 +240,6 @@ class IssuanceController extends Controller
         $sql = "UPDATE issuances SET " . implode(', ', $fields) . " WHERE id = ?";
         DB::update($sql, $params);
 
-        // --- Logic Fix: Delete physical PDF to force regeneration on demand ---
-        // Instead of taking 100 seconds to synchronously regenerate the PDF with DOMPDF,
-        // we just delete the cached PDF file. The `getIssuanceFile` method will rebuild it
-        // on the fly next time the user clicks "View PDF".
-        $record = DB::selectOne("SELECT * FROM issuances WHERE id = ?", [$id]);
-        if ($record && property_exists($record, 'file_path') && $record->file_path) {
-            $path = storage_path("app/public/" . $record->file_path);
-            if (file_exists($path)) {
-                unlink($path);
-            }
-            DB::table('issuances')->where('id', $id)->update(['file_path' => null]);
-        }
-
         return response()->json(['success' => true]);
     }
 
@@ -337,7 +340,7 @@ class IssuanceController extends Controller
     }
 
     /**
-     * Download issuance PDF
+     * Download the original uploaded document linked to this issuance.
      */
     public function download($id)
     {
@@ -345,7 +348,7 @@ class IssuanceController extends Controller
     }
 
     /**
-     * View issuance PDF
+     * View the original uploaded document linked to this issuance.
      */
     public function view($id)
     {
@@ -353,66 +356,29 @@ class IssuanceController extends Controller
     }
 
     /**
-     * Helper to get or generate the issuance PDF
+     * Serve the original uploaded document. OCR data is never rendered here.
      */
     private function getIssuanceFile($id, $disposition = 'inline')
     {
-        $record = DB::selectOne("SELECT * FROM issuances WHERE id = ?", [$id]);
+        $record = DB::selectOne("SELECT i.*, d.file_path AS source_file_path, d.name AS source_file_name FROM issuances i LEFT JOIN documents d ON d.id = i.document_id WHERE i.id = ?", [$id]);
         
         if (!$record) {
             return response()->json(['error' => 'Not found'], 404);
         }
 
-        $filePath = property_exists($record, 'file_path') ? $record->file_path : null;
-        if ($filePath && request()->query('refresh') !== '1' && \Storage::disk('public')->exists($filePath)) {
-            return response()->file(\Storage::disk('public')->path($filePath), [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => $disposition . '; filename="' . $this->issuanceFilename($record) . '"',
-            ]);
+        $filePath = $record->source_file_path;
+        if (!$filePath || !\Storage::disk('public')->exists($filePath)) {
+            return response()->json(['error' => 'Original document file is not available'], 404);
         }
 
-        $doc = DB::selectOne("SELECT * FROM documents WHERE id = ?", [$record->document_id]);
-        if (!$doc) {
-            return response()->json(['error' => 'No file data available'], 404);
-        }
+        $absolutePath = \Storage::disk('public')->path($filePath);
+        $filename = $record->source_file_name ?: basename($filePath);
+        $headers = [
+            'Content-Type' => \Illuminate\Support\Facades\File::mimeType($absolutePath),
+            'Content-Disposition' => $disposition . '; filename="' . addslashes($filename) . '"',
+        ];
 
-        $docType = strtolower($record->type ?? 'birth');
-        $extractedFields = json_decode($record->extracted_data, true) ?: [];
-        $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
-
-        $pdf = app('dompdf.wrapper');
-        $pdf->setPaper('a4', 'portrait');
-        $pdf->loadView('pdf.composite_document', [
-            'doc' => $doc,
-            'fields' => $extractedFields,
-            'overlayFields' => $overlayFields,
-            'docType' => $docType,
-        ]);
-
-        $pdfData = $pdf->output();
-        $filePath = $this->storeIssuancePdf($id, $docType, $pdfData);
-        DB::table('issuances')->where('id', $id)->update(['file_path' => $filePath]);
-
-        return response()->file(\Storage::disk('public')->path($filePath), [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => $disposition . '; filename="' . $this->issuanceFilename($record) . '"',
-        ]);
-    }
-
-    private function storeIssuancePdf($id, $docType, $pdfData)
-    {
-        $safeType = preg_replace('/[^a-z0-9_-]/i', '_', strtolower($docType ?: 'certificate'));
-        $filePath = 'issuances/' . $safeType . '_' . $id . '_' . time() . '.pdf';
-
-        \Storage::disk('public')->put($filePath, $pdfData);
-
-        return $filePath;
-    }
-
-    private function issuanceFilename($record)
-    {
-        $certNumber = preg_replace('/[^a-z0-9_-]/i', '_', $record->certNumber ?? 'certificate');
-        return 'Certificate_' . $certNumber . '.pdf';
+        return response()->file($absolutePath, $headers);
     }
 
 

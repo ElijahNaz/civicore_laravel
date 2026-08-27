@@ -780,21 +780,8 @@ class DocumentController extends Controller
                         elseif (str_starts_with($p, 'ML') || str_starts_with($p, 'MC')) $docType = 'marriage';
                     }
                     
-                    // --- Dynamic Composite PDF Generation ---
-                    $overlayFields = \App\Services\TemplateConfigService::getFieldsForType($docType);
-                    
-                    $pdf = app('dompdf.wrapper');
-                    $pdf->setPaper('a4', 'portrait');
-                    $pdf->loadView('pdf.composite_document', [
-                        'doc' => $doc[0], 
-                        'fields' => $extractedFields,
-                        'overlayFields' => $overlayFields
-                    ]);
-                    $pdfData = $pdf->output();
-
-                    // Save the PDF to disk instead of the database
-                    $issuanceFilePath = 'issuances/' . $docType . '_' . $id . '_' . time() . '.pdf';
-                    \Storage::disk('public')->put($issuanceFilePath, $pdfData);
+                    // Keep the original upload as the issuance source of truth.
+                    $issuanceFilePath = $doc[0]->file_path;
 
                     $normCertType = 'birth';
                     if ($docType === 'death') {
@@ -983,26 +970,7 @@ class DocumentController extends Controller
         $metadata = json_decode($doc->metadata ?? '[]', true) ?: [];
         $status = strtolower($doc->status ?? 'pending');
         
-        // --- If extracted or processed, generate a PDF preview with the text ---
-        // UNLESS we explicitly ask for the 'raw' original file
-        if (!$request->has('raw') && ($status === 'extracted' || $status === 'processed' || $status === 'active')) {
-            $fields = json_decode($doc->extracted_fields, true) ?? [];
-            
-            // Build a quick PDF view
-            $pdf = app('dompdf.wrapper');
-            $pdf->loadView('pdf.ocr_report', [
-                'doc' => $doc, 
-                'fields' => $fields,
-                'ocr_text' => $doc->ocr_text,
-                'is_preview' => true 
-            ]);
-            
-            return response($pdf->output())
-                ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', $disposition . '; filename="preview-' . $id . '.pdf"');
-        }
-
-        // Return the raw upload with binary safety
+        // Always return the original upload. OCR data is for indexing and review only.
         $mimetype = $metadata['mimetype'] ?? null;
         if (!$mimetype) {
             $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);

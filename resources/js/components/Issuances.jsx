@@ -31,7 +31,7 @@ const NAIC_BARANGAYS = [
 ].sort();
 
 // ── Issuance Preview Modal ──────────────────────────────────────────────────
-const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload, openRequestModal }) => {
+export const IssuancePreviewModal = ({ cert, onClose, onPrint, onDownload, openRequestModal }) => {
     const viewUrl = cert.source === 'issuance'
         ? `/api/issuances/view/${cert.realId}`
         : `/api/documents/view/${cert.realId}`;
@@ -561,31 +561,34 @@ const Issuances = () => {
         const endpoint = action === 'Download' ? 'download' : 'view';
         const url = `${baseUrl}/${endpoint}/${cert.realId}`;
 
-        const perform = () => {
+        const perform = async () => {
             if (action === 'Print') {
                 const iframeId = 'print-frame-' + cert.id;
-                let iframe = document.getElementById(iframeId);
-                if (!iframe) {
-                    iframe = document.createElement('iframe');
-                    iframe.id = iframeId;
-                    iframe.style.display = 'none';
-                    document.body.appendChild(iframe);
-                }
+                const iframe = document.createElement('iframe');
+                iframe.id = iframeId;
                 iframe.src = url;
-                iframe.onload = async () => {
+                iframe.style.display = 'none';
+
+                const handlePrintLoad = async () => {
                     try {
-                        iframe.contentWindow.focus();
-                        iframe.contentWindow.print();
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
                         logActivity(cert.status === 'Issued' ? 'Reprinted' : 'Printed', cert);
 
                         if (cert.status === 'Approved') {
                             await axios.post(`/api/issuances/${cert.realId}/issue`);
                             refreshAll();
                         }
-                    } catch (e) {
-                        window.open(url, '_blank');
+                    } finally {
+                        window.setTimeout(() => {
+                            iframe.removeEventListener('load', handlePrintLoad);
+                            iframe.remove();
+                        }, 2000);
                     }
                 };
+
+                iframe.addEventListener('load', handlePrintLoad, { once: true });
+                document.body.appendChild(iframe);
             } else {
                 window.open(url, '_blank');
                 logActivity(action === 'View' ? 'Viewed' : 'Downloaded', cert);
