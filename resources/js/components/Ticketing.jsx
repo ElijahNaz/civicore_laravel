@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
+import { toPng } from 'html-to-image';
 import {
     TicketIcon,
     UserIcon,
@@ -286,9 +287,20 @@ export default function Ticketing({ mode = 'portal' }) {
         }
     };
 
-    // Print helper
-    const handlePrint = () => {
-        window.print();
+    const handleDownloadTicket = async () => {
+        try {
+            const node = document.getElementById('ticket-card');
+            if (!node) return;
+
+            const dataUrl = await toPng(node, { cacheBust: true });
+            const link = document.createElement('a');
+            link.download = 'queue-ticket.png';
+            link.href = dataUrl;
+            link.click();
+        } catch (err) {
+            console.error('Failed to download ticket:', err);
+            alert('Could not download the ticket image.');
+        }
     };
 
     // ── RENDER CLIENT PORTAL (PUBLIC REQUEST FORM) ────────────────────────────────
@@ -514,7 +526,10 @@ export default function Ticketing({ mode = 'portal' }) {
 
     // ── RENDER TICKET STATUS (CLIENT RECEIPT / LIVE QUEUE POSITION) ───────────────
     if (mode === 'status') {
-        const trackingUrl = `${window.location.origin}/ticket-status/${token}`;
+        const trackingToken = token || ticket?.token || '';
+        const trackingUrl = trackingToken
+            ? `${window.location.origin}/ticket-status/${trackingToken}`
+            : `${window.location.origin}/ticket-status`;
         const purposeLabel = ticket?.purpose === 'birth' ? 'Birth Certificate' : ticket?.purpose === 'death' ? 'Death Certificate' : 'Marriage Certificate';
         const formattedDate = ticket?.created_at ? new Date(ticket.created_at).toLocaleString() : '';
 
@@ -539,7 +554,7 @@ export default function Ticketing({ mode = 'portal' }) {
                         className="space-y-6"
                     >
                         {/* Premium downloadable ticket */}
-                        <div id="print-area" className="bg-[#0f172a] text-white rounded-[2.5rem] p-8 sm:p-12 shadow-2xl relative overflow-hidden border border-slate-800 print:bg-white print:text-slate-900 print:shadow-none print:p-6 print:rounded-none">
+                        <div id="ticket-card" className="bg-[#0f172a] text-white rounded-[2.5rem] p-8 sm:p-12 shadow-2xl relative overflow-hidden border border-slate-800 print:bg-white print:text-slate-900 print:shadow-none print:p-6 print:rounded-none">
                             {/* Ambient Light */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-[#d4a574]/10 rounded-full blur-[100px] pointer-events-none print:hidden"></div>
 
@@ -549,11 +564,15 @@ export default function Ticketing({ mode = 'portal' }) {
                                     <h2 className="text-2xl font-black text-white tracking-tight print:text-slate-900">Civil Registry Queue Ticket</h2>
                                     <p className="text-slate-400 text-xs mt-1 print:text-slate-500">{formattedDate}</p>
                                 </div>
-                                <div className="bg-white p-3 rounded-2xl shadow-lg print:shadow-none border border-slate-100 shrink-0">
-                                    {ticketQrUrl
-                                        ? <img src={ticketQrUrl} alt="QR Code" className="w-[110px] h-[110px]" />
-                                        : <QRCodeSVG value={trackingUrl} size={110} />
-                                    }
+                                <div className="bg-white p-3 rounded-2xl shadow-lg print:shadow-none border border-slate-100 shrink-0 w-[128px] h-[128px] flex items-center justify-center overflow-hidden">
+                                    <QRCodeCanvas
+                                        value={trackingUrl || window.location.href || 'https://example.com'}
+                                        size={110}
+                                        bgColor="#ffffff"
+                                        fgColor="#0f172a"
+                                        includeMargin={true}
+                                        level="M"
+                                    />
                                 </div>
                             </div>
 
@@ -628,11 +647,11 @@ export default function Ticketing({ mode = 'portal' }) {
                         {/* Controls */}
                         <div className="flex gap-4">
                             <button
-                                onClick={handlePrint}
+                                onClick={handleDownloadTicket}
                                 className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
                             >
-                                <PrinterIcon className="w-4 h-4" />
-                                Print Ticket
+                                <ArrowDownTrayIcon className="w-4 h-4" />
+                                Download Ticket
                             </button>
                             <Link
                                 to="/ticket-request"

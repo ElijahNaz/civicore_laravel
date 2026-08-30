@@ -218,10 +218,10 @@ These objectives define the full scope of the CiviCORE system. All items below h
 
 ## 🧠 Gemini AI Integration
 
-To achieve the highest OCR accuracy across multiple document layouts, CiviCORE is designed to integrate **Google Gemini (gemini-2.5-flash)** into the OCR pipeline.
+To achieve the highest OCR accuracy across multiple document layouts, CiviCORE is designed to integrate **Google Gemini (gemini-3.6-flash)** into the OCR pipeline.
 
 > ⚠️ **Note: Gemini API Key Not Yet Purchased**
-> The Gemini AI integration is fully implemented in the codebase, but the production Gemini API key has **not yet been purchased**. The system currently falls back to EasyOCR + Tesseract for all document processing. Once a Gemini API key is acquired and added to the `.env` file (`GEMINI_API_KEY=`), the AI-powered extraction pipeline will activate automatically.
+> The Gemini AI integration is fully implemented in the codebase (Elijah "I added a google AI studio free API for this), but the production Gemini API key has **not yet been purchased**. The system currently falls back to EasyOCR + Tesseract for all document processing. Once a Gemini API key is acquired and added to the `.env` file (`GEMINI_API_KEY=`), the AI-powered extraction pipeline will activate automatically.
 
 ### What Gemini Enables
 - **Multi-Form Version Support**: Automatically identify whether a document is a 1958 or 1993 layout variant and map fields to the unified schema accordingly.

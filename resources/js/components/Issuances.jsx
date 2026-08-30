@@ -202,7 +202,6 @@ const Issuances = () => {
     const [tickets, setTickets] = useState([]);
     const [ticketsLoading, setTicketsLoading] = useState(false);
     const [approvalsSearch, setApprovalsSearch] = useState('');
-    const [readySearch, setReadySearch] = useState('');
 
     // Scan Search workflow state
     const [isScanSearchOpen, setIsScanSearchOpen] = useState(false);
@@ -1348,7 +1347,6 @@ const Issuances = () => {
             {/* ── Main Section Tab Bar ──────────────────────────────────────────────── */}
             <motion.div variants={itemVariants} className="flex space-x-1 bg-slate-100 p-1.5 rounded-xl w-fit">
                 <button onClick={() => setActiveTab('database')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'database' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Master Database</button>
-                <button onClick={() => setActiveTab('ready')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'ready' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Ready to Print</button>
                 <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 text-sm font-bold rounded-lg transition-all cursor-pointer ${activeTab === 'history' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Activity Log History</button>
             </motion.div>
 
@@ -1494,137 +1492,6 @@ const Issuances = () => {
                             </table>
                         </div>
                     </>
-                ) : activeTab === 'ready' ? (
-                    <div className="p-0">
-                        <div className="p-6 border-b border-slate-100 bg-slate-50/10">
-                            {/* Top Row: Title & Action */}
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                                <div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-100">
-                                            <PrinterIcon className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">Ready to Print</h3>
-                                            <p className="text-[11px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Approved document requests authorized for physical printing</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-200/50">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest tabular-nums italic">
-                                            {certificates.filter(c => c.status === 'Approved').length} Approved Requests
-                                        </span>
-                                    </div>
-                                    <button
-                                        onClick={() => { refreshAll(); fetchTickets(); }}
-                                        className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-indigo-600 px-4 py-2 bg-white hover:bg-indigo-50 rounded-xl border border-slate-200 hover:border-indigo-100 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap group"
-                                    >
-                                        <ArrowPathIcon className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                                        Refresh List
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Search Field */}
-                            <div className="relative max-w-md w-full pt-2">
-                                <MagnifyingGlassIcon className="absolute left-3 top-[calc(50%+4px)] -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search by Cert No, Name or Barangay..."
-                                    value={readySearch}
-                                    onChange={(e) => setReadySearch(e.target.value)}
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] sm:text-sm transition-all shadow-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-widest font-black border-b border-slate-200">
-                                        <th className="p-4 pl-6">Ref/Cert No.</th>
-                                        <th className="p-4">Recipient Name</th>
-                                        <th className="p-4">Type</th>
-                                        <th className="p-4">Barangay</th>
-                                        <th className="p-4">OR Number</th>
-                                        <th className="p-4">Attached By</th>
-                                        <th className="p-4 pr-6 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {certificates.filter(c => c.status === 'Approved').filter(cert => {
-                                        const term = readySearch.toLowerCase();
-                                        return cert.number.toLowerCase().includes(term) ||
-                                            cert.name.toLowerCase().includes(term) ||
-                                            cert.barangay.toLowerCase().includes(term);
-                                    }).length === 0 ? (
-                                        <tr>
-                                            <td colSpan="7" className="p-12 text-center text-slate-400">
-                                                <PrinterIcon className="w-12 h-12 mx-auto mb-2 opacity-20 text-slate-400" />
-                                                <p className="font-semibold text-slate-600">No documents ready to print</p>
-                                                <p className="text-xs text-slate-400 mt-1">Once print requests are approved, they will appear here.</p>
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        certificates.filter(c => c.status === 'Approved').filter(cert => {
-                                            const term = readySearch.toLowerCase();
-                                            return cert.number.toLowerCase().includes(term) ||
-                                                cert.name.toLowerCase().includes(term) ||
-                                                cert.barangay.toLowerCase().includes(term);
-                                        }).map((cert) => {
-                                            return (
-                                                <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="p-4 pl-6">
-                                                        <span className="font-bold text-slate-800 text-sm tracking-tight">{cert.number}</span>
-                                                    </td>
-                                                    <td className="p-4 font-semibold text-slate-700 text-sm">{cert.name}</td>
-                                                    <td className="p-4">
-                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                                                            {cert.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-slate-500 text-xs font-medium">{cert.barangay}</td>
-                                                    <td className="p-4">
-                                                        <span className="text-slate-700 font-bold text-xs bg-slate-100/80 px-2 py-1 rounded border border-slate-200">
-                                                            {cert.raw?.or_number || '—'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-slate-500 text-xs font-semibold">{cert.raw?.approved_by || '—'}</td>
-                                                    <td className="p-4 pr-6 text-right">
-                                                        <div className="flex items-center justify-end gap-1.5">
-                                                            <button
-                                                                onClick={() => handleAction('View', cert)}
-                                                                title="View/Preview Document"
-                                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg transition-all border border-indigo-100 cursor-pointer"
-                                                            >
-                                                                <EyeIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleAction('Print', cert)}
-                                                                title="Print Now"
-                                                                className="p-2 text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-all shadow-md shadow-emerald-200 cursor-pointer flex items-center justify-center border border-emerald-400/20 active:scale-95"
-                                                            >
-                                                                <PrinterIcon className="w-4 h-4 text-white" />
-                                                                <span className="ml-1.5 text-xs font-bold whitespace-nowrap">Print Now</span>
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleAction('Download', cert)}
-                                                                title="Download PDF"
-                                                                className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-lg transition-all border border-blue-100 cursor-pointer"
-                                                            >
-                                                                <ArrowDownTrayIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 ) : (
                     <div className="p-0">
                         <div className="p-6 border-b border-slate-100 bg-slate-50/10">
