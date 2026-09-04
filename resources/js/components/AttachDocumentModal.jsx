@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     XMarkIcon,
@@ -79,7 +80,7 @@ export default function AttachDocumentModal({ isOpen, onClose, ticket, onAttach 
     if (!isOpen) return null;
 
     if (isMinimized) {
-        return (
+        return createPortal(
             <div className="fixed bottom-6 right-6 z-[9999]">
                 <motion.button
                     initial={{ scale: 0.8, opacity: 0, y: 20 }}
@@ -109,11 +110,12 @@ export default function AttachDocumentModal({ isOpen, onClose, ticket, onAttach 
                     </div>
                     <ArrowsPointingOutIcon className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors ml-1" />
                 </motion.button>
-            </div>
+            </div>,
+            document.body
         );
     }
 
-        return (
+        return createPortal(
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-slate-900 leading-normal">
                 <motion.div
                     initial={{ scale: 0.95, opacity: 0, y: 15 }}
@@ -308,6 +310,7 @@ export default function AttachDocumentModal({ isOpen, onClose, ticket, onAttach 
                             </button>
                         </div>
             </motion.div>
-        </div>
+            </div>,
+            document.body
     );
 }

@@ -30,6 +30,7 @@
         "framer-motion": "^12.35.2",
         "html-to-image": "^1.11.13",
         "html2canvas": "^1.4.1",
+        "html5-qrcode": "^2.3.8",
         "leaflet": "^1.9.4",
         "lodash": "^4.17.23",
         "qrcode.react": "^4.2.0",

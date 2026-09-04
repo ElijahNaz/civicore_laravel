@@ -597,6 +597,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             } catch (e) {}
         }
     };
+    
+    React.useEffect(() => {
+            return () => {
+                    stopCamera();
+                };
+            }, []);
 
     const handleClose = () => {
         modalOpenRef.current = false;

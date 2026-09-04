@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Html5QrcodeScanner } from "html5-qrcode";
 import {
     InboxIcon,
     MagnifyingGlassIcon,
@@ -10,6 +12,7 @@ import {
     ArrowPathIcon,
     MapPinIcon,
     CheckCircleIcon,
+    PrinterIcon,
     XMarkIcon,
     ExclamationTriangleIcon,
     ClockIcon,
@@ -39,6 +42,10 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
     const [isIssuing, setIsIssuing] = useState(false);
 
     const [isWalkinModalOpen, setIsWalkinModalOpen] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [scannerError, setScannerError] = useState('');
+    const [isPopupOpen, setIsPopupOpen] = useState(false);
+    const [scannedData, setScannedData] = useState(null);
     const [walkinName, setWalkinName] = useState('');
     const [walkinPurpose, setWalkinPurpose] = useState('birth');
     const [isCreatingWalkin, setIsCreatingWalkin] = useState(false);
@@ -129,6 +136,14 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                 print_remarks: printRemarks
             });
             if (res.data.success) {
+                const updatedTicket = {
+                    ...selectedTicket,
+                    document_id: docId,
+                    request_status: 'ready_for_pickup'
+                };
+                setSelectedTicket(updatedTicket);
+                setScannedData(prev => prev ? { ...prev, ...updatedTicket } : prev);
+                setIsPopupOpen(true);
                 showAlert({
                     title: 'File Attached!',
                     message: `Ticket ${selectedTicket.ticket_number} was sent to the ready for printing queue.`,
@@ -206,6 +221,27 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
         }
     };
 
+    const handlePrintTicketDocument = (ticket) => {
+        if (!ticket?.document_id) return;
+
+        const iframe = document.createElement('iframe');
+        iframe.src = `/api/documents/view/${ticket.document_id}?raw=1`;
+        iframe.style.position = 'fixed';
+        iframe.style.width = '1px';
+        iframe.style.height = '1px';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+
+        const printWhenReady = () => {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+            window.setTimeout(() => iframe.remove(), 2000);
+        };
+
+        iframe.addEventListener('load', printWhenReady, { once: true });
+        document.body.appendChild(iframe);
+    };
+
     const handleCreateWalkinTicket = async () => {
         if (!walkinName.trim()) {
             showAlert({ title: 'Error', message: 'Client name is required.', type: 'warning' });
@@ -240,6 +276,72 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
         }
     };
 
+    useEffect(() => {
+        if (!isScannerOpen) return;
+
+        let scanner = null;
+        let frameId = null;
+        setScannerError('');
+
+        const onScanSuccess = async (decodedText) => {
+            console.log('found a code: ', decodedText);
+            
+            await scanner?.clear().catch(error => console.log("Scanner already cleared", error));
+            setIsScannerOpen(false);
+
+            try {
+                // 1. Extract the ticket token/number if the QR code outputs a full URL
+                const ticketToken = decodedText.includes('/') 
+                    ? decodedText.split('/').filter(Boolean).pop() 
+                    : decodedText;
+
+                // 2. Call your backend's actual scan/lookup route
+                const response = await axios.post(`/api/v1/tickets/scan`, {
+                    qr_code_token: ticketToken});
+                    
+                console.log("Full backend response:", response.data);
+
+                // 3. Unwrap Laravel's nested response object (.ticket) and save it
+                const ticketRecord = response.data.ticket || response.data;
+                setScannedData(ticketRecord);
+                setSelectedTicket(ticketRecord);
+                setIsPopupOpen(true);
+                fetchPendingTickets(false);
+
+            } catch (error) {
+                console.error("Lookup failed:", error);
+                alert(error.response?.data?.error || "Ticket scan failed.");
+            }
+                
+            }
+
+        const initializeScanner = () => {
+            const reader = document.getElementById('reader');
+            if (!reader) {
+                setScannerError('The scanner could not initialize. Please close this window and try again.');
+                return;
+            }
+
+            try {
+                scanner = new Html5QrcodeScanner('reader', {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                });
+                scanner.render(onScanSuccess, () => {});
+            } catch (error) {
+                console.error('QR scanner initialization failed:', error);
+                setScannerError('The QR scanner could not start. Check browser camera permission and try again.');
+            }
+        };
+
+        frameId = requestAnimationFrame(initializeScanner);
+
+        return () => {
+            if (frameId) cancelAnimationFrame(frameId);
+            scanner?.clear().catch(error => console.log("Scanner already cleared"));
+        };
+    }, [isScannerOpen]);
+
     const filteredTickets = tickets.filter(t =>
         t.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.client_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -271,14 +373,13 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                             <button
                                 onClick={() => setIsWalkinModalOpen(true)}
                                 className="px-3 py-1.5 bg-[#0f172a] text-[#d4a574] rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
-                            >
-                                + Walk-in
-                            </button>
+                            >Walk in</button>
+                            <button type="button" onClick={() => setIsScannerOpen(true)}
+                                className="px-3 py-1.5 bg-[#0f172a] text-[#d4a574] rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors">Scan QR</button>
                             <button
                                 onClick={() => fetchPendingTickets(false)}
                                 className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-650 transition-colors"
-                                title="Reload inbox"
-                            >
+                                title="Reload inbox">
                                 <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                             </button>
                         </div>
@@ -732,6 +833,52 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                 )}
             </AnimatePresence>
 
+            <>
+                {isScannerOpen && (
+                    createPortal(
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                                className="bg-white rounded-3xl shadow-2xl shadow-slate-950/30 w-full max-w-md relative overflow-hidden border border-white/80"
+                            >
+                                <div className="bg-[#0f172a] px-6 py-5 text-white">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d4a574]">CiviCORE Check-in</p>
+                                            <h3 className="text-xl font-black tracking-tight mt-1">Scan Ticket QR Code</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Point the camera at the citizen's queue ticket.</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsScannerOpen(false)}
+                                            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                                            aria-label="Close scanner"
+                                        >
+                                            <XMarkIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="p-5 bg-slate-50">
+                                    {scannerError ? (
+                                        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center">
+                                            <ExclamationTriangleIcon className="w-8 h-8 mx-auto text-rose-500 mb-2" />
+                                            <p className="text-xs font-bold text-rose-700">{scannerError}</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div id="reader" className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white" />
+                                            <p className="text-[11px] text-slate-500 text-center mt-4">A successful scan checks the ticket into the waiting queue.</p>
+                                        </>
+                                    )}
+                                </div>
+                            </motion.div>
+                        </div>,
+                        document.body
+                    )
+                )}
+            </>
+
             <AnimatePresence>
                 {isDeclineOpen && selectedTicket && (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-slate-900 leading-normal">
@@ -813,6 +960,97 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                     </div>
                 )}
             </AnimatePresence>
+
+            <>
+                {/* Scanned Ticket Popup Modal */}
+                {isPopupOpen && scannedData && (
+                    createPortal(
+                        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                                className="bg-white rounded-3xl shadow-2xl shadow-slate-950/30 w-full max-w-lg relative overflow-hidden border border-white/80"
+                            >
+                                <div className="bg-[#0f172a] px-6 py-5 text-white">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-11 h-11 rounded-2xl bg-[#d4a574]/15 border border-[#d4a574]/30 flex items-center justify-center">
+                                                <CheckCircleIcon className="w-6 h-6 text-[#d4a574]" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#d4a574]">Verified Ticket</p>
+                                                <h3 className="text-xl font-black tracking-tight">Scanned Ticket Details</h3>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsPopupOpen(false)}
+                                            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                                            aria-label="Close ticket details"
+                                        >
+                                            <XMarkIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="p-6">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="col-span-2 rounded-2xl bg-[#d4a574]/10 border border-[#d4a574]/25 p-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-[#9a7449]">Ticket Number</p>
+                                            <p className="text-2xl font-black text-slate-900 mt-1">{scannedData.ticket_number}</p>
+                                        </div>
+                                        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Client Name</p>
+                                            <p className="text-sm font-black text-slate-800 mt-1 break-words">{scannedData.client_name || scannedData.name || '—'}</p>
+                                        </div>
+                                        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Purpose</p>
+                                            <p className="text-sm font-black text-slate-800 mt-1 capitalize">{scannedData.purpose || '—'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                                        <span className="text-xs font-bold text-emerald-800">Queue status</span>
+                                        <span className="px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                                            {scannedData.queue_status?.replace(/_/g, ' ') || scannedData.status || 'Verified'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-3 px-6 py-5 bg-slate-50 border-t border-slate-100">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedTicket(scannedData);
+                                            setIsPopupOpen(false);
+                                            setIsAttachOpen(true);
+                                        }}
+                                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest transition-colors shadow-sm"
+                                    >
+                                        <LinkIcon className="w-4 h-4" />
+                                        {scannedData.document_id ? 'Change Document' : 'Attach Document'}
+                                    </button>
+                                    {scannedData.document_id && (
+                                        <button
+                                            onClick={() => handlePrintTicketDocument(scannedData)}
+                                            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-[#0f172a] hover:bg-slate-800 text-white text-xs font-black uppercase tracking-widest transition-colors shadow-sm"
+                                        >
+                                            <PrinterIcon className="w-4 h-4" />
+                                            Print Document
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setIsPopupOpen(false)}
+                                        className="sm:flex-none px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 text-xs font-black uppercase tracking-widest transition-colors"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>,
+                        document.body
+                    )
+                )}
+            </>
 
             {/* Verify ID & Checkout Modal */}
             <AnimatePresence>

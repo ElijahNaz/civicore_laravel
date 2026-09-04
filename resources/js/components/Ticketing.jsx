@@ -566,7 +566,7 @@ export default function Ticketing({ mode = 'portal' }) {
                                 </div>
                                 <div className="bg-white p-3 rounded-2xl shadow-lg print:shadow-none border border-slate-100 shrink-0 w-[128px] h-[128px] flex items-center justify-center overflow-hidden">
                                     <QRCodeCanvas
-                                        value={trackingUrl || window.location.href || 'https://example.com'}
+                                        value={ticket?.ticket_number || ''}
                                         size={110}
                                         bgColor="#ffffff"
                                         fgColor="#0f172a"

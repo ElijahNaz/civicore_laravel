@@ -745,6 +745,8 @@ class TicketController extends Controller
             return DB::transaction(function () use ($request) {
                 $ticket = Ticket::where('qr_code_token', $request->qr_code_token)
                     ->orWhere('token', $request->qr_code_token)
+                    // Support older QR codes that contain the visible ticket number.
+                    ->orWhere('ticket_number', $request->qr_code_token)
                     ->first();
 
                 if (!$ticket) {
