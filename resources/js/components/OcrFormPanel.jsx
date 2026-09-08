@@ -80,8 +80,8 @@ export const ParentalConsentModal = ({ onConfirm, onCancel }) => (
 );
 
 import { BirthConfig, BirthTemplateOverlayFields } from './forms/BirthCertificateConfig.js';
-import { DeathConfig } from './forms/DeathCertificateConfig.js';
-import { MarriageConfig } from './forms/MarriageCertificateConfig.js';
+import { DeathConfig, DeathTemplateOverlayFields } from './forms/DeathCertificateConfig.js';
+import { MarriageConfig, MarriageTemplateOverlayFields } from './forms/MarriageCertificateConfig.js';
 import { NAIC_BARANGAYS } from './forms/SharedConfig.js';
 
 const normalizeBrgyString = (name) => {
@@ -114,7 +114,7 @@ const getInitialFormData = (type, ocrFields, fileObj) => {
     if (typeof ef === 'string') {
         try { ef = JSON.parse(ef); } catch (e) { ef = {}; }
     }
-    const isManualEntry = !fileObj.file_path || fileObj.name === 'Manual Entry' || fileObj.id === 'manual';
+    const isManualEntry = !fileObj?.file_path || fileObj?.name === 'Manual Entry' || fileObj?.id === 'manual';
     const init = {};
     const configSections = FIELD_CONFIG[type] || FIELD_CONFIG.birth;
 
@@ -148,6 +148,23 @@ const getInitialFormData = (type, ocrFields, fileObj) => {
         });
     });
 
+    // Default province and city/municipality for Naic LCRO records if missing
+    if (!init.province || init.province === 'n/a' || init.province === '') {
+        init.province = 'Cavite';
+    }
+    if (!init.city_municipality || init.city_municipality === 'n/a' || init.city_municipality === '') {
+        init.city_municipality = 'Naic';
+    }
+
+    // Try auto-detecting barangay from raw address fields if barangay is not explicitly set
+    if (!init.barangay || init.barangay === 'n/a' || init.barangay === '' || init.barangay === 'Select...') {
+        const allText = Object.values(ef).filter(v => typeof v === 'string').join(' ');
+        const detectedBrgy = findClosestBarangay(allText);
+        if (detectedBrgy) {
+            init.barangay = detectedBrgy;
+        }
+    }
+
     try {
         const prefillStr = sessionStorage.getItem('civicore_ticket_prefill');
         if (prefillStr) {
@@ -165,6 +182,19 @@ const getInitialFormData = (type, ocrFields, fileObj) => {
     }
 
     return init;
+};
+
+const getFieldMaxLength = (field) => {
+    if (field.maxLength) return field.maxLength;
+    const k = (field.key || '').toLowerCase();
+    if (k.includes('name') || k.includes('officer') || k.includes('father') || k.includes('mother') || k.includes('informant') || k.includes('person') || k.includes('client')) return 50;
+    if (k.includes('place') || k.includes('residence') || k.includes('address') || k.includes('cemetery') || k.includes('hospital')) return 255;
+    if (k.includes('no') || k.includes('number') || k.includes('registry') || k.includes('code') || k.includes('permit')) return 30;
+    if (k.includes('age') || k.includes('day') || k.includes('month') || k.includes('year') || k.includes('duration') || k.includes('weight') || k.includes('total') || k.includes('living') || k.includes('dead') || k.includes('order')) return 20;
+    if (k.includes('phone')) return 15;
+    if (k.includes('email')) return 100;
+    if (k.includes('remark') || k.includes('note') || k.includes('condition')) return 1000;
+    return 100;
 };
 
 const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, onDuplicateStatusChange, isSaving = false, isViewOnly = false, hideBoxes = false }) => {
@@ -186,6 +216,25 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
     const effectiveType = manualType || detectedType;
     const isManualEntry = !file?.file_path || file?.name === 'Manual Entry' || file?.id === 'manual';
     const isEditMode = !isManualEntry && (file?.status === 'processed' || file?.status === 'extracted' || file?.source === 'issuance' || isViewOnly);
+
+    // Optimized Reference Document Loading (Instant HTTP Browser Caching & Direct PDF rendering)
+    const isPdf = useMemo(() => {
+        const fn = (file?.name || file?.file_path || file?.original_filename || '').toLowerCase();
+        const mime = (file?.mime_type || file?.type || '').toLowerCase();
+        return fn.endsWith('.pdf') || mime.includes('pdf');
+    }, [file]);
+
+    const targetDocId = file?.realId || file?.document_id || file?.file_id || file?.id;
+    const documentPreviewUrl = useMemo(() => {
+        if (!targetDocId) return '';
+        const stableVersion = file.updated_at ? new Date(file.updated_at).getTime() : (targetDocId || 1);
+        return `/api/documents/view/${targetDocId}?raw=1&v=${stableVersion}`;
+    }, [file, targetDocId]);
+
+    const [isDocLoading, setIsDocLoading] = useState(true);
+    useEffect(() => {
+        setIsDocLoading(true);
+    }, [documentPreviewUrl]);
 
     const formatNumber = (num) => {
         if (num === undefined || num === null) return '0';
@@ -344,8 +393,14 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
             checkDuplicateRecord();
         }, 1000);
 
-        return () => clearTimeout(delayDebounceFn);
-    }, [formData.first_name, formData.last_name, formData.husband_first_name, formData.wife_first_name, effectiveType]);
+    }, [
+        formData.first_name, formData.last_name, 
+        formData.husband_first_name, formData.husband_last_name, 
+        formData.wife_first_name, formData.wife_last_name, 
+        formData.deceased_first_name, formData.deceased_last_name, 
+        formData.registry_number, formData.registry_no,
+        effectiveType, manualType
+    ]);
 
     /**
      * Returns Tailwind classes for field confidence:
@@ -354,7 +409,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
      * - High            (>=0.85) → emerald ring flash (only on first load)
      */
     const getConfidenceClass = (fieldKey, hasError) => {
-        if (hasError) return 'border-rose-300 bg-rose-50/20 focus:ring-rose-100';
+        if (hasError) return 'border-rose-500 bg-rose-50/40 focus:ring-rose-200 focus:border-rose-600 ring-2 ring-rose-300 shadow-sm';
         const meta = fieldConfidence[fieldKey];
         if (!meta) return 'border-slate-200 focus:ring-slate-100 focus:border-slate-400 shadow-sm';
         if (meta.low_confidence || meta.confidence < 0.65) {
@@ -390,11 +445,12 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
         return tType === eType || tType.includes(eType) || eType.includes(tType);
     });
 
-    // Sync form data if background extraction finishes while modal is open
+    const activeDocId = file?.realId || file?.document_id || file?.file_id || file?.id;
+
+    // Sync form data if file changes or background extraction finishes
     useEffect(() => {
-        // --- FIELD SYNC ---
-        // Prioritize ocrResult (fresh from server) over file.extracted_fields (saved in DB)
-        const rawFields = ocrResult?.extracted_fields || file.extracted_fields;
+        isDirtyRef.current = false;
+        const rawFields = ocrResult?.extracted_fields || file?.extracted_fields;
         if (rawFields) {
             let parsed = rawFields;
             if (typeof rawFields === 'string') {
@@ -402,52 +458,15 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
             }
 
             if (parsed && typeof parsed === 'object') {
-                setFormData(prev => {
-                    const next = { ...prev };
-                    let changed = false;
-
-                    // We loop through our known field configuration to map the incoming data
-                    const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
-                    configSections.forEach(section => {
-                        section.fields.forEach(f => {
-                            // Only fill if current value is empty OR if this is a fresh OCR result
-                            const newValue = parsed[f.key];
-                            if (newValue !== undefined && newValue !== null && newValue !== prev[f.key]) {
-                                let val = String(newValue).trim();
-                                // Basic date normalization
-                                if (f.type === 'date') {
-                                    if (val && val.toLowerCase() !== 'n/a' && val.toLowerCase() !== 'not applicable') {
-                                        const d = new Date(val.replace(/[^0-9a-zA-Z/-]/g, ' '));
-                                        if (!isNaN(d.getTime())) {
-                                            val = d.toISOString().split('T')[0];
-                                        } else {
-                                            val = '';
-                                        }
-                                    } else {
-                                        val = '';
-                                    }
-                                }
-                                // Optional fields: if empty, default to "n/a"
-                                const isManualEntry = !file.file_path || file.name === 'Manual Entry' || file.id === 'manual';
-                                if (!isManualEntry && !f.required && val === '' && f.type !== 'date') {
-                                    val = 'n/a';
-                                }
-                                next[f.key] = val;
-                                changed = true;
-                            }
-                        });
-                    });
-                    return changed ? next : prev;
-                });
+                setFormData(getInitialFormData(effectiveType, parsed, file));
             }
+        } else {
+            setFormData(getInitialFormData(effectiveType, {}, file));
         }
 
-        // --- TEXT SYNC ---
-        const newText = ocrResult?.text || file.ocr_text;
-        if (newText && newText !== ocrText) {
-            setOcrText(newText);
-        }
-    }, [file.extracted_fields, ocrResult, file.ocr_text, effectiveType]);
+        const newText = ocrResult?.text || file?.ocr_text || '';
+        setOcrText(newText);
+    }, [activeDocId, file?.id, file?.updated_at, ocrResult, effectiveType]);
 
     const typeMismatch = ocrResult?.type_mismatch;
     const mismatchMessage = ocrResult?.mismatch_message;
@@ -471,6 +490,12 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
     const handleSubmit = (e, minimize = false) => {
         if (e) e.preventDefault();
 
+        // --- Block save if document type is unknown / not a valid document ---
+        if (!effectiveType || effectiveType === 'unknown' || !['birth', 'death', 'marriage'].includes(effectiveType)) {
+            setErrors({ _type: true });
+            return;
+        }
+
         // --- Strict Validation ---
         const configSections = FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth;
         const newErrors = {};
@@ -478,26 +503,32 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
 
         configSections.forEach(section => {
             section.fields.forEach(f => {
-                if (f.required && (!formData[f.key] || String(formData[f.key]).trim() === '')) {
+                const rawVal = formData[f.key];
+                const strVal = rawVal === undefined || rawVal === null ? '' : String(rawVal).trim();
+                if (f.required && (strVal === '' || strVal === 'Select...')) {
                     newErrors[f.key] = true;
                     if (!firstErrorField) firstErrorField = f.label;
                 }
             });
         });
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            // Focus the first error field automatically
-            setTimeout(() => {
-                const firstError = document.querySelector('.border-rose-300');
-                if (firstError) firstError.focus();
-            }, 100);
-            return;
+        // Mandatory Barangay Check for Geospatial Analytics Mapping
+        const brgyVal = formData.barangay ? String(formData.barangay).trim() : '';
+        if (!brgyVal || brgyVal === 'Select...' || brgyVal === 'n/a') {
+            newErrors.barangay = true;
+            if (!firstErrorField) firstErrorField = 'Barangay (For analytics)';
         }
 
-        // Block save if document type is still unknown
-        if (!effectiveType || effectiveType === 'unknown') {
-            setErrors(prev => ({ ...prev, _type: true }));
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            // Focus and scroll to the first error field automatically
+            setTimeout(() => {
+                const firstError = document.querySelector('.border-rose-500, select.border-rose-500, input.border-rose-500');
+                if (firstError) {
+                    firstError.focus();
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
             return;
         }
 
@@ -507,7 +538,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
             section.fields.forEach(f => {
                 const val = sanitizedFields[f.key];
                 const strVal = val === undefined || val === null ? '' : String(val).trim();
-                if (!f.required) {
+                if (!f.required && f.key !== 'barangay') {
                     if (strVal === '' || strVal === 'n/a') {
                         sanitizedFields[f.key] = 'n/a';
                     }
@@ -541,7 +572,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                 section.fields.forEach(f => {
                     const val = sanitizedFields[f.key];
                     const strVal = val === undefined || val === null ? '' : String(val).trim();
-                    if (!f.required) {
+                    if (!f.required && f.key !== 'barangay') {
                         if (strVal === '' || strVal === 'n/a') {
                             sanitizedFields[f.key] = 'n/a';
                         }
@@ -669,6 +700,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                             isDirtyRef.current = true;
                                             setManualType(t);
                                             setFormData(getInitialFormData(t, {}, file));
+                                            if (errors._type) setErrors(p => ({ ...p, _type: false }));
                                         }}
                                         className={`px-3.5 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
                                             effectiveType === t
@@ -699,7 +731,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
 
                 {/* Unknown Type Warning Banner */}
                 {(detectedType === 'unknown' || !manualType) && !isViewOnly && !isManualEntry && (
-                    <div className={`px-8 py-4 border-b flex items-center gap-4 ${errors._type ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className={`px-8 py-4 border-b flex items-center gap-4 ${errors._type ? 'bg-rose-50 border-rose-200 animate-pulse' : 'bg-amber-50 border-amber-200'}`}>
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${errors._type ? 'bg-rose-100' : 'bg-amber-100'}`}>
                             <ExclamationTriangleIcon className={`w-5 h-5 ${errors._type ? 'text-rose-600' : 'text-amber-600'}`} />
                         </div>
@@ -708,7 +740,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                 {errors._type ? 'Document type required before saving' : 'Document type could not be auto-detected'}
                             </p>
                             <p className={`text-xs font-medium mt-0.5 ${errors._type ? 'text-rose-500' : 'text-amber-600'}`}>
-                                Please select the correct document type to continue.
+                                Please select if this picture is a Birth, Death, or Marriage certificate.
                             </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -718,6 +750,7 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                                     onClick={() => {
                                         isDirtyRef.current = true;
                                         setManualType(t);
+                                        setFormData(getInitialFormData(t, {}, file));
                                         setErrors(p => ({ ...p, _type: false }));
                                     }}
                                     className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all cursor-pointer ${
@@ -833,283 +866,222 @@ const OcrFormPanel = ({ file, docType, ocrResult, onSave, onClose, onMinimize, o
                             </div>
                         )}
 
-                        {viewMode === 'fields' && (
-                            <>
-                                {typeMismatch && (
-                                    <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                                        <ExclamationTriangleIcon className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="text-sm font-bold text-rose-700">Document Type Mismatch</p>
-                                            <p className="text-sm text-rose-600 mt-0.5">{mismatchMessage}</p>
-                                        </div>
+                        <div className={viewMode === 'fields' ? 'block space-y-5' : 'hidden'}>
+                            {Object.keys(errors).length > 0 && !errors._type && (
+                                <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm font-bold shadow-sm">
+                                    <ExclamationTriangleIcon className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-black text-rose-900">Cannot Save: Required Fields Missing</p>
+                                        <p className="text-xs font-semibold text-rose-700 mt-0.5">
+                                            {errors.barangay
+                                                ? "Barangay (For Analytics) is mandatory to ensure geospatial mapping accuracy. Please select or enter the Barangay before saving."
+                                                : "Please complete all mandatory fields highlighted in red below."}
+                                        </p>
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                {isMinor && (
-                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                                        <p className="text-sm font-bold text-amber-700">Minor Person (Age: {age})</p>
+                            {typeMismatch && (
+                                <div className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                                    <ExclamationTriangleIcon className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-bold text-rose-700">Document Type Mismatch</p>
+                                        <p className="text-sm text-rose-600 mt-0.5">{mismatchMessage}</p>
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                <div className="space-y-12">
-                                    {(FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth).map((section, sIdx) => (
-                                        <div key={sIdx} className="space-y-4">
-                                            {section.section && (
-                                                <div className="flex items-center gap-3 mb-6">
-                                                    <h4 className="text-base font-black text-slate-900 uppercase tracking-wider">{section.section}</h4>
-                                                    <div className="flex-1 h-px bg-slate-100"></div>
-                                                </div>
-                                            )}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                                                {section.fields.map(field => (
-                                                    <div key={field.key} className={field.width || 'sm:col-span-1'}>
-                                                        <label className={`block text-[11px] font-black uppercase tracking-widest mb-2.5 transition-colors ${errors[field.key] ? 'text-rose-500' : 'text-slate-500'}`}>
-                                                            {field.label} {field.required && <span className="text-rose-400">*</span>}
-                                                        </label>
-                                                        {field.type === 'select' ? (
-                                                            <select
+                            {isMinor && (
+                                <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                                    <p className="text-sm font-bold text-amber-700">Minor Person (Age: {age})</p>
+                                </div>
+                            )}
+
+                            <div className="space-y-12">
+                                {(FIELD_CONFIG[effectiveType] || FIELD_CONFIG.birth).map((section, sIdx) => (
+                                    <div key={sIdx} className="space-y-4">
+                                        {section.section && (
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <h4 className="text-base font-black text-slate-900 uppercase tracking-wider">{section.section}</h4>
+                                                <div className="flex-1 h-px bg-slate-100"></div>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                                            {section.fields.map(field => (
+                                                <div key={field.key} className={field.width || 'sm:col-span-1'}>
+                                                    <label className={`block text-[11px] font-black uppercase tracking-widest mb-2.5 transition-colors ${errors[field.key] ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                        {field.label} {field.required && <span className="text-rose-400">*</span>}
+                                                    </label>
+                                                    {field.type === 'select' ? (
+                                                        <select
+                                                            value={formData[field.key] || ''}
+                                                            onChange={e => {
+                                                                isDirtyRef.current = true;
+                                                                setFormData(p => ({ ...p, [field.key]: e.target.value }));
+                                                                if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
+                                                            }}
+                                                            className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all ${getConfidenceClass(field.key, errors[field.key])}`}
+                                                        >
+                                                            <option value="">Select…</option>
+                                                            {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                                        </select>
+                                                    ) : field.type === 'signature' ? (
+                                                        <SignaturePad
+                                                            fieldKey={field.key}
+                                                            value={formData[field.key] || 'n/a'}
+                                                            onChange={val => {
+                                                                isDirtyRef.current = true;
+                                                                setFormData(p => ({ ...p, [field.key]: val }));
+                                                            }}
+                                                            disabled={isViewOnly}
+                                                        />
+                                                    ) : field.type === 'textarea' ? (
+                                                        <textarea
+                                                            value={formData[field.key] || ''}
+                                                            maxLength={getFieldMaxLength(field)}
+                                                            onChange={e => {
+                                                                isDirtyRef.current = true;
+                                                                setFormData(p => ({ ...p, [field.key]: e.target.value.slice(0, getFieldMaxLength(field)) }));
+                                                                if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
+                                                            }}
+                                                            rows={3}
+                                                            placeholder={`…`}
+                                                            className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${getConfidenceClass(field.key, errors[field.key])}`}
+                                                        />
+                                                    ) : (
+                                                        <div className="relative">
+                                                            <input
+                                                                type={field.type === 'date' ? 'date' : 'text'}
                                                                 value={formData[field.key] || ''}
+                                                                maxLength={field.type === 'date' ? undefined : getFieldMaxLength(field)}
                                                                 onChange={e => {
                                                                     isDirtyRef.current = true;
-                                                                    setFormData(p => ({ ...p, [field.key]: e.target.value }));
+                                                                    const maxLen = getFieldMaxLength(field);
+                                                                    let val = field.type === 'date' ? e.target.value : e.target.value.slice(0, maxLen);
+                                                                    const isNameField = field.key.includes('name') && !field.key.includes('place') && !field.key.includes('date') && !field.key.includes('no') && !field.key.includes('file');
+                                                                    if (isNameField && field.type !== 'date') {
+                                                                        val = val.replace(/[^a-zA-Z\s\.\,\'\-\ñ\Ñ\u00C0-\u024F]/g, '');
+                                                                    }
+                                                                    setFormData(p => ({ ...p, [field.key]: val }));
                                                                     if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
                                                                 }}
-                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all ${getConfidenceClass(field.key, errors[field.key])}`}
-                                                            >
-                                                                <option value="">Select…</option>
-                                                                {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                                            </select>
-                                                        ) : field.type === 'signature' ? (
-                                                            <SignaturePad
-                                                                fieldKey={field.key}
-                                                                value={formData[field.key] || 'n/a'}
-                                                                onChange={val => {
-                                                                    isDirtyRef.current = true;
-                                                                    setFormData(p => ({ ...p, [field.key]: val }));
-                                                                }}
-                                                                disabled={isViewOnly}
+                                                                required={field.required}
+                                                                placeholder={`…`}
+                                                                className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${getConfidenceClass(field.key, errors[field.key])}`}
                                                             />
-                                                        ) : (
-                                                            <div className="relative">
-                                                                <input
-                                                                    type={field.type === 'date' ? 'date' : 'text'}
-                                                                    value={formData[field.key] || ''}
-                                                                    onChange={e => {
-                                                                        isDirtyRef.current = true;
-                                                                        setFormData(p => ({ ...p, [field.key]: e.target.value }));
-                                                                        if (errors[field.key]) setErrors(p => ({ ...p, [field.key]: false }));
-                                                                    }}
-                                                                    required={field.required}
-                                                                    placeholder={`…`}
-                                                                    className={`w-full px-4 py-3.5 text-[15px] font-medium border rounded-2xl bg-white focus:outline-none focus:ring-4 transition-all placeholder-slate-300 ${getConfidenceClass(field.key, errors[field.key])}`}
-                                                                />
-                                                                {isLowConf(field.key) && (
-                                                                    <span
-                                                                        title="Low OCR confidence — please verify this value"
-                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400"
-                                                                    >
-                                                                        <ExclamationTriangleIcon className="w-4 h-4" />
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-
-                        {viewMode === 'template' && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xs font-black uppercase tracking-wider text-slate-600">
-                                            Template Overlay Preview
-                                        </p>
-                                        <p className="text-[11px] text-slate-500 mt-1">
-                                            Professional layout using calibrated clean templates.
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-xl">
-                                        <button
-                                            onClick={() => setShowDiagnosticBoxes(false)}
-                                            className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${!showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            Clean View
-                                        </button>
-                                        <button
-                                            onClick={() => setShowDiagnosticBoxes(true)}
-                                            className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                                        >
-                                            Diagnostic Grid
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {matchedTemplate ? (
-                                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-inner">
-                                        <div className="relative w-full overflow-hidden" style={{ minHeight: '600px' }}>
-                                            <img
-                                                src={`/api/templates/preview?file=${matchedTemplate.file_path}`}
-                                                className="w-full h-auto block"
-                                                alt="Professional Template Background"
-                                            />
-
-                                            {(effectiveType === 'birth' ? BirthTemplateOverlayFields : matchedTemplate?.config?.fields)?.map((item) => {
-                                                const value = formData[item.key] || '';
-                                                const label = item.label || item.key;
-                                                return (
-                                                    <div
-                                                        key={item.key}
-                                                        className={`absolute flex flex-col justify-center px-0.5 rounded-px shadow-sm transition-all ${!showDiagnosticBoxes ? '' : 'border border-emerald-400/50 bg-emerald-50/30 shadow-sm backdrop-blur-[0.5px]'}`}
-                                                        style={{
-                                                            left: `${(item.x || 0) * 100}%`,
-                                                            top: `${(item.y || 0) * 100}%`,
-                                                            width: `${(item.w || 0) * 100}%`,
-                                                            height: `${(item.h || 0) * 80}%`, // Scaling down height slightly
-                                                        }}
-                                                        title={`${label}`}
-                                                    >
-                                                        {showDiagnosticBoxes && (
-                                                            <div className="text-[4px] font-black text-emerald-800/80 uppercase tracking-tighter absolute -top-1 left-0 whitespace-nowrap bg-white/90 px-0.5 rounded-px shadow-xs z-10 leading-none py-0.2">
-                                                                {label}
-                                                            </div>
-                                                        )}
-                                                        <div className={`font-black text-slate-950 tracking-tight truncate px-0.5 leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px]'}`}>
-                                                            {value || (!showDiagnosticBoxes ? '' : '—')}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ) : !file.name?.toLowerCase().endsWith('.pdf') && templateOverlay?.enabled ? (
-                                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-                                        <div className="relative w-full">
-                                            <img
-                                                src={`/api/documents/view/${file.id}?raw=1&t=${new Date(file.updated_at || Date.now()).getTime()}`}
-                                                className="w-full h-auto block"
-                                                alt="Scan Overlay"
-                                            />
-                                            {effectiveType === 'birth' ? (
-                                                BirthTemplateOverlayFields.map((item) => {
-                                                    const value = formData[item.key] || '';
-                                                    return (
-                                                        <div
-                                                            key={item.key}
-                                                            className="absolute border-2 border-emerald-400 bg-emerald-100/50 rounded-lg text-[10px] p-1 backdrop-blur-[1px]"
-                                                            style={{
-                                                                left: `${item.x * 100}%`,
-                                                                top: `${item.y * 100}%`,
-                                                                width: `${item.w * 100}%`,
-                                                                minHeight: `${item.h * 100}%`,
-                                                            }}
-                                                            title={item.label}
-                                                        >
-                                                            <div className="font-bold uppercase tracking-wide text-[9px] truncate">{item.label}</div>
-                                                            <div className="font-semibold truncate text-slate-800">{value || '—'}</div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                templateOverlay.fields.map((item) => {
-                                                    const roi = item.roi || [];
-                                                    const [x1, y1, x2, y2] = roi;
-
-                                                    // Map backend overlay keys to our structured form data so the preview updates live
-                                                    let derivedValue = '';
-                                                    const k = item.key?.toLowerCase() || '';
-
-                                                    if (k.includes('husband name') || k.includes('groom')) {
-                                                        derivedValue = [formData.husband_first_name, formData.husband_middle_name, formData.husband_last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('wife name') || k.includes('bride')) {
-                                                        derivedValue = [formData.wife_first_name, formData.wife_middle_name, formData.wife_last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('date of marriage')) {
-                                                        derivedValue = formData.date_of_marriage || '';
-                                                    } else if (k.includes('place of marriage')) {
-                                                        derivedValue = formData.place_of_marriage || '';
-                                                    } else if (k.includes('deceased') || k.includes('name of deceased') || k.includes('person name')) {
-                                                        derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('date of death')) {
-                                                        derivedValue = formData.date_of_death || '';
-                                                    } else if (k.includes('place of death')) {
-                                                        derivedValue = formData.place_of_death || '';
-                                                    } else if (k.includes('cause of death')) {
-                                                        derivedValue = formData.cause_of_death || '';
-                                                    } else if (k.includes('child name')) {
-                                                        derivedValue = [formData.first_name, formData.middle_name, formData.last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('mother name')) {
-                                                        derivedValue = [formData.mother_first_name, formData.mother_middle_name, formData.mother_last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('father name')) {
-                                                        derivedValue = [formData.father_first_name, formData.father_middle_name, formData.father_last_name].filter(Boolean).join(' ');
-                                                    } else if (k.includes('place of birth')) {
-                                                        derivedValue = [formData.place_of_birth_hospital, formData.place_of_birth_city, formData.place_of_birth_province].filter(Boolean).join(', ');
-                                                    } else if (k.includes('type of birth')) {
-                                                        derivedValue = formData.type_of_birth || '';
-                                                    } else if (k.includes('sex')) {
-                                                        derivedValue = formData.sex || '';
-                                                    } else {
-                                                        derivedValue = formData[item.key] || item.value || '';
-                                                    }
-
-                                                    const value = derivedValue || item.value || '';
-                                                    const label = fieldLabelMap[item.key] || item.key;
-                                                    return (
-                                                        <div
-                                                            key={item.key}
-                                                            className={`absolute rounded-lg transition-all ${!showDiagnosticBoxes ? '' : 'border-2 border-emerald-400 bg-emerald-100/50 p-1 backdrop-blur-[1px]'}`}
-                                                            style={{
-                                                                left: `${(x1 || 0) * 100}%`,
-                                                                top: `${(y1 || 0) * 100}%`,
-                                                                width: `${Math.max(((x2 || 0) - (x1 || 0)) * 100, 6)}%`,
-                                                                minHeight: `${Math.max(((y2 || 0) - (y1 || 0)) * 100, 4)}%`,
-                                                            }}
-                                                            title={`${label}`}
-                                                        >
-                                                            {showDiagnosticBoxes && (
-                                                                <div className="font-bold uppercase tracking-wide text-[9px]">
-                                                                    {label}
-                                                                </div>
+                                                            {isLowConf(field.key) && (
+                                                                <span
+                                                                    title="Low OCR confidence — please verify this value"
+                                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400"
+                                                                >
+                                                                    <ExclamationTriangleIcon className="w-4 h-4" />
+                                                                </span>
                                                             )}
-                                                            <div className={`font-black text-slate-950 truncate leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px] font-semibold'}`}>
-                                                                {value || (!showDiagnosticBoxes ? '' : '—')}
-                                                            </div>
                                                         </div>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                                        <DocumentTextIcon className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-                                        <p className="text-sm font-bold text-slate-700">No Overlay Configured</p>
-                                        <p className="text-xs text-slate-500 mt-2 max-w-xs mx-auto">
-                                            To see a professional preview, please configure the <b>{effectiveType}</b> template in the Template Registry.
-                                        </p>
-                                    </div>
-                                )}
-
-                                {ocrResult?.field_confidence && (
-                                    <div className="rounded-xl border border-slate-200 bg-white p-3">
-                                        <p className="text-xs font-bold text-slate-700 mb-2">Extraction Confidence</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {Object.entries(ocrResult.field_confidence).map(([key, meta]) => (
-                                                <div key={key} className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex items-center justify-between gap-2">
-                                                    <span className="font-semibold text-slate-700">{fieldLabelMap[key] || key}</span>
-                                                    <span className={`font-bold ${meta?.validation_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                        {Math.round(Number(meta?.confidence || 0) * 100)}%
-                                                    </span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                )}
+                                ))}
                             </div>
-                        )}
+                        </div>
+
+                        <div className={viewMode === 'template' ? 'block space-y-4' : 'hidden'}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-wider text-slate-600">
+                                        Template Overlay Preview
+                                    </p>
+                                    <p className="text-[11px] text-slate-500 mt-1">
+                                        Professional layout using calibrated clean templates.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-xl">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDiagnosticBoxes(false)}
+                                        className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${!showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Clean View
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDiagnosticBoxes(true)}
+                                        className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${showDiagnosticBoxes ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        Diagnostic Grid
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-inner">
+                                <div className="relative w-full overflow-hidden" style={{ minHeight: '600px' }}>
+                                    <img
+                                        src={`/api/templates/preview?file=${matchedTemplate?.file_path || effectiveType}&type=${effectiveType}`}
+                                        className="w-full h-auto block"
+                                        alt="Professional Template Background"
+                                        onError={(e) => {
+                                            // Fallback to type background preview if direct file fails
+                                            if (!e.target.dataset.triedFallback) {
+                                                e.target.dataset.triedFallback = "true";
+                                                e.target.src = `/api/templates/preview?type=${effectiveType}`;
+                                            }
+                                        }}
+                                    />
+
+                                    {(matchedTemplate?.config?.fields && matchedTemplate.config.fields.length > 0 
+                                        ? matchedTemplate.config.fields 
+                                        : effectiveType === 'marriage' 
+                                            ? MarriageTemplateOverlayFields 
+                                            : effectiveType === 'death' 
+                                                ? DeathTemplateOverlayFields 
+                                                : BirthTemplateOverlayFields
+                                    )?.map((item) => {
+                                        const value = formData[item.key] || '';
+                                        const label = item.label || item.key;
+                                        return (
+                                            <div
+                                                key={item.key}
+                                                className={`absolute flex flex-col justify-center px-0.5 rounded-px shadow-sm transition-all ${!showDiagnosticBoxes ? '' : 'border border-emerald-400/50 bg-emerald-50/30 shadow-sm backdrop-blur-[0.5px]'}`}
+                                                style={{
+                                                    left: `${(item.x || 0) * 100}%`,
+                                                    top: `${(item.y || 0) * 100}%`,
+                                                    width: `${(item.w || 0) * 100}%`,
+                                                    height: `${(item.h || 0) * 80}%`,
+                                                }}
+                                                title={`${label}`}
+                                            >
+                                                {showDiagnosticBoxes && (
+                                                    <div className="text-[4px] font-black text-emerald-800/80 uppercase tracking-tighter absolute -top-1 left-0 whitespace-nowrap bg-white/90 px-0.5 rounded-px shadow-xs z-10 leading-none py-0.2">
+                                                        {label}
+                                                    </div>
+                                                )}
+                                                <div className={`font-black text-slate-950 tracking-tight truncate px-0.5 leading-none ${!showDiagnosticBoxes ? 'text-[8px] md:text-[10px]' : 'text-[6px] md:text-[7px]'}`}>
+                                                    {value || (!showDiagnosticBoxes ? '' : '—')}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {ocrResult?.field_confidence && (
+                                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                    <p className="text-xs font-bold text-slate-700 mb-2">Extraction Confidence</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {Object.entries(ocrResult.field_confidence).map(([key, meta]) => (
+                                            <div key={key} className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs flex items-center justify-between gap-2">
+                                                <span className="font-semibold text-slate-700">{fieldLabelMap[key] || key}</span>
+                                                <span className={`font-bold ${meta?.validation_passed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {Math.round(Number(meta?.confidence || 0) * 100)}%
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {viewMode === 'compare' && duplicateData && (
                             <div className="space-y-6">

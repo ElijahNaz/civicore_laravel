@@ -78,14 +78,24 @@ export default function Ticketing({ mode = 'portal' }) {
         place_of_marriage: ''
     });
 
+    const sanitizeName = (val) => val ? val.replace(/[^a-zA-Z\s\.\,\'\-\ñ\Ñ\u00C0-\u024F]/g, '') : '';
+
     const handleDetailChange = (field, val) => {
-        setDetails(prev => ({ ...prev, [field]: val }));
+        const isNameField = field.includes('name') && !field.includes('place') && !field.includes('date');
+        const cleanVal = isNameField ? sanitizeName(val) : val;
+        setDetails(prev => ({ ...prev, [field]: cleanVal }));
     };
 
     const handlePortalSubmit = async (e) => {
         e.preventDefault();
-        if (!clientName) {
+        if (!clientName.trim()) {
             showAlert({ title: 'Validation Error', message: 'Please enter your name.', type: 'danger' });
+            return;
+        }
+
+        const nameRegex = /^[a-zA-Z\s\.\,\'\-\ñ\Ñ\u00C0-\u024F]+$/;
+        if (!nameRegex.test(clientName.trim())) {
+            showAlert({ title: 'Validation Error', message: 'Name cannot contain numbers or special symbols (only letters, spaces, and . , - \' are allowed).', type: 'danger' });
             return;
         }
 
@@ -104,7 +114,13 @@ export default function Ticketing({ mode = 'portal' }) {
             }
         } catch (err) {
             console.error(err);
-            showAlert({ title: 'Queue Error', message: 'Could not create ticket. Please try again.', type: 'danger' });
+            const serverMsg = err.response?.data?.error || err.response?.data?.message || 'Could not create ticket. Please try again.';
+            const isLimit = err.response?.status === 429;
+            showAlert({
+                title: isLimit ? 'Request Limit Reached' : 'Queue Error',
+                message: serverMsg,
+                type: isLimit ? 'warning' : 'danger'
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -139,6 +155,7 @@ export default function Ticketing({ mode = 'portal' }) {
     };
 
     // ── Staff Dashboard State ──────────────────────────────────────────────────
+    const [counter, setCounter] = useState(0);
     const [tickets, setTickets] = useState([]);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [dashboardSearch, setDashboardSearch] = useState('');
@@ -346,7 +363,8 @@ export default function Ticketing({ mode = 'portal' }) {
                                             type="text"
                                             required
                                             value={clientName}
-                                            onChange={e => setClientName(e.target.value)}
+                                            onChange={e => setClientName(sanitizeName(e.target.value).slice(0, 50))}
+                                            maxLength={50}
                                             placeholder="Juan Santos"
                                             className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
@@ -360,7 +378,8 @@ export default function Ticketing({ mode = 'portal' }) {
                                             type="email"
                                             required
                                             value={email}
-                                            onChange={e => setEmail(e.target.value)}
+                                            onChange={e => setEmail(e.target.value.slice(0, 100))}
+                                            maxLength={100}
                                             placeholder="juan@email.com"
                                             className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
@@ -372,10 +391,13 @@ export default function Ticketing({ mode = 'portal' }) {
                                         <PhoneIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                         <input
                                             type="text"
-                                            required
                                             value={phone}
-                                            onChange={e => setPhone(e.target.value)}
-                                            placeholder="09123456789"
+                                            onChange={e => {
+                                                const cleaned = e.target.value.replace(/[^0-9+\-\s()]/g, '').slice(0, 15);
+                                                setPhone(cleaned);
+                                            }}
+                                            maxLength={15}
+                                            placeholder="09123456789 (or +639123456789)"
                                             className="w-full pl-10 pr-4 py-3.5 border border-slate-300 rounded-2xl bg-white focus:outline-none focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] transition-all text-sm font-semibold text-slate-900 placeholder-slate-400"
                                         />
                                     </div>
@@ -610,13 +632,6 @@ export default function Ticketing({ mode = 'portal' }) {
                                 </div>
                             </div>
 
-                            {ticket.status === 'Pending' && (
-                                <div className="pt-8 text-center space-y-2 print:hidden">
-                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Active Queue Position</p>
-                                    <div className="text-5xl font-black text-[#d4a574] tracking-tighter">{queuePosition}</div>
-                                    <p className="text-xs text-slate-500 max-w-xs mx-auto">Please keep this tab open or save the QR code to check status updates live.</p>
-                                </div>
-                            )}
 
                             {ticket.status === 'Serving' && (
                                 <div className="pt-8 text-center space-y-2 bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10 print:hidden animate-pulse">
@@ -669,8 +684,6 @@ export default function Ticketing({ mode = 'portal' }) {
 
     // ── RENDER STAFF QUEUE DASHBOARD (PRIVATE BOARD) ──────────────────────────────
     if (mode === 'staff') {
-        const [counter, setCounter] = useState(0);
-
         const triggerCounterRefresh = () => {
             setCounter(prev => prev + 1);
         };

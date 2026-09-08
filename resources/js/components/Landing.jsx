@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClockIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, MegaphoneIcon, ArrowRightIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 
 export default function Landing() {
     const navigate = useNavigate();
@@ -46,48 +46,48 @@ export default function Landing() {
     };
 
     return (
-        <div className="relative overflow-visible pb-24">
+        <div className="relative overflow-visible pb-16 sm:pb-24">
             {/* Ambient Lighting FX */}
             <div className="absolute top-0 right-[-10%] w-[60%] h-[60%] bg-[#d4a574]/10 blur-[150px] rounded-full pointer-events-none" />
 
-            {/* Hero Section */}
-            <main className="min-h-[85vh] flex items-center px-6 md:px-12 lg:px-24 z-10 relative">
+            {/* Hero Section - Shifted upward for mobile screens without reducing element scale */}
+            <main className="min-h-[70vh] sm:min-h-[80vh] md:min-h-[85vh] flex items-start sm:items-center pt-0 sm:pt-4 md:pt-12 pb-8 px-5 sm:px-8 md:px-12 lg:px-24 z-10 relative">
                 <motion.div
                     variants={containerVars}
                     initial="hidden"
                     animate="visible"
-                    className="max-w-5xl"
+                    className="max-w-5xl w-full"
                 >
                     {/* Status Badge */}
-                    <motion.div variants={itemVars} className="mb-6 flex items-center gap-3">
+                    <motion.div variants={itemVars} className="mb-4 sm:mb-6 flex flex-wrap items-center gap-2 sm:gap-3">
                         <span className="px-3 py-1 rounded-full bg-[#d4a574]/10 border border-[#d4a574]/20 text-[#d4a574] text-xs font-bold uppercase tracking-widest">Office of the Civil Registrar</span>
-                        <span className="text-slate-400 text-sm font-medium">Official Registry Platform</span>
+                        <span className="text-slate-400 text-xs sm:text-sm font-medium">Official Registry Platform</span>
                     </motion.div>
 
                     {/* Main Headline */}
                     <motion.h1
                         variants={itemVars}
-                        className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-8"
+                        className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[0.9] tracking-tighter mb-6 sm:mb-8"
                     >
                         RECORDING.<br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#d4a574] to-[#f3d0a2] drop-shadow-sm">PRESERVING.</span><br />
                         SERVING.
                     </motion.h1>
 
-                    <motion.div variants={itemVars} className="space-y-8">
-                        <p className="text-slate-300 text-lg md:text-xl max-w-2xl leading-relaxed font-light border-l-2 border-[#d4a574]/30 pl-6">
+                    <motion.div variants={itemVars} className="space-y-6 sm:space-y-8">
+                        <p className="text-slate-300 text-lg md:text-xl max-w-2xl leading-relaxed font-light border-l-2 border-[#d4a574]/30 pl-5 sm:pl-6">
                             The centralized hub for authenticating and managing civil events—Births, Marriages, and Deaths—for the Municipality of Naic.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                        <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 pt-2 sm:pt-4">
                             <motion.button
                                 whileHover={{ scale: 1.02, translateY: -2 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => navigate('/login')}
                                 className="bg-gradient-to-r from-[#d4a574] to-[#c49a67] text-[#0f172a] px-10 py-5 rounded-2xl font-black shadow-xl shadow-[#d4a574]/20 transition-all uppercase tracking-[0.15em] text-sm flex items-center justify-center gap-3 group cursor-pointer"
                             >
-                                Enter Portal
-                                <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
+                                <span className="leading-none">Enter Portal</span>
+                                <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform stroke-[2.5] shrink-0" />
                             </motion.button>
                             <motion.button
                                 whileHover={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.05)" }}
@@ -95,7 +95,7 @@ export default function Landing() {
                                 onClick={() => navigate('/ticket-request')}
                                 className="bg-transparent border border-slate-600 text-white px-10 py-5 rounded-2xl font-bold hover:border-[#d4a574]/50 hover:text-[#d4a574] transition-all uppercase tracking-[0.15em] text-sm flex items-center justify-center cursor-pointer"
                             >
-                                Online Request
+                                <span className="leading-none">Online Request</span>
                             </motion.button>
                         </div>
 
@@ -149,58 +149,37 @@ export default function Landing() {
                     </motion.div>
                 </motion.div>
 
-                {/* Right Side Abstract Visuals for Desktop */}
+                {/* Right Side Digital Seal Emblem (PC / XL screens only - hidden on mobile/tablet) */}
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
+                    initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 1.2, delay: 0.4 }}
-                    className="hidden lg:block absolute right-12 top-1/2 -translate-y-1/2 w-[400px] h-[500px] pointer-events-none perspective-normal"
+                    transition={{ duration: 1, delay: 0.3 }}
+                    className="hidden xl:flex absolute right-16 top-1/2 -translate-y-1/2 flex-col items-center justify-center pointer-events-none z-10"
                 >
-                    {/* Floating decorative cards */}
-                    <div className="absolute inset-0 border border-[#d4a574]/20 rounded-3xl rotate-6 transition-transform duration-700" />
-                    <div className="absolute inset-4 border border-white/5 bg-white/[0.02] backdrop-blur-3xl rounded-3xl -rotate-3 overflow-hidden shadow-2xl flex flex-col justify-end p-8 group/card">
-                        <div className="absolute top-10 -right-10 w-32 h-32 bg-[#d4a574]/20 blur-3xl rounded-full" />
+                    {/* Ambient Radial Glow */}
+                    <div className="absolute w-[360px] h-[360px] bg-[#d4a574]/15 blur-[100px] rounded-full" />
 
-                        {/* Dynamic Mini Dashboard Visual */}
-                        <div className="flex-1 flex flex-col justify-center gap-6 mb-8 mt-4">
-                            <div className="relative group/scan">
-                                <div className="flex items-end gap-1 h-12 mb-2">
-                                    {[40, 70, 45, 90, 65, 80, 50].map((h, i) => (
-                                        <motion.div
-                                            key={i}
-                                            initial={{ height: 0 }}
-                                            animate={{ height: `${h}%` }}
-                                            transition={{ repeat: Infinity, repeatType: "reverse", duration: 1 + i * 0.2 }}
-                                            className="w-full bg-gradient-to-t from-[#d4a574]/40 to-[#d4a574] rounded-t-sm"
-                                        />
-                                    ))}
-                                </div>
-                                <div className="flex justify-between text-[8px] font-bold text-slate-500 uppercase tracking-widest">
-                                    <span>Records Verification</span>
-                                    <span className="text-[#d4a574]">100% Authentic</span>
-                                </div>
-                                <motion.div
-                                    animate={{ top: ['0%', '100%', '0%'] }}
-                                    transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-                                    className="absolute left-0 right-0 h-[1px] bg-[#d4a574] shadow-[0_0_15px_#d4a574] z-10 opacity-50"
-                                />
-                            </div>
+                    {/* Concentric Glass Emblem Container */}
+                    <div className="relative w-80 h-80 rounded-full border border-[#d4a574]/25 bg-gradient-to-b from-[#d4a574]/10 via-[#0f172a]/80 to-[#0f172a]/95 backdrop-blur-2xl p-8 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(212,165,116,0.15)] group">
+                        
+                        {/* Orbiting Tech Ring Accent */}
+                        <div className="absolute inset-2 rounded-full border border-dashed border-[#d4a574]/20 animate-[spin_40s_linear_infinite]" />
+                        <div className="absolute inset-5 rounded-full border border-white/5" />
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Processed</div>
-                                    <div className="text-white font-black text-xl tracking-tight">{stats.processed >= 1000 ? (stats.processed / 1000).toFixed(1) + 'K' : stats.processed}</div>
-                                </div>
-                                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Response</div>
-                                    <div className="text-white font-black text-xl tracking-tight">{stats.response_s}s</div>
-                                </div>
-                            </div>
+                        {/* Central Logo Emblem */}
+                        <div className="w-24 h-24 rounded-2xl bg-[#d4a574]/10 border border-[#d4a574]/30 flex items-center justify-center p-4 shadow-inner mb-4 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-tr from-[#d4a574]/20 to-transparent opacity-50" />
+                            <img src="/logo.png" alt="CiviCORE Emblem" className="w-full h-full object-contain drop-shadow-[0_0_12px_rgba(212,165,116,0.6)]" />
                         </div>
 
-                        <div className="w-16 h-1 bg-[#d4a574]/50 mb-6 rounded-full" />
-                        <h3 className="text-white font-bold text-2xl tracking-tight mb-2">Registry Excellence</h3>
-                        <p className="text-slate-400 text-sm font-medium">Securing our citizens' legal rights through definitive civil documentation.</p>
+                        {/* Seal Metadata */}
+                        <div className="flex items-center gap-1.5 mb-1 text-[#d4a574]">
+                            <ShieldCheckIcon className="w-4 h-4" />
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em]">Official Registry</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">
+                            Municipality of Naic
+                        </p>
                     </div>
                 </motion.div>
             </main>

@@ -109,8 +109,12 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'User not found.'], 404);
         }
 
-        if (!Hash::check($request->input('currentPassword'), $user->password)) {
-            return response()->json(['success' => false, 'message' => 'Current password is incorrect.'], 401);
+        // If user is changing their OWN password, verify current password.
+        // If SuperAdmin is changing another user's password, allow direct reset.
+        if ($sessionUserId === $targetId) {
+            if (!Hash::check($request->input('currentPassword'), $user->password)) {
+                return response()->json(['success' => false, 'message' => 'Current password is incorrect.'], 401);
+            }
         }
 
         $user->password = Hash::make($request->input('newPassword'));

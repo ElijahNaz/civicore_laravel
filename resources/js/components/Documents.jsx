@@ -602,13 +602,29 @@ const Documents = () => {
     const buildPersonName = (fields, type) => {
         if (!fields) return '';
         if (type === 'marriage') {
-            const h = [fields.husband_last_name, fields.husband_first_name].filter(Boolean).join(', ');
-            const w = [fields.wife_last_name, fields.wife_first_name].filter(Boolean).join(', ');
-            const joined = [h, w].filter(Boolean).join(' & ');
-            return joined || fields.personName || '';
+            const hLast = (fields.husband_last_name || '').toUpperCase().trim();
+            const hFirst = (fields.husband_first_name || '').toUpperCase().trim();
+            const hMiddle = (fields.husband_middle_name || '').toUpperCase().trim();
+            const hSuffix = (fields.husband_suffix || '').toUpperCase().trim();
+            const hName = [hLast ? `${hLast},` : '', hFirst, hMiddle, hSuffix].filter(Boolean).join(' ');
+
+            const wLast = (fields.wife_last_name || '').toUpperCase().trim();
+            const wFirst = (fields.wife_first_name || '').toUpperCase().trim();
+            const wMiddle = (fields.wife_middle_name || '').toUpperCase().trim();
+            const wSuffix = (fields.wife_suffix || '').toUpperCase().trim();
+            const wName = [wLast ? `${wLast},` : '', wFirst, wMiddle, wSuffix].filter(Boolean).join(' ');
+
+            const joined = [hName, wName].filter(Boolean).join(' & ');
+            return (joined || fields.personName || '').toUpperCase();
         }
-        const nameParts = [fields.last_name ? `${fields.last_name},` : '', fields.first_name, fields.middle_name].filter(Boolean).join(' ');
-        return nameParts || fields.personName || '';
+
+        const last = (fields.last_name || fields.deceased_last_name || '').toUpperCase().trim();
+        const first = (fields.first_name || fields.deceased_first_name || '').toUpperCase().trim();
+        const middle = (fields.middle_name || fields.deceased_middle_name || '').toUpperCase().trim();
+        const suffix = (fields.suffix || '').toUpperCase().trim();
+
+        const nameParts = [last ? `${last},` : '', first, middle, suffix].filter(Boolean).join(' ');
+        return (nameParts || fields.personName || '').toUpperCase();
     };
 
     const executeSave = async ({ fields, ocr_text, parentalConsent, detectedType, minimizeRequested = false }) => {

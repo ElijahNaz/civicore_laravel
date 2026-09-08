@@ -17,11 +17,11 @@ class TicketConfirmation extends Mailable
     public string $ticketUrl;
     public string $qrCodeBase64;
 
-    public function __construct(Ticket $ticket, string $qrCodeBase64)
+    public function __construct(Ticket $ticket, string $qrCodeBase64, ?string $ticketUrl = null)
     {
         $this->ticket       = $ticket;
         $this->qrCodeBase64 = $qrCodeBase64;
-        $this->ticketUrl    = url('/ticket/' . $ticket->token);
+        $this->ticketUrl    = $ticketUrl ?: url('/ticket-status/' . $ticket->token);
     }
 
     public function envelope(): Envelope

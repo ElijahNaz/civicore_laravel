@@ -3,15 +3,13 @@ const CAPTURE_PROFILES = {
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 30 },
-        facingMode: 'user',
-        aspectRatio: { ideal: 16 / 9 }
+        facingMode: 'user'
     },
     mobile: {
-        width: { ideal: 1080 },
-        height: { ideal: 1920 },
-        frameRate: { ideal: 24 },
-        facingMode: 'environment',
-        aspectRatio: { ideal: 9 / 16 }
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
+        facingMode: 'environment'
     }
 };
 
@@ -40,7 +38,9 @@ export const createCaptureEngine = () => {
 
     const stop = () => {
         if (activeStream) {
-            activeStream.getTracks().forEach((track) => track.stop());
+            try {
+                activeStream.getTracks().forEach((track) => track.stop());
+            } catch (e) {}
             activeStream = null;
         }
     };
@@ -49,48 +49,74 @@ export const createCaptureEngine = () => {
         stop();
         lastFacingMode = facingMode || lastFacingMode || profile.facingMode;
 
-        const baseVideoConstraints = {
-            width: profile.width,
-            height: profile.height,
-            frameRate: profile.frameRate,
-            aspectRatio: profile.aspectRatio
-        };
-        const constraints = {
-            video: {
-                ...baseVideoConstraints,
-                facingMode: { ideal: lastFacingMode }
-            }
-        };
-        let stream;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (error) {
-            console.warn("Primary camera constraints failed, attempting fallback:", error);
-            try {
-                // Fallback 1: Try without rigid resolution, aspect ratio, or framerate constraints (just ideal facingMode)
-                const fallbackConstraints = {
-                    video: {
-                        facingMode: { ideal: lastFacingMode }
-                    }
-                };
-                stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-            } catch (fallbackError) {
-                console.warn("Secondary camera constraints failed, attempting absolute minimal:", fallbackError);
-                try {
-                    // Fallback 2: Absolute minimal, just any video
-                    const minimalConstraints = { video: true };
-                    stream = await navigator.mediaDevices.getUserMedia(minimalConstraints);
-                } catch (minimalError) {
-                    console.error("All camera initialization attempts failed:", minimalError);
-                    throw minimalError;
+        // Check if mediaDevices API is supported (requires HTTPS or localhost on phones)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.error("navigator.mediaDevices.getUserMedia is not supported in this browser context (likely HTTP connection on mobile device).");
+            throw new Error("WebRTC camera stream requires HTTPS or localhost. Please use secure connection or upload file directly.");
+        }
+
+        const constraintAttempts = [
+            // Attempt 1: Facing mode ideal + flexible resolution
+            {
+                video: {
+                    facingMode: { ideal: lastFacingMode },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
                 }
+            },
+            // Attempt 2: Just facing mode ideal
+            {
+                video: {
+                    facingMode: { ideal: lastFacingMode }
+                }
+            },
+            // Attempt 3: Exact facing mode
+            {
+                video: {
+                    facingMode: lastFacingMode
+                }
+            },
+            // Attempt 4: Any available video device
+            {
+                video: true
+            }
+        ];
+
+        let stream = null;
+        let lastError = null;
+
+        for (const constraints of constraintAttempts) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (stream) break;
+            } catch (err) {
+                console.warn("Camera constraint attempt failed:", constraints, err);
+                lastError = err;
             }
         }
+
+        if (!stream) {
+            console.error("All camera initialization attempts failed:", lastError);
+            throw lastError || new Error("Failed to initialize camera");
+        }
+
         activeStream = stream;
 
         if (videoElement) {
-            videoElement.srcObject = stream;
-            videoElement.play().catch(e => console.warn("Engine video play failed:", e));
+            try {
+                videoElement.srcObject = stream;
+                videoElement.setAttribute('playsinline', 'true');
+                videoElement.setAttribute('webkit-playsinline', 'true');
+                videoElement.muted = true;
+                
+                const playPromise = videoElement.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => console.warn("Engine video play promise catch:", e));
+                }
+            } catch (e) {
+                console.warn("Failed setting video element srcObject:", e);
+            }
         }
 
         return stream;
@@ -130,7 +156,6 @@ export const createCaptureEngine = () => {
                 cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
 
                 edged = new cv.Mat();
-                // Try dual Canny thresholds for low & high contrast
                 cv.Canny(blurred, edged, 30, 120);
 
                 contours = new cv.MatVector();
@@ -143,11 +168,9 @@ export const createCaptureEngine = () => {
                     const contour = contours.get(i);
                     const area = cv.contourArea(contour);
 
-                    // Threshold relative to resized frame size
                     if (area > 800) {
                         const perimeter = cv.arcLength(contour, true);
                         
-                        // Stage 1: Try polygon approximation with multiple epsilon ratios
                         let quadFound = false;
                         const epsilons = [0.02, 0.03, 0.015, 0.04];
                         
@@ -170,7 +193,6 @@ export const createCaptureEngine = () => {
                             approx.delete();
                         }
 
-                        // Stage 2: Fallback to minAreaRect for contours with >= 4 points
                         if (!quadFound && area > maxArea && contour.rows >= 4) {
                             try {
                                 const rotatedRect = cv.minAreaRect(contour);
@@ -182,9 +204,7 @@ export const createCaptureEngine = () => {
                                         y: (pt.y / dsize.height) * 100
                                     }));
                                 }
-                            } catch (rectErr) {
-                                // ignore
-                            }
+                            } catch (rectErr) {}
                         }
                     }
                     contour.delete();
@@ -206,7 +226,7 @@ export const createCaptureEngine = () => {
             }
         }
 
-        // Fast Canvas-based Luminance Contrast Fallback Detector (when OpenCV is offline or loading)
+        // Fast Canvas-based Luminance Contrast Fallback Detector
         try {
             if (!window.fallbackCanvas) {
                 window.fallbackCanvas = document.createElement('canvas');
@@ -217,7 +237,6 @@ export const createCaptureEngine = () => {
             fctx.drawImage(videoElement, 0, 0, 40, 30);
             const imgData = fctx.getImageData(0, 0, 40, 30).data;
 
-            // Calculate center vs edge contrast
             let centerLuma = 0;
             let edgeLuma = 0;
             let centerCount = 0;
@@ -241,7 +260,6 @@ export const createCaptureEngine = () => {
             const avgEdge = edgeLuma / (edgeCount || 1);
             const contrastDiff = Math.abs(avgCenter - avgEdge);
 
-            // If there is significant document contrast in center frame
             if (contrastDiff > 18) {
                 return sortPoints([
                     { x: 15, y: 15 },
@@ -250,9 +268,7 @@ export const createCaptureEngine = () => {
                     { x: 15, y: 85 }
                 ]);
             }
-        } catch (fbErr) {
-            // ignore
-        }
+        } catch (fbErr) {}
 
         return null;
     };
@@ -261,8 +277,8 @@ export const createCaptureEngine = () => {
         if (!videoElement) return null;
 
         const canvas = document.createElement('canvas');
-        canvas.width = videoElement.videoWidth;
-        canvas.height = videoElement.videoHeight;
+        canvas.width = videoElement.videoWidth || 1280;
+        canvas.height = videoElement.videoHeight || 720;
         const context = canvas.getContext('2d');
         context.drawImage(videoElement, 0, 0);
 

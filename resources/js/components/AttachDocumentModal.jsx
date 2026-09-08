@@ -6,6 +6,7 @@ import {
     DocumentMagnifyingGlassIcon,
     ArrowPathIcon,
     LinkIcon,
+    PaperClipIcon,
     EyeIcon,
     SparklesIcon,
     CheckCircleIcon,
@@ -304,7 +305,7 @@ export default function AttachDocumentModal({ isOpen, onClose, ticket, onAttach 
                                 {isLinking ? (
                                     <ArrowPathIcon className="w-4 h-4 animate-spin" />
                                 ) : (
-                                    <LinkIcon className="w-4 h-4" />
+                                    <PaperClipIcon className="w-4 h-4" />
                                 )}
                                 Attach File to Ticket
                             </button>

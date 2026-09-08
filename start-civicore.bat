@@ -5,6 +5,14 @@ title CiviCORE Control Center
 echo ===================================================
 echo   CiviCORE: Starting All Systems (V4 Queue Profiles)...
 echo ===================================================
+echo.
+echo ===================================================
+echo   [YOUR NETWORK IP ADDRESSES FOR OTHER DEVICES / PHONES]
+echo   ---------------------------------------------------
+ipconfig | findstr /i "IPv4 Address Ethernet Wireless Wi-Fi Adapter"
+echo   ---------------------------------------------------
+echo ===================================================
+echo.
 
 :: -----------------------------------------------------------------
 :: Queue profile selection
@@ -88,9 +96,13 @@ echo ===================================================
 echo   ALL SYSTEMS GO!
 echo   1. Wait for "OCR Reader ready" in the OCR window.
 echo   2. If running dev mode, wait for "VITE ready" in the Vite window.
-echo   3. Then visit on PC:   http://localhost:8000
-echo      Or visit on phone: http://%PC_IP%:8000
-echo   * Note: Choose 'n' to run in Production Mode if you
-echo     want to access it on your phone without firewall issues.
+echo.
+echo   [NETWORK IP ADDRESSES FOR OTHER DEVICES / PHONES]
+echo   ---------------------------------------------------
+ipconfig | findstr /i "IPv4 Address Ethernet Wireless Wi-Fi Adapter"
+echo   ---------------------------------------------------
+echo   * Visit on Local PC:       http://localhost:8000
+echo   * Visit on Mobile Phone:   http://%PC_IP%:8000
+echo   (If connected via Wi-Fi, type the IPv4 address above followed by :8000)
 echo ===================================================
 pause

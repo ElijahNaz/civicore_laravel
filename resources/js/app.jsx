@@ -23,12 +23,14 @@ import ContactDirectory from './components/ContactDirectory.jsx';
 import Ticketing        from './components/Ticketing.jsx';
 import { ModalProvider } from './components/ModalContext.jsx';
 import { DataProvider } from './components/DataContext.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 
 const getUser = () => {
     try {
-        return JSON.parse(sessionStorage.getItem('user') || 'null');
+        const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : null;
     } catch {
         return null;
     }
@@ -79,6 +81,7 @@ function App() {
                         <Route path="/contact"  element={<PublicLayout><ContactDirectory /></PublicLayout>} />
                         <Route path="/ticket-request" element={<PublicLayout><Ticketing mode="portal" /></PublicLayout>} />
                         <Route path="/ticket-status/:token" element={<PublicLayout><Ticketing mode="status" /></PublicLayout>} />
+                        <Route path="/ticket/:token" element={<PublicLayout><Ticketing mode="status" /></PublicLayout>} />
                         <Route path="/login"    element={<Login />} />
 
                         {/* ── Protected ──────────────────────────────────────── */}
@@ -156,4 +159,8 @@ function App() {
 
 // Mount
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+root.render(
+    <ErrorBoundary>
+        <App />
+    </ErrorBoundary>
+);

@@ -26,7 +26,7 @@ export default function PublicLayout({ children }) {
             <motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="px-6 md:px-12 py-8 flex justify-between items-center z-50 relative"
+                className="px-5 sm:px-6 md:px-12 pt-4 pb-2 sm:py-8 flex justify-between items-center z-50 relative"
             >
                 <Link to="/" className="flex items-center gap-4 group cursor-pointer">
                     <div className="w-14 h-14 bg-gradient-to-br from-[#d4a574]/10 to-transparent rounded-2xl flex items-center justify-center border border-[#d4a574]/20 shadow-lg shadow-[#d4a574]/5 group-hover:scale-105 transition-transform duration-300 overflow-hidden">

@@ -56,6 +56,54 @@ class OcrParserService
         'registered_by_date'         => ['25\. date', 'registered.*date'],
     ];
 
+    private const DEATH_ANCHORS = [
+        'province'                   => ['\bprovince\b'],
+        'city_municipality'          => ['city/municipality', 'city municipality', '\bmunicipality\b'],
+        'barangay'                   => ['\bbarangay\b', '\bbrgy\b'],
+        'first_name'                 => ['\(first\)', '1\. name', 'deceased.*first', 'name.*first'],
+        'middle_name'                => ['\(middle\)', 'deceased.*middle', 'name.*middle'],
+        'last_name'                  => ['\(last\)', 'deceased.*last', 'name.*last'],
+        'sex'                        => ['2\. sex', '\bsex\b'],
+        'date_of_death'              => ['3\. date of death', 'date of death', 'died'],
+        'date_of_birth'              => ['4\. date of birth', 'date of birth'],
+        'place_of_death'             => ['6\. place of death', 'place of death', 'died at'],
+        'civil_status'               => ['7\. civil status', 'civil status'],
+        'religion'                   => ['8\. religion', 'religion'],
+        'citizenship'                => ['9\. citizenship', 'citizenship'],
+        'residence'                  => ['10\. residence', 'residence'],
+        'occupation'                 => ['11\. occupation', 'occupation'],
+        'father_name'                => ['12\. name of father', 'father.*name'],
+        'mother_maiden_name'         => ['13\. maiden name of mother', 'mother.*name'],
+        'cause_of_death_immediate'   => ['immediate cause', '19b.*a'],
+        'cause_of_death_antecedent'  => ['antecedent cause', '19b.*b'],
+        'cause_of_death_underlying'  => ['underlying cause', '19b.*c'],
+        'manner_of_death'            => ['19d.*manner of death', 'manner of death'],
+        'informant_name'             => ['26\. informant name', 'informant.*name'],
+        'prepared_by_name'           => ['27\. prepared by', 'prepared.*name'],
+        'received_by_name'           => ['28\. received by', 'received.*name'],
+        'registered_by_name'         => ['29\. registered by', 'registered.*name'],
+    ];
+
+    private const MARRIAGE_ANCHORS = [
+        'province'                   => ['\bprovince\b'],
+        'city_municipality'          => ['city/municipality', 'city municipality', '\bmunicipality\b'],
+        'barangay'                   => ['\bbarangay\b', '\bbrgy\b'],
+        'husband_first_name'         => ['husband.*first', 'groom.*first'],
+        'husband_middle_name'        => ['husband.*middle', 'groom.*middle'],
+        'husband_last_name'          => ['husband.*last', 'groom.*last'],
+        'wife_first_name'            => ['wife.*first', 'bride.*first'],
+        'wife_middle_name'           => ['wife.*middle', 'bride.*middle'],
+        'wife_last_name'             => ['wife.*last', 'bride.*last'],
+        'place_of_marriage'          => ['15\. place of marriage', 'place of marriage', 'married at'],
+        'date_of_marriage'           => ['16\. date of marriage', 'date of marriage', 'married on'],
+        'marriage_license_no'        => ['19a\. marriage license', 'license no'],
+        'solemnizing_officer_name'   => ['18\. solemnizing officer', 'solemnizing officer'],
+        'witness_1_name'             => ['20a\. witness 1', 'witness 1'],
+        'witness_2_name'             => ['20a\. witness 2', 'witness 2'],
+        'prepared_by_name'           => ['21\. received by', 'received.*name'],
+        'registered_by_name'         => ['22\. registered by', 'registered.*name'],
+    ];
+
     private const SKIP_WORDS = [
         'OFFICE', 'GENERAL', 'REGISTRAR', 'CERTIFICATE', 'BIRTH', 'REPUBLIC', 'FORM', 
         'PHILIPPINES', 'DEPARTMENT', 'HEALTH', 'STATISTICS', 'AUTHORITY', 'MUNICIPAL', 
@@ -95,6 +143,10 @@ class OcrParserService
 
         if ($detectedType === 'birth') {
             $fields = array_merge($fields, $this->extractByAnchors($lines, self::BIRTH_ANCHORS));
+        } elseif ($detectedType === 'death') {
+            $fields = array_merge($fields, $this->extractByAnchors($lines, self::DEATH_ANCHORS));
+        } elseif ($detectedType === 'marriage') {
+            $fields = array_merge($fields, $this->extractByAnchors($lines, self::MARRIAGE_ANCHORS));
         }
 
         // ── 4. Fallback for Names ───────────────────────────────────────────

@@ -192,8 +192,9 @@ const Mapping = () => {
 
             L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
 
             const markersLayer = L.layerGroup().addTo(map);
@@ -402,10 +403,14 @@ const Mapping = () => {
                         { label: 'Marriages', data: monthData.marriages, backgroundColor: '#6366f1', borderRadius: 4 }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false // Disables chart bar re-animation movement on data update/hover
+                }
             });
         }
-    }, [isLoading, apiData, docsData, showHeatmap, showRatioMode, hoveredBrgy, quickFilter, dateFrom, dateTo]);
+    }, [isLoading, apiData, docsData, showHeatmap, showRatioMode, quickFilter, dateFrom, dateTo]);
 
     const exportToCSV = () => {
         const headers = ["Certificate No.", "Type", "Subject Name", "Barangay", "Print Date", "Status", "Encoded By"];

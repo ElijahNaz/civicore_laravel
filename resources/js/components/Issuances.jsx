@@ -129,6 +129,9 @@ const Issuances = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('database');
     const [dashboardTab, setDashboardTab] = useState('overview');
+    const [isAnalyticsCollapsed, setIsAnalyticsCollapsed] = useState(() => {
+        return typeof window !== 'undefined' && window.innerWidth < 768;
+    });
 
     // Unified state
     const [certificates, setCertificates] = useState([]);
@@ -477,28 +480,39 @@ const Issuances = () => {
         });
     };
 
+    const buildPersonName = (fields, type) => {
+        if (!fields) return '';
+        if (type === 'marriage') {
+            const hLast = (fields.husband_last_name || '').toUpperCase().trim();
+            const hFirst = (fields.husband_first_name || '').toUpperCase().trim();
+            const hMiddle = (fields.husband_middle_name || '').toUpperCase().trim();
+            const hSuffix = (fields.husband_suffix || '').toUpperCase().trim();
+            const hName = [hLast ? `${hLast},` : '', hFirst, hMiddle, hSuffix].filter(Boolean).join(' ');
+
+            const wLast = (fields.wife_last_name || '').toUpperCase().trim();
+            const wFirst = (fields.wife_first_name || '').toUpperCase().trim();
+            const wMiddle = (fields.wife_middle_name || '').toUpperCase().trim();
+            const wSuffix = (fields.wife_suffix || '').toUpperCase().trim();
+            const wName = [wLast ? `${wLast},` : '', wFirst, wMiddle, wSuffix].filter(Boolean).join(' ');
+
+            const joined = [hName, wName].filter(Boolean).join(' & ');
+            return (joined || fields.personName || '').toUpperCase();
+        }
+
+        const last = (fields.last_name || fields.deceased_last_name || '').toUpperCase().trim();
+        const first = (fields.first_name || fields.deceased_first_name || '').toUpperCase().trim();
+        const middle = (fields.middle_name || fields.deceased_middle_name || '').toUpperCase().trim();
+        const suffix = (fields.suffix || '').toUpperCase().trim();
+
+        const nameParts = [last ? `${last},` : '', first, middle, suffix].filter(Boolean).join(' ');
+        return (nameParts || fields.personName || fields.full_name || fields.deceased_name || '').toUpperCase();
+    };
+
     const saveEdit = async ({ fields, ocr_text, parentalConsent, detectedType }) => {
         if (!editingCert) return;
         const fileId = editingCert.realId;
-        let personName = '';
         const docType = detectedType || editingCert.type || '';
-        if (docType === 'marriage') {
-            const h = `${fields.husband_last_name || ''}, ${fields.husband_first_name || ''} ${fields.husband_middle_name || ''}`.trim();
-            const w = `${fields.wife_last_name || ''}, ${fields.wife_first_name || ''} ${fields.wife_middle_name || ''}`.trim();
-            personName = `${h} & ${w}`.trim();
-            if (personName.startsWith('&')) personName = personName.slice(1).trim();
-            if (personName.endsWith('&')) personName = personName.slice(0, -1).trim();
-        } else {
-            const last = fields.last_name || '';
-            const first = fields.first_name || '';
-            const middle = fields.middle_name || '';
-            const suffix = fields.suffix || '';
-            if (last || first) {
-                personName = `${last}, ${first} ${middle} ${suffix}`.replace(/\s+/g, ' ').trim();
-            } else {
-                personName = fields.full_name || fields.deceased_name || editingCert.name || '';
-            }
-        }
+        const personName = buildPersonName(fields, docType) || editingCert.name || '';
         const barangay = fields.barangay || '';
 
         const certToClear = editingCert;
@@ -1023,32 +1037,78 @@ const Issuances = () => {
                 )}
             </AnimatePresence>
 
-            {/* ── Issuance Dashboard Panel (3 Tabs) ────────────────────────────────── */}
-            <motion.div variants={itemVariants} className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 overflow-hidden">
+            {/* ── Issuance Dashboard Panel (Overview / Per Category / Top Issued) ────────────────── */}
+            <motion.div variants={itemVariants} className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden">
                 {/* Dashboard Tab Header */}
-                <div className="flex items-center justify-between px-6 pt-5 pb-0 border-b border-slate-100">
-                    <div className="flex space-x-1">
-                        {[
-                            { key: 'overview', label: 'Overview', Icon: ChartBarIcon },
-                            { key: 'categories', label: 'Per Category', Icon: PresentationChartLineIcon },
-                            { key: 'top', label: 'Top Issued', Icon: TrophyIcon },
-                        ].map(tab => (
-                            <button
-                                key={tab.key}
-                                onClick={() => setDashboardTab(tab.key)}
-                                className={`flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all cursor-pointer ${
-                                    dashboardTab === tab.key
-                                        ? 'border-[#d4a574] text-[#d4a574]'
-                                        : 'border-transparent text-slate-400 hover:text-slate-600'
-                                }`}
-                            >
-                                <tab.Icon className="w-4 h-4" />
-                                {tab.label}
-                            </button>
-                        ))}
+                <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-100 flex-wrap gap-3 bg-gradient-to-r from-slate-50/80 to-white">
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2 pr-4 border-r border-slate-200/80 hidden sm:flex">
+                            <ChartBarIcon className="w-5 h-5 text-[#d4a574]" />
+                            <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Analytics & Stats</span>
+                        </div>
+                        <div className="flex space-x-1 overflow-x-auto">
+                            {[
+                                { key: 'overview', label: 'Overview', Icon: ChartBarIcon },
+                                { key: 'categories', label: 'Per Category', Icon: PresentationChartLineIcon },
+                                { key: 'top', label: 'Top Issued', Icon: TrophyIcon },
+                            ].map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => {
+                                        setDashboardTab(tab.key);
+                                        if (isAnalyticsCollapsed) setIsAnalyticsCollapsed(false);
+                                    }}
+                                    className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer whitespace-nowrap ${
+                                        dashboardTab === tab.key && !isAnalyticsCollapsed
+                                            ? 'bg-slate-900 text-[#d4a574] shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <tab.Icon className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pr-2">Issuance Analytics</p>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button
+                            type="button"
+                            onClick={() => setIsAnalyticsCollapsed(prev => !prev)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#d4a574] text-xs font-black uppercase tracking-wider transition-all cursor-pointer border border-slate-800 shadow-md active:scale-95"
+                            title={isAnalyticsCollapsed ? "Expand Category Overview Analytics" : "Retract Category Overview Analytics"}
+                        >
+                            <span>{isAnalyticsCollapsed ? "Show Overview" : "Retract Overview"}</span>
+                            {isAnalyticsCollapsed ? (
+                                <ChevronDownIcon className="w-4 h-4 text-[#d4a574] animate-bounce" />
+                            ) : (
+                                <ChevronUpIcon className="w-4 h-4 text-[#d4a574]" />
+                            )}
+                        </button>
+                    </div>
                 </div>
+
+                <AnimatePresence initial={false}>
+                    {isAnalyticsCollapsed && (
+                        <div
+                            onClick={() => setIsAnalyticsCollapsed(false)}
+                            className="px-6 py-3 bg-amber-50/60 border-b border-amber-100 text-amber-800 text-xs font-bold flex items-center justify-between cursor-pointer hover:bg-amber-100/60 transition-colors"
+                        >
+                            <span className="flex items-center gap-2">
+                                <ChartBarIcon className="w-4 h-4 text-amber-600" />
+                                Category & Issuance Overview is retracted.
+                            </span>
+                            <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 underline">Click to Expand Stats & Overview</span>
+                        </div>
+                    )}
+                    {!isAnalyticsCollapsed && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                        >
 
                 {/* Tab 1: Overview */}
                 {dashboardTab === 'overview' && (
@@ -1342,6 +1402,9 @@ const Issuances = () => {
                         </div>
                     );
                 })()}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </motion.div>
 
             {/* ── Main Section Tab Bar ──────────────────────────────────────────────── */}

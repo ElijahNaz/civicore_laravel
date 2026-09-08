@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Ticket;
+use App\Models\Setting;
 use App\Mail\TicketConfirmation;
 use App\Mail\TicketDeclinedMail;
 use Illuminate\Support\Str;
@@ -30,25 +31,65 @@ class TicketController extends Controller
         return $expiry;
     }
 
+    private function buildTicketUrl(Request $request, string $token): string
+    {
+        $host = $request->getSchemeAndHttpHost();
+
+        // If request comes from localhost or 127.0.0.1, resolve local LAN IP so mobile devices on Wi-Fi can open it
+        if (str_contains($host, 'localhost') || str_contains($host, '127.0.0.1')) {
+            $ip = gethostbyname(gethostname());
+            if ($ip && $ip !== '127.0.0.1') {
+                $scheme = $request->getScheme();
+                $port = $request->getPort();
+                $portStr = ($port && $port != 80 && $port != 443) ? ':' . $port : '';
+                return "{$scheme}://{$ip}{$portStr}/ticket-status/{$token}";
+            }
+        }
+
+        return "{$host}/ticket-status/{$token}";
+    }
+
     /**
      * Generate a QR code PNG, persist it, and return the base64 string.
      * Returns [qr_code_path (relative), base64_string].
      */
-    private function generateQr(string $token): array
+    private function generateQr(string $token, string $ticketUrl): array
     {
-        $url      = url('/ticket/' . $token);
-        $filename = 'qrcodes/ticket_' . $token . '.svg';
+        $filename = 'qrcodes/ticket_' . $token . '.png';
 
-        // Generate as SVG binary (300px, no margin)
-        $svg = QrCode::format('svg')
-            ->size(300)
-            ->margin(1)
-            ->errorCorrection('M')
-            ->generate($url);
+        $qr = \BaconQrCode\Encoder\Encoder::encode($ticketUrl, \BaconQrCode\Common\ErrorCorrectionLevel::M());
+        $matrix = $qr->getMatrix();
+        $width = $matrix->getWidth();
+        $height = $matrix->getHeight();
 
-        Storage::disk('public')->put($filename, $svg);
+        $scale = 8;
+        $margin = 2;
+        $imgSize = ($width + ($margin * 2)) * $scale;
 
-        return [$filename, base64_encode($svg)];
+        $image = imagecreatetruecolor($imgSize, $imgSize);
+        $white = imagecolorallocate($image, 255, 255, 255);
+        $black = imagecolorallocate($image, 0, 0, 0);
+
+        imagefill($image, 0, 0, $white);
+
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                if ($matrix->get($x, $y) === 1) {
+                    $px = ($x + $margin) * $scale;
+                    $py = ($y + $margin) * $scale;
+                    imagefilledrectangle($image, $px, $py, $px + $scale - 1, $py + $scale - 1, $black);
+                }
+            }
+        }
+
+        ob_start();
+        imagepng($image);
+        $pngData = ob_get_clean();
+        imagedestroy($image);
+
+        Storage::disk('public')->put($filename, $pngData);
+
+        return [$filename, base64_encode($pngData)];
     }
 
     private function currentUserName(Request $request): string
@@ -73,18 +114,25 @@ class TicketController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'client_name' => 'required|string|max:255',
+            'client_name' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
             'email'       => 'nullable|email|max:255',
-            'phone'       => 'nullable|string|max:50',
+            'phone'       => ['nullable', 'string', 'max:15', 'regex:/^[0-9+\-\s()]+$/'],
             'purpose'     => 'required|in:birth,death,marriage',
             'details'     => 'required|array',
+        ], [
+            'client_name.regex' => 'Name cannot contain numbers or invalid special characters (only letters, spaces, and . , - \' are allowed).',
+            'phone.regex' => 'Phone number may only contain numbers and valid phone symbols (+, -, space, parens).',
+            'phone.max'   => 'Phone number cannot exceed 15 characters.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json(['errors' => $validator->errors(), 'error' => $validator->errors()->first()], 422);
         }
 
-        if ($request->email || $request->phone) {
+        $limitsSetting = Setting::where('key', 'ticket_limits_enabled')->value('value');
+        $limitsEnabled = ($limitsSetting !== '0');
+
+        if ($limitsEnabled && ($request->email || $request->phone)) {
             $identifierQuery = function ($query) use ($request) {
                 $query->where(function($q) use ($request) {
                     if ($request->email) {
@@ -96,15 +144,23 @@ class TicketController extends Controller
                 });
             };
 
+            $now = Carbon::now(config('app.timezone'));
+
             // Max 1 request per day
             $todayCount = Ticket::whereDate('created_at', Carbon::today(config('app.timezone')))
                 ->where($identifierQuery)
                 ->count();
 
             if ($todayCount >= 1) {
+                $tomorrow = Carbon::tomorrow(config('app.timezone'));
+                $diff = $now->diff($tomorrow);
+                $hrs = $diff->h;
+                $mins = $diff->i;
+                $timeStr = ($hrs > 0 ? "{$hrs} hour(s) and " : "") . "{$mins} minute(s)";
+
                 return response()->json([
                     'success' => false,
-                    'error' => "You have already submitted a request today. You are limited to 1 request per day."
+                    'error'   => "Request Limit Reached: You have already submitted a request today (Limit: 1 per day). You can submit your next request in {$timeStr} (at 12:00 AM tomorrow)."
                 ], 429);
             }
 
@@ -115,9 +171,21 @@ class TicketController extends Controller
                 ->count();
 
             if ($weekCount >= 3) {
+                $oldestTicket = Ticket::where('created_at', '>=', $sevenDaysAgo)
+                    ->where($identifierQuery)
+                    ->orderBy('created_at', 'asc')
+                    ->first();
+
+                $availableAt = $oldestTicket ? Carbon::parse($oldestTicket->created_at)->addDays(7) : $now->copy()->addDays(7);
+                $diff = $now->diff($availableAt);
+                $days = $diff->d;
+                $hrs = $diff->h;
+                $mins = $diff->i;
+                $timeStr = ($days > 0 ? "{$days} day(s), " : "") . ($hrs > 0 ? "{$hrs} hr(s), and " : "") . "{$mins} min";
+
                 return response()->json([
                     'success' => false,
-                    'error' => "You have reached the limit of 3 requests per week. Please wait before requesting another."
+                    'error'   => "Weekly Limit Reached: You have reached the maximum limit of 3 requests per week. You can request again in {$timeStr} (on " . $availableAt->format('M j, Y \a\t g:i A') . ")."
                 ], 429);
             }
         }
@@ -134,9 +202,10 @@ class TicketController extends Controller
                 $ticketNumber = 'T-' . $year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
                 $token        = Str::random(40);
                 $expiry       = $this->buildExpiry();
+                $ticketUrl    = $this->buildTicketUrl($request, $token);
 
-                // Generate QR code
-                [$qrPath, $qrBase64] = $this->generateQr($token);
+                // Generate QR code PNG
+                [$qrPath, $qrBase64] = $this->generateQr($token, $ticketUrl);
 
                 $ticket = Ticket::create([
                     'ticket_number'  => $ticketNumber,
@@ -158,7 +227,7 @@ class TicketController extends Controller
                 if ($request->email) {
                     try {
                         Mail::to($request->email)
-                            ->send(new TicketConfirmation($ticket, $qrBase64));
+                            ->send(new TicketConfirmation($ticket, $qrBase64, $ticketUrl));
                     } catch (\Exception $mailErr) {
                         \Log::warning('Ticket email failed: ' . $mailErr->getMessage());
                     }
@@ -177,8 +246,8 @@ class TicketController extends Controller
                 return response()->json([
                     'success'       => true,
                     'ticket'        => $ticket,
-                    'qr_code_url'   => Storage::disk('public')->url($qrPath),
-                    'ticket_url'    => url('/ticket/' . $token),
+                    'qr_code_url'   => Storage::url($qrPath),
+                    'ticket_url'    => $ticketUrl,
                     'email_sent'    => (bool) $request->email,
                 ], 201);
             });
@@ -200,15 +269,19 @@ class TicketController extends Controller
     public function storeWalkIn(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'client_name' => 'required|string|max:255',
+            'client_name' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
             'email'       => 'nullable|email|max:255',
             'purpose'     => 'required|in:birth,death,marriage',
-            'phone'       => 'nullable|string|max:50',
+            'phone'       => ['nullable', 'string', 'max:15', 'regex:/^[0-9+\-\s()]+$/'],
             'details'     => 'nullable|array',
+        ], [
+            'client_name.regex' => 'Name cannot contain numbers or invalid special characters (only letters, spaces, and . , - \' are allowed).',
+            'phone.regex' => 'Phone number may only contain numbers and valid phone symbols (+, -, space, parens).',
+            'phone.max'   => 'Phone number cannot exceed 15 characters.',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json(['errors' => $validator->errors(), 'error' => $validator->errors()->first()], 422);
         }
 
         try {
@@ -224,8 +297,9 @@ class TicketController extends Controller
                 $ticketNumber = 'WI-' . $year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
                 $token        = Str::random(40);
                 $expiry       = $this->buildExpiry();
+                $ticketUrl    = $this->buildTicketUrl($request, $token);
 
-                [$qrPath, $qrBase64] = $this->generateQr($token);
+                [$qrPath, $qrBase64] = $this->generateQr($token, $ticketUrl);
 
                 // Assign lobby sequence number starting at 101
                 $start = Carbon::today(config('app.timezone'))->startOfDay();
@@ -257,7 +331,7 @@ class TicketController extends Controller
                 if ($request->email) {
                     try {
                         Mail::to($request->email)
-                            ->send(new TicketConfirmation($ticket, $qrBase64));
+                            ->send(new TicketConfirmation($ticket, $qrBase64, $ticketUrl));
                     } catch (\Exception $mailErr) {
                         \Log::warning('Walk-in ticket email failed: ' . $mailErr->getMessage());
                     }
@@ -276,9 +350,9 @@ class TicketController extends Controller
                 return response()->json([
                     'success'     => true,
                     'ticket'      => $ticket,
-                    'qr_code_url' => Storage::disk('public')->url($qrPath),
+                    'qr_code_url' => Storage::url($qrPath),
                     'qr_base64'   => $qrBase64,
-                    'ticket_url'  => url('/ticket/' . $token),
+                    'ticket_url'  => $ticketUrl,
                     'email_sent'  => (bool) $request->email,
                 ], 201);
             });
@@ -322,9 +396,16 @@ class TicketController extends Controller
                 ->count() + 1;
         }
 
-        $qrCodeUrl = $ticket->qr_code_path
-            ? Storage::disk('public')->url($ticket->qr_code_path)
-            : null;
+        $qrCodeUrl = null;
+        if ($ticket->qr_code_path && Storage::disk('public')->exists($ticket->qr_code_path) && str_ends_with($ticket->qr_code_path, '.png')) {
+            $qrCodeUrl = '/storage/' . ltrim($ticket->qr_code_path, '/');
+        } else {
+            $ticketUrl = $this->buildTicketUrl(request(), $ticket->token);
+            [$qrPath, $qrBase64] = $this->generateQr($ticket->token, $ticketUrl);
+            $ticket->qr_code_path = $qrPath;
+            $ticket->save();
+            $qrCodeUrl = '/storage/' . ltrim($qrPath, '/');
+        }
 
         // Maintain compatibility mapping for status in UI
         $compatStatus = 'Pending';
@@ -408,7 +489,7 @@ class TicketController extends Controller
         // Attach QR URL and legacy compatibility 'status'
         $tickets->transform(function ($ticket) {
             $ticket->qr_code_url = $ticket->qr_code_path
-                ? Storage::disk('public')->url($ticket->qr_code_path)
+                ? Storage::url($ticket->qr_code_path)
                 : null;
 
             $compatStatus = 'Pending';
@@ -612,7 +693,7 @@ class TicketController extends Controller
         }
 
         // We can optionally store the cancellation reason in the details JSON
-        $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
+        $details = is_array($ticket->details) ? $ticket->details : [];
         $details['cancellation_reason'] = $request->reason;
         $ticket->details = $details;
 
@@ -664,7 +745,7 @@ class TicketController extends Controller
             $normCertType = 'marriage';
         }
 
-        $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
+        $details = is_array($ticket->details) ? $ticket->details : [];
         $existingFields = json_decode($document->extracted_fields, true) ?: [];
 
         // Merge! The citizen's input takes precedence.
@@ -897,7 +978,7 @@ class TicketController extends Controller
 
         $all->transform(function ($ticket) {
             $ticket->qr_code_url = $ticket->qr_code_path
-                ? \Storage::disk('public')->url($ticket->qr_code_path)
+                ? \Storage::url($ticket->qr_code_path)
                 : null;
 
             $compatStatus = 'Pending';
@@ -934,7 +1015,7 @@ class TicketController extends Controller
             return response()->json(['error' => 'Ticket not found'], 404);
         }
         if ($request->filled('reason')) {
-            $details = is_string($ticket->details) ? json_decode($ticket->details, true) : ($ticket->details ?: []);
+            $details = is_array($ticket->details) ? $ticket->details : [];
             $details['deletion_reason'] = $request->reason;
             $details['cancellation_reason'] = $request->reason;
             $ticket->details = $details;

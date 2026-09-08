@@ -172,7 +172,7 @@
 
     <!-- Header -->
     <div class="header">
-        <div class="logo-text">🏛️ CiviCORE</div>
+        <div class="logo-text">CiviCORE</div>
         <div class="logo-sub">Civil Registry Management System</div>
         <h1>Your Queue Ticket</h1>
         <div class="ticket-num">{{ $ticket->ticket_number }}</div>
@@ -186,7 +186,11 @@
 
         <!-- QR Code -->
         <div class="qr-section">
-            <img src="data:image/svg+xml;base64,{{ $qrCodeBase64 }}" alt="QR Code – {{ $ticket->ticket_number }}">
+            @if(!empty($ticket->qr_code_path) && file_exists(storage_path('app/public/' . $ticket->qr_code_path)))
+                <img src="{{ $message->embed(storage_path('app/public/' . $ticket->qr_code_path)) }}" alt="QR Code – {{ $ticket->ticket_number }}">
+            @else
+                <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Code – {{ $ticket->ticket_number }}">
+            @endif
             <div class="qr-label">Scan this QR at the counter to check in</div>
         </div>
 
@@ -222,12 +226,12 @@
 
         <!-- Expiry Warning -->
         <div class="warning">
-            ⏰ <strong>Important:</strong> This ticket is valid only until <strong>5:00 PM today</strong>. If you do not visit the Civil Registry within this period, your ticket will expire and you will need to request a new one online.
+            <strong>Important:</strong> This ticket is valid only until <strong>5:00 PM today</strong>. If you do not visit the Civil Registry within this period, your ticket will expire and you will need to request a new one online.
         </div>
 
         <!-- Walk-in note -->
         <p style="font-size:13px; color:#64748b; margin-bottom:20px;">
-            📍 <strong>Don't have access to your email?</strong> Walk-in clients are welcome at the counter. Staff can issue an on-site ticket for you.
+            <strong>Don't have access to your email?</strong> Walk-in clients are welcome at the counter. Staff can issue an on-site ticket for you.
         </p>
 
         <!-- CTA -->

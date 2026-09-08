@@ -30,7 +30,8 @@ export default function Login() {
             const data = await response.json();
 
             if (data.success) {
-                // Store user data for the auth guard
+                // Store user data for the auth guard (persistent session across browser restarts)
+                localStorage.setItem('user', JSON.stringify(data.user));
                 sessionStorage.setItem('user', JSON.stringify(data.user));
                 console.log("Authenticated successfully");
                 navigate('/dashboard', { replace: true });

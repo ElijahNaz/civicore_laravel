@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     XMarkIcon, ArrowsRightLeftIcon,
-    SparklesIcon, CpuChipIcon, ArrowDownTrayIcon,
+    SparklesIcon, ArrowDownTrayIcon,
     VideoCameraIcon
 } from '@heroicons/react/24/outline';
 import { createCaptureEngine, detectCaptureEnvironment } from './captureEngine';
@@ -13,6 +13,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const canvasRef = useRef(null);
     const overlayCanvasRef = useRef(null);
     const fileInputRef = useRef(null);
+    const nativeCameraInputRef = useRef(null);
     const activeStreamRef = useRef(null);
     const modalOpenRef = useRef(isOpen);
 
@@ -66,15 +67,16 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const [stabilityScore, setStabilityScore] = useState(0);
     const captureEngine = useMemo(() => createCaptureEngine(), []);
 
+    const isMobileDevice = useMemo(() => detectCaptureEnvironment() === 'mobile' || (typeof window !== 'undefined' && window.innerWidth < 1024), []);
+
     // OpenCV.js Loader
     useEffect(() => {
-        if (isOpen && !window.cv && !isInitializing) {
+        if (isOpen && !window.cv && !isInitializing && !isMobileDevice) {
             setIsInitializing(true);
             const script = document.createElement('script');
             script.src = 'https://docs.opencv.org/4.x/opencv.js';
             script.async = true;
             script.onload = () => {
-                // OpenCV might take a moment to initialize the WASM runtime
                 const checkCv = setInterval(() => {
                     if (window.cv && window.cv.Mat) {
                         clearInterval(checkCv);
@@ -87,7 +89,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         } else if (window.cv) {
             setCvLoaded(true);
         }
-    }, [isOpen]);
+    }, [isOpen, isMobileDevice]);
 
     useEffect(() => {
         modalOpenRef.current = isOpen;
@@ -100,18 +102,25 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             setEdgeDetectionFailed(false);
             detectionHistoryRef.current = [];
             stabilitySamplesRef.current = [];
-            startCamera();
+
+            if (isMobileDevice) {
+                // Mobile device: Immediately trigger Native Device Camera app without WebRTC preview
+                setTimeout(() => {
+                    nativeCameraInputRef.current?.click();
+                }, 150);
+            } else {
+                // Desktop device: Start WebRTC camera preview stream
+                startCamera();
+            }
         } else {
             stopCamera();
         }
         return () => stopCamera();
-    }, [isOpen, facingMode]);
+    }, [isOpen, facingMode, isMobileDevice]);
 
-    // Ensure the video element gets the stream once it is mounted.
-    // The video element is conditionally rendered, so its ref might be null
-    // when startCamera first retrieves the stream.
+    // Ensure the video element gets the stream once it is mounted on desktop
     useEffect(() => {
-        if (stream && videoRef.current) {
+        if (stream && videoRef.current && !isMobileDevice) {
             if (videoRef.current.srcObject !== stream) {
                 videoRef.current.srcObject = stream;
             }
@@ -119,11 +128,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                 videoRef.current.play().catch(e => console.warn("Video play failed:", e));
             }
         }
-    }, [stream]);
+    }, [stream, isMobileDevice]);
 
-    // Live Tracing & Rendering Logic
+    // Live Tracing & Rendering Logic (Canvas Overlay for Live & Preview Modes)
     useEffect(() => {
         if (!isOpen) return;
+        if (!previewImage && isMobileDevice) return;
 
         let lastProcessTime = 0;
         let lastStateUpdateTime = 0;
@@ -200,9 +210,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                         blackFeedStartTime = 0;
                         setIsBlackFeed(false);
                     }
-                } catch (lightErr) {
-                    // ignore
-                }
+                } catch (lightErr) {}
             } else {
                 blackFeedStartTime = 0;
                 setIsBlackFeed(false);
@@ -252,9 +260,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                             setStabilityScore(0);
                         }
                         lastProcessTime = time;
-                    } catch (e) {
-                        // Silent fail for rendering loop stability
-                    }
+                    } catch (e) {}
                 }
 
                 if (time - lastStateUpdateTime > 200) {
@@ -299,7 +305,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                         { x: (currentTrace.bl.x / 100) * width, y: (currentTrace.bl.y / 100) * height }
                     ];
 
-                    // 1. Translucent glowing emerald document fill
                     ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
                     ctx.beginPath();
                     ctx.moveTo(pts[0].x, pts[0].y);
@@ -309,7 +314,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     ctx.closePath();
                     ctx.fill();
 
-                    // 2. Bright glowing green bounding outline
                     ctx.strokeStyle = '#10b981';
                     ctx.lineWidth = 4;
                     ctx.lineJoin = 'round';
@@ -317,7 +321,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     ctx.shadowColor = '#10b981';
                     ctx.stroke();
 
-                    // 3. 4 Green target corner circles
                     pts.forEach(pt => {
                         ctx.beginPath();
                         ctx.arc(pt.x, pt.y, 7, 0, Math.PI * 2);
@@ -368,9 +371,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     ctx.moveTo(rx + rw - len, ry + rh); ctx.lineTo(rx + rw, ry + rh); ctx.lineTo(rx + rw, ry + rh - len);
                     ctx.stroke();
                 }
-            }
-
-            // PHASE 2: PREVIEW (Free-Form 4-Corner Perspective Crop)
+            }            // PHASE 2: PREVIEW (Free-Form 4-Corner Perspective Crop)
             if (previewImage) {
                 const fc = freeCornersRef.current;
                 const p = {
@@ -380,11 +381,9 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     bl: { x: (fc.bl.x / 100) * width, y: (fc.bl.y / 100) * height }
                 };
 
-                // Fill dark mask outside free-form polygon
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
                 ctx.fillRect(0, 0, width, height);
 
-                // Cut out quad area inside the 4 free corners
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(p.tl.x, p.tl.y);
@@ -396,11 +395,10 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                 ctx.clearRect(0, 0, width, height);
                 ctx.restore();
 
-                // Draw glowing indigo polygon border
-                ctx.strokeStyle = '#818cf8';
+                ctx.strokeStyle = '#d4a574';
                 ctx.lineWidth = 3;
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = '#818cf8';
+                ctx.shadowBlur = 14;
+                ctx.shadowColor = '#d4a574';
                 ctx.beginPath();
                 ctx.moveTo(p.tl.x, p.tl.y);
                 ctx.lineTo(p.tr.x, p.tr.y);
@@ -409,25 +407,40 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                 ctx.closePath();
                 ctx.stroke();
 
-                // Draw 4 circular corner handles at corners
                 const handlePoints = [
-                    { key: 'tl', ...p.tl },
-                    { key: 'tr', ...p.tr },
-                    { key: 'br', ...p.br },
-                    { key: 'bl', ...p.bl }
+                    { key: 'tl', label: '1', ...p.tl },
+                    { key: 'tr', label: '2', ...p.tr },
+                    { key: 'br', label: '3', ...p.br },
+                    { key: 'bl', label: '4', ...p.bl }
                 ];
 
                 handlePoints.forEach((pt) => {
+                    // Outer pulse ring for touch feedback
                     ctx.beginPath();
-                    ctx.arc(pt.x, pt.y, 14, 0, Math.PI * 2);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = 'rgba(79, 70, 229, 0.8)';
+                    const outerRadius = isMobileDevice ? 26 : 20;
+                    ctx.arc(pt.x, pt.y, outerRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(212, 165, 116, 0.25)';
                     ctx.fill();
-                    ctx.strokeStyle = '#4f46e5';
-                    ctx.lineWidth = 3;
+
+                    // Main handle button
+                    ctx.beginPath();
+                    const radius = isMobileDevice ? 18 : 14;
+                    ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#d4a574';
+                    ctx.shadowBlur = 16;
+                    ctx.shadowColor = '#d4a574';
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3.5;
                     ctx.stroke();
                     ctx.shadowBlur = 0;
+
+                    // Inner number label
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = `bold ${isMobileDevice ? '13px' : '11px'} sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(pt.label, pt.x, pt.y);
                 });
             }
 
@@ -436,28 +449,42 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
         animationHandle = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationHandle);
-    }, [captureEngine, isOpen, previewImage, borderColor, stabilityScore, edgeDetectionFailed]);
+    }, [captureEngine, isOpen, previewImage, borderColor, stabilityScore, edgeDetectionFailed, isMobileDevice]);
 
-    // Free-Form 4-Corner Dragging Handlers (ONLY IN PREVIEW/ADJUST MODE)
+    // Free-Form 4-Corner Dragging Handlers
     const dragStateRef = useRef(null);
 
     const handleDragStart = (e) => {
         if (!previewImage) return;
+        if (e.cancelable && typeof e.preventDefault === 'function') {
+            e.preventDefault();
+        }
         const canvas = overlayCanvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const x = ((clientX - rect.left) / rect.width) * 100;
-        const y = ((clientY - rect.top) / rect.height) * 100;
+        const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+
+        const px = clientX - rect.left;
+        const py = clientY - rect.top;
+
+        const width = rect.width;
+        const height = rect.height;
 
         const fc = freeCornersRef.current;
-        const threshold = 12;
-        let clickedCorner = null;
-        let minDist = threshold;
+        const p = {
+            tl: { x: (fc.tl.x / 100) * width, y: (fc.tl.y / 100) * height },
+            tr: { x: (fc.tr.x / 100) * width, y: (fc.tr.y / 100) * height },
+            br: { x: (fc.br.x / 100) * width, y: (fc.br.y / 100) * height },
+            bl: { x: (fc.bl.x / 100) * width, y: (fc.bl.y / 100) * height }
+        };
 
-        Object.entries(fc).forEach(([key, pt]) => {
-            const dist = Math.hypot(pt.x - x, pt.y - y);
+        const maxPixelDist = isMobileDevice ? 50 : 35; // Generous touch radius for fingers
+        let clickedCorner = null;
+        let minDist = maxPixelDist;
+
+        Object.entries(p).forEach(([key, pt]) => {
+            const dist = Math.hypot(pt.x - px, pt.y - py);
             if (dist < minDist) {
                 minDist = dist;
                 clickedCorner = key;
@@ -466,20 +493,21 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
 
         if (clickedCorner) {
             dragStateRef.current = {
-                type: clickedCorner,
-                startX: x,
-                startY: y
+                type: clickedCorner
             };
         }
     };
 
     const handleDragging = (e) => {
         if (!dragStateRef.current) return;
+        if (e.cancelable && typeof e.preventDefault === 'function') {
+            e.preventDefault();
+        }
         const canvas = overlayCanvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
         
         const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
         const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
@@ -495,23 +523,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     const handleDragEnd = () => {
         dragStateRef.current = null;
     };
-
-    useEffect(() => {
-        const isMobile = captureEngine.environment === 'mobile';
-        detectionProfileRef.current = {
-            environment: captureEngine.environment,
-            // Desktop default: ~10-15fps, Mobile default: ~5-8fps
-            baseInterval: isMobile ? 143 : 80,
-            minInterval: isMobile ? 125 : 67,
-            maxInterval: isMobile ? 300 : 240,
-            adaptiveInterval: isMobile ? 143 : 80,
-            lowPerfHits: 0,
-            highPerfHits: 0
-        };
-        detectionHistoryRef.current = [];
-        stabilitySamplesRef.current = [];
-        setStabilityScore(0);
-    }, [captureEngine.environment]);
 
     const calculateStability = useCallback((detectedCorners) => {
         if (!detectedCorners) {
@@ -547,6 +558,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         setStabilityScore(score);
         return score;
     }, []);
+
     const sharedSteps = useMemo(() => ([
         { key: 'preview', label: 'Preview', message: 'Align the document inside the frame.' },
         { key: 'edge_lock', label: 'Edge lock', message: 'Keep steady while we lock document edges.' },
@@ -564,10 +576,13 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                 facingMode
             });
 
-            // Critical Race Condition Check:
-            // If the modal was closed while we were waiting for the camera, stop it immediately.
             if (!modalOpenRef.current) {
-                newStream.getTracks().forEach(track => track.stop());
+                if (newStream && newStream.getTracks) {
+                    newStream.getTracks().forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
+                }
                 return;
             }
 
@@ -579,23 +594,48 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         }
     };
 
+    // Thorough Camera Hardware LED Release
     const stopCamera = () => {
         if (activeStreamRef.current) {
             try {
-                activeStreamRef.current.getTracks().forEach(track => track.stop());
+                activeStreamRef.current.getTracks().forEach(track => {
+                    track.stop();
+                    track.enabled = false;
+                });
             } catch (e) {}
             activeStreamRef.current = null;
         }
+
+        if (stream) {
+            try {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    track.enabled = false;
+                });
+            } catch (e) {}
+        }
+
+        if (videoRef.current) {
+            try {
+                if (videoRef.current.srcObject) {
+                    const srcStream = videoRef.current.srcObject;
+                    if (srcStream && srcStream.getTracks) {
+                        srcStream.getTracks().forEach(track => {
+                            track.stop();
+                            track.enabled = false;
+                        });
+                    }
+                    videoRef.current.pause();
+                    videoRef.current.srcObject = null;
+                }
+            } catch (e) {}
+        }
+
         try {
             captureEngine.stop();
         } catch (e) {}
+
         setStream(null);
-        if (videoRef.current) {
-            try {
-                videoRef.current.pause();
-                videoRef.current.srcObject = null;
-            } catch (e) {}
-        }
     };
     
     React.useEffect(() => {
@@ -631,8 +671,6 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             return;
         }
 
-        // Automatic Warp/Crop Confirmation Bypass:
-        // If high confidence edge detection was active (borderColor is green), bypass crop adjust screen
         if (borderColor === 'green' && lastDetectedRef.current) {
             onCapture({
                 file: captured.file,
@@ -645,9 +683,8 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                 edgeStability: stabilityScore,
                 deviceType: captureEngine.environment
             });
-            onClose();
+            handleClose();
             setIsCapturing(false);
-            stopCamera();
             return;
         }
 
@@ -710,20 +747,46 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         setIsGrayscale(false);
         setEdgeDetectionFailed(false);
         setScannerStatus('preview');
-        captureEngine.retake({ videoElement: videoRef.current, facingMode }).then((newStream) => {
-            activeStreamRef.current = newStream;
-            setStream(newStream);
-            setHasPermission(true);
-        }).catch(() => setHasPermission(false));
+        
+        if (isMobileDevice) {
+            nativeCameraInputRef.current?.click();
+        } else {
+            startCamera();
+        }
     };
 
     const handleRotate = () => setRotation(prev => (prev + 90) % 360);
     const toggleGrayscale = () => setIsGrayscale(prev => !prev);
     const openFilePicker = () => fileInputRef.current?.click();
+
+    const handleResetCrop = () => {
+        setFreeCorners({
+            tl: { x: 12, y: 12 },
+            tr: { x: 88, y: 12 },
+            br: { x: 88, y: 88 },
+            bl: { x: 12, y: 88 }
+        });
+    };
+
+    const handleFullCrop = () => {
+        setFreeCorners({
+            tl: { x: 0, y: 0 },
+            tr: { x: 100, y: 0 },
+            br: { x: 100, y: 100 },
+            bl: { x: 0, y: 100 }
+        });
+    };
+
     const handleFileUpload = async (event) => {
         const file = event.target.files?.[0];
         event.target.value = '';
-        if (!file) return;
+        if (!file) {
+            if (isMobileDevice && !previewImage) {
+                // User cancelled native camera without picking a photo
+                handleClose();
+            }
+            return;
+        }
 
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
             onCapture({
@@ -758,42 +821,19 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
         };
         reader.readAsDataURL(file);
     };
+
     const activeStepIndex = sharedSteps.findIndex((step) => step.key === scannerStatus);
     const currentStep = sharedSteps[Math.max(activeStepIndex, 0)];
-    const liveMetrics = useMemo(() => {
-        const cornersList = autoCorners ? Object.values(autoCorners) : [];
-        const xs = cornersList.map((point) => point.x);
-        const ys = cornersList.map((point) => point.y);
-        const widthPct = xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
-        const heightPct = ys.length ? Math.max(...ys) - Math.min(...ys) : 0;
-        return {
-            camera: facingMode === 'environment' ? 'Rear camera' : 'Front camera',
-            stream: stream ? 'Active' : 'Paused',
-            edgeLock: autoCorners ? 'Locked' : 'Scanning',
-            frameCoverage: `${Math.round(widthPct * heightPct)}%`,
-            detectRate: `${Math.max(1, Math.round(1000 / detectionProfileRef.current.adaptiveInterval))} FPS`,
-            stability: `${Math.round(stabilityScore * 100)}%`,
-            autoCapture: stabilityScore >= 82 / 100 ? 'Ready' : 'Waiting',
-            quality: cvLoaded ? 'Enhanced' : 'Standard'
-        };
-    }, [autoCorners, cvLoaded, facingMode, stabilityScore, stream]);
-
-    useEffect(() => {
-        if (!isOpen || previewImage || isCapturing) return;
-        setScannerStatus(autoCorners ? 'edge_lock' : 'preview');
-    }, [autoCorners, isCapturing, isOpen, previewImage]);
-
-    const isDesktop = captureEngine.environment === 'desktop';
 
     if (!isOpen) return null;
 
     const content = (
         <motion.div
-            initial={{ opacity: 0, scale: isDesktop ? 0.95 : 1 }}
+            initial={{ opacity: 0, scale: !isMobileDevice ? 0.95 : 1 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: isDesktop ? 0.95 : 1 }}
+            exit={{ opacity: 0, scale: !isMobileDevice ? 0.95 : 1 }}
             className={
-                isDesktop
+                !isMobileDevice
                     ? "relative w-full max-w-4xl h-[680px] max-h-[88vh] bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden text-white"
                     : "fixed inset-0 z-[10000] flex flex-col bg-slate-950 touch-none overflow-hidden text-white"
             }
@@ -805,11 +845,13 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     </motion.button>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-md">
                         <SparklesIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest">{captureEngine.environment} Scan Engine</span>
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">{isMobileDevice ? 'Mobile Camera' : 'Desktop Scan Engine'}</span>
                     </div>
-                    <button onClick={toggleCamera} className="p-3 text-white/70 hover:text-white bg-black/40 backdrop-blur-md rounded-2xl border border-white/10 transition-all active:scale-95 pointer-events-auto cursor-pointer">
-                        <ArrowsRightLeftIcon className="w-6 h-6" />
-                    </button>
+                    {!isMobileDevice && (
+                        <button onClick={toggleCamera} className="p-3 text-white/70 hover:text-white bg-black/40 backdrop-blur-md rounded-2xl border border-white/10 transition-all active:scale-95 pointer-events-auto cursor-pointer">
+                            <ArrowsRightLeftIcon className="w-6 h-6" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Main Viewport Container */}
@@ -821,6 +863,34 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                     <img src={previewImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10" style={{ filter: isGrayscale ? 'grayscale(100%)' : 'none' }} alt="Preview" />
                                 </motion.div>
                                 <canvas ref={overlayCanvasRef} onMouseDown={handleDragStart} onMouseMove={handleDragging} onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd} onTouchStart={handleDragStart} onTouchMove={handleDragging} onTouchEnd={handleDragEnd} className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-10" />
+                            </motion.div>
+                        ) : isMobileDevice ? (
+                            /* STATE MOBILE: DIRECT NATIVE CAMERA TRIGGER SCREEN */
+                            <motion.div key="mobile_native" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="p-6 text-center max-w-sm mx-auto flex flex-col items-center gap-5 z-30">
+                                <div className="p-5 bg-[#d4a574]/15 border border-[#d4a574]/30 rounded-3xl text-[#d4a574] animate-bounce">
+                                    <VideoCameraIcon className="w-10 h-10" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-black text-lg tracking-tight">Opening Phone Camera...</h3>
+                                    <p className="text-xs text-white/60 leading-relaxed mt-1.5">
+                                        Take a document photo with your phone's native camera. It will automatically load here for perspective crop and post-processing.
+                                    </p>
+                                </div>
+                                <div className="flex flex-col gap-2.5 w-full mt-2">
+                                    <button
+                                        onClick={() => nativeCameraInputRef.current?.click()}
+                                        className="w-full py-4 bg-[#d4a574] hover:bg-[#c39463] text-slate-950 rounded-2xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#d4a574]/20 flex items-center justify-center gap-2"
+                                    >
+                                        <VideoCameraIcon className="w-5 h-5" />
+                                        <span>Open Phone Camera</span>
+                                    </button>
+                                    <button
+                                        onClick={openFilePicker}
+                                        className="w-full py-3 bg-white/10 hover:bg-white/15 text-white/90 rounded-2xl text-xs font-bold border border-white/10 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        Select from Gallery / PDF
+                                    </button>
+                                </div>
                             </motion.div>
                         ) : (isInitializing || (!stream && hasPermission !== false)) ? (
                             /* STATE 1: HIGH-TECH CAMERA LOADING STATE */
@@ -843,44 +913,41 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                 </div>
                             </motion.div>
                         ) : (hasPermission === false || !stream || streamStuck) ? (
-                            /* STATE 2: LOCAL STREAM OFFLINE TROUBLESHOOTING OVERLAY */
+                            /* STATE 2: LOCAL STREAM OFFLINE OVERLAY */
                             <motion.div key="offline" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 text-center max-w-sm mx-auto flex flex-col items-center gap-4 z-30">
                                 <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full animate-bounce">
                                     <VideoCameraIcon className="w-8 h-8" />
                                 </div>
                                 <div>
                                     <h3 className="text-white font-bold text-base">Local Camera Stream Offline</h3>
-                                    <p className="text-xs text-white/50 leading-relaxed mt-1">
-                                        The camera stream is paused, black, or blocked by browser permissions.
+                                    <p className="text-xs text-white/60 leading-relaxed mt-1">
+                                        The web camera stream is offline or blocked. You can snap a photo with your device camera directly below.
                                     </p>
                                 </div>
                                 <div className="flex flex-col gap-2 w-full max-w-xs mt-1">
                                     <button
-                                        onClick={() => {
-                                            if (videoRef.current) {
-                                                videoRef.current.play().catch(e => console.warn("Manual force play failed:", e));
-                                            }
-                                        }}
-                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-lg shadow-indigo-500/10"
+                                        onClick={() => nativeCameraInputRef.current?.click()}
+                                        className="w-full py-3 bg-[#d4a574] hover:bg-[#c39463] text-slate-950 rounded-2xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-lg shadow-[#d4a574]/20 flex items-center justify-center gap-2"
                                     >
-                                        Force Start Player
+                                        <VideoCameraIcon className="w-4 h-4" />
+                                        <span>Take Photo with Device Camera</span>
                                     </button>
                                     <button
                                         onClick={handleRetake}
                                         className="w-full py-3 bg-white/10 hover:bg-white/15 text-white rounded-2xl text-xs font-bold border border-white/10 transition-all active:scale-95 cursor-pointer"
                                     >
-                                        Restart Camera Device
+                                        Retry WebRTC Camera Stream
                                     </button>
                                     <button
                                         onClick={openFilePicker}
                                         className="w-full py-3 bg-white/5 hover:bg-white/10 text-white/80 rounded-2xl text-xs font-bold border border-white/10 transition-all active:scale-95 cursor-pointer"
                                     >
-                                        Upload Document File
+                                        Choose File / PDF
                                     </button>
                                 </div>
                             </motion.div>
                         ) : (
-                            /* STATE 3: LIVE ACTIVE VIDEO STREAM */
+                            /* STATE 3: LIVE ACTIVE VIDEO STREAM (DESKTOP) */
                             <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full relative">
                                 <video
                                     ref={(el) => {
@@ -904,8 +971,24 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                         )}
                     </AnimatePresence>
 
-                    {/* GCash-style Helper Alert Message Banner */}
-                    {!previewImage && (
+                    {/* Helper Alert Message Banner */}
+                    {previewImage ? (
+                        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-2 rounded-full border border-[#d4a574]/40 shadow-2xl backdrop-blur-md bg-slate-950/85">
+                            <span className="text-[11px] font-black text-[#d4a574] px-1 tracking-tight">4 Corners (1, 2, 3, 4)</span>
+                            <button
+                                onClick={handleResetCrop}
+                                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-full text-[10px] font-extrabold border border-white/10 active:scale-95 transition-all cursor-pointer"
+                            >
+                                Reset
+                            </button>
+                            <button
+                                onClick={handleFullCrop}
+                                className="px-2.5 py-1 bg-[#d4a574]/20 hover:bg-[#d4a574]/30 text-[#d4a574] rounded-full text-[10px] font-extrabold border border-[#d4a574]/40 active:scale-95 transition-all cursor-pointer"
+                            >
+                                Full Page
+                            </button>
+                        </div>
+                    ) : !isMobileDevice && (
                         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/10 shadow-lg backdrop-blur-md bg-black/60">
                             <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${
                                 borderColor === 'green' ? 'bg-emerald-500' : borderColor === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
@@ -927,7 +1010,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                         <p className="text-[11px] text-white/60 mt-1">{currentStep.message}</p>
                         {previewImage && edgeDetectionFailed && (
                             <p className="text-[10px] text-amber-200 mt-1.5 font-medium">
-                                Adjust the crop box manually, then press Confirm.
+                                Drag the 4 corner handles manually, then press Confirm.
                             </p>
                         )}
                     </div>
@@ -939,6 +1022,19 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                 <button onClick={handleRotate} className="flex-1 h-14 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm border border-white/10 transition-all active:scale-95 cursor-pointer">Rotate</button>
                                 <button onClick={toggleGrayscale} className={`flex-1 h-14 rounded-2xl font-bold text-sm border border-white/10 transition-all active:scale-95 cursor-pointer ${isGrayscale ? 'bg-indigo-500 text-white' : 'bg-white/10 text-white'}`}>B&W</button>
                                 <button onClick={handleConfirm} className="flex-1 h-14 rounded-2xl bg-white hover:bg-white/90 text-slate-900 font-black text-sm transition-all active:scale-95 cursor-pointer">Confirm</button>
+                            </>
+                        ) : isMobileDevice ? (
+                            <>
+                                <button
+                                    onClick={() => nativeCameraInputRef.current?.click()}
+                                    className="flex-1 h-16 rounded-3xl bg-[#d4a574] hover:bg-[#c39463] text-slate-950 font-black text-base transition-all active:scale-95 cursor-pointer shadow-xl flex items-center justify-center gap-2"
+                                >
+                                    <VideoCameraIcon className="w-6 h-6" />
+                                    <span>Take Photo</span>
+                                </button>
+                                <button onClick={openFilePicker} className="h-16 w-16 rounded-3xl bg-white/10 hover:bg-white/15 border border-white/10 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0" title="Upload File">
+                                    <ArrowDownTrayIcon className="w-6 h-6 rotate-180" />
+                                </button>
                             </>
                         ) : (
                             <>
@@ -953,7 +1049,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                                 >
                                     {isInitializing ? 'Initializing...' : 'Capture Page'}
                                 </button>
-                                <button onClick={openFilePicker} className="h-16 w-16 rounded-3xl bg-white/10 hover:bg-white/15 border border-white/10 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer">
+                                <button onClick={openFilePicker} className="h-16 w-16 rounded-3xl bg-white/10 hover:bg-white/15 border border-white/10 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0" title="Upload Document File">
                                     <ArrowDownTrayIcon className="w-6 h-6 rotate-180" />
                                 </button>
                             </>
@@ -961,7 +1057,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     </div>
                 </div>
 
-                {/* Hidden Processing Canvas */}
+                {/* Hidden Processing Canvas & File Inputs */}
                 <canvas ref={canvasRef} className="hidden" />
                 <input
                     ref={fileInputRef}
@@ -970,12 +1066,20 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
                     onChange={handleFileUpload}
                     className="hidden"
                 />
+                <input
+                    ref={nativeCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                />
             </motion.div>
     );
 
     return createPortal(
         <AnimatePresence>
-            {isDesktop ? (
+            {!isMobileDevice ? (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 lg:p-6 bg-slate-950/85 backdrop-blur-md overflow-hidden">
                     {content}
                 </div>

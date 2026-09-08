@@ -711,21 +711,36 @@ class DocumentController extends Controller
 
     private function buildFullName($fields, $type)
     {
+        if (!$fields) return null;
+
         if ($type === 'marriage') {
-            $h = trim(($fields['husband_last_name'] ?? '') . ', ' . ($fields['husband_first_name'] ?? '') . ' ' . ($fields['husband_middle_name'] ?? '') . ' ' . ($fields['husband_suffix'] ?? ''));
-            $w = trim(($fields['wife_last_name'] ?? '') . ', ' . ($fields['wife_first_name'] ?? '') . ' ' . ($fields['wife_middle_name'] ?? '') . ' ' . ($fields['wife_suffix'] ?? ''));
-            return trim("$h & $w", " &");
+            $hLast = strtoupper(trim($fields['husband_last_name'] ?? ''));
+            $hFirst = strtoupper(trim($fields['husband_first_name'] ?? ''));
+            $hMiddle = strtoupper(trim($fields['husband_middle_name'] ?? ''));
+            $hSuffix = strtoupper(trim($fields['husband_suffix'] ?? ''));
+            $hParts = array_filter([$hLast ? "{$hLast}," : '', $hFirst, $hMiddle, $hSuffix]);
+            $hName = implode(' ', $hParts);
+
+            $wLast = strtoupper(trim($fields['wife_last_name'] ?? ''));
+            $wFirst = strtoupper(trim($fields['wife_first_name'] ?? ''));
+            $wMiddle = strtoupper(trim($fields['wife_middle_name'] ?? ''));
+            $wSuffix = strtoupper(trim($fields['wife_suffix'] ?? ''));
+            $wParts = array_filter([$wLast ? "{$wLast}," : '', $wFirst, $wMiddle, $wSuffix]);
+            $wName = implode(' ', $wParts);
+
+            $joined = implode(' & ', array_filter([$hName, $wName]));
+            return $joined ? strtoupper($joined) : null;
         }
-        
-        // Default for Birth/Death
-        $last = $fields['last_name'] ?? '';
-        $first = $fields['first_name'] ?? '';
-        $middle = $fields['middle_name'] ?? '';
-        $suffix = $fields['suffix'] ?? '';
-        
-        if (!$last && !$first) return null;
-        
-        return trim("$last, $first $middle $suffix");
+
+        $last = strtoupper(trim($fields['last_name'] ?? $fields['deceased_last_name'] ?? ''));
+        $first = strtoupper(trim($fields['first_name'] ?? $fields['deceased_first_name'] ?? ''));
+        $middle = strtoupper(trim($fields['middle_name'] ?? $fields['deceased_middle_name'] ?? ''));
+        $suffix = strtoupper(trim($fields['suffix'] ?? ''));
+
+        $parts = array_filter([$last ? "{$last}," : '', $first, $middle, $suffix]);
+        $name = implode(' ', $parts);
+
+        return $name ? strtoupper($name) : null;
     }
 
     /**
@@ -1203,7 +1218,20 @@ class DocumentController extends Controller
         $type = $request->input('type');
         $fields = $request->input('fields', []);
 
-        if (empty($type) || empty($fields)) {
+        if (empty($fields)) {
+            return response()->json([
+                'success' => true,
+                'duplicate' => false,
+                'candidate' => null
+            ]);
+        }
+
+        // Extract all candidate name components regardless of current category
+        $firstName = trim($fields['first_name'] ?? $fields['husband_first_name'] ?? $fields['wife_first_name'] ?? $fields['deceased_first_name'] ?? '');
+        $lastName  = trim($fields['last_name']  ?? $fields['husband_last_name']  ?? $fields['wife_last_name']  ?? $fields['deceased_last_name']  ?? '');
+        $regNo     = trim($fields['registry_number'] ?? $fields['registry_no'] ?? '');
+
+        if (empty($firstName) && empty($lastName) && empty($regNo)) {
             return response()->json([
                 'success' => true,
                 'duplicate' => false,
@@ -1217,64 +1245,43 @@ class DocumentController extends Controller
             $normType = 'marriage';
         }
 
-        // We look for duplicate records in issuances table
-        $query = DB::table('issuances')
-            ->where('type', $normType)
-            ->whereNull('deleted_at');
+        // Function to build query for a given type filter (or all types if null)
+        $findCandidate = function ($typeFilter = null) use ($id, $firstName, $lastName, $regNo) {
+            $query = DB::table('issuances')
+                ->whereNull('deleted_at')
+                ->where('document_id', '!=', $id);
 
-        // Let's filter candidates based on matching criteria depending on type:
-        if ($normType === 'birth') {
-            $firstName = trim($fields['first_name'] ?? '');
-            $lastName = trim($fields['last_name'] ?? '');
-            
-            if (empty($firstName) && empty($lastName)) {
-                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
+            if ($typeFilter) {
+                $query->where('type', $typeFilter);
             }
 
-            $query->where(function ($q) use ($firstName, $lastName) {
-                if (!empty($firstName) && !empty($lastName)) {
-                    $q->where('name', 'like', "%{$lastName}%")
-                      ->where('name', 'like', "%{$firstName}%");
+            $query->where(function ($q) use ($firstName, $lastName, $regNo) {
+                if (!empty($regNo)) {
+                    $q->orWhere('certNumber', 'like', "%{$regNo}%")
+                      ->orWhere('extracted_data', 'like', "%{$regNo}%");
+                }
+                if (!empty($lastName)) {
+                    if (!empty($firstName)) {
+                        $q->orWhere(function ($sub) use ($firstName, $lastName) {
+                            $sub->where('name', 'like', "%{$lastName}%")
+                                ->where('name', 'like', "%{$firstName}%");
+                        });
+                    } else {
+                        $q->orWhere('name', 'like', "%{$lastName}%");
+                    }
                 }
             });
-        } elseif ($normType === 'death') {
-            $firstName = trim($fields['first_name'] ?? '');
-            $lastName = trim($fields['last_name'] ?? '');
 
-            if (empty($firstName) && empty($lastName)) {
-                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
-            }
+            return $query->first();
+        };
 
-            $query->where(function ($q) use ($firstName, $lastName) {
-                if (!empty($firstName) && !empty($lastName)) {
-                    $q->where('name', 'like', "%{$lastName}%")
-                      ->where('name', 'like', "%{$firstName}%");
-                }
-            });
-        } elseif ($normType === 'marriage') {
-            $hFirstName = trim($fields['husband_first_name'] ?? '');
-            $hLastName = trim($fields['husband_last_name'] ?? '');
-            $wFirstName = trim($fields['wife_first_name'] ?? '');
-            $wLastName = trim($fields['wife_last_name'] ?? '');
+        // 1. Try matching with specific requested type
+        $candidate = $findCandidate($normType);
 
-            if (empty($hFirstName) && empty($hLastName) && empty($wFirstName) && empty($wLastName)) {
-                return response()->json(['success' => true, 'duplicate' => false, 'candidate' => null]);
-            }
-
-            $query->where(function ($q) use ($hFirstName, $hLastName, $wFirstName, $wLastName) {
-                if (!empty($hLastName)) {
-                    $q->where('name', 'like', "%{$hLastName}%");
-                }
-                if (!empty($wLastName)) {
-                    $q->where('name', 'like', "%{$wLastName}%");
-                }
-            });
+        // 2. If no match found under current category, fallback to cross-category search
+        if (!$candidate) {
+            $candidate = $findCandidate(null);
         }
-
-        // Get matching candidates (exclude the issuance representing this document itself if it exists)
-        $query->where('document_id', '!=', $id);
-
-        $candidate = $query->first();
 
         if ($candidate) {
             return response()->json([
@@ -1386,8 +1393,17 @@ class DocumentController extends Controller
         }
 
         if (!empty($status) && $status !== 'all') {
-            $conditions[] = "LOWER(status) = ?";
-            $params[] = strtolower($status);
+            $s = strtolower($status);
+            if ($s === 'processed' || $s === 'registered') {
+                $conditions[] = "LOWER(status) IN ('processed', 'issued', 'active')";
+            } elseif ($s === 'pending' || $s === 'draft') {
+                $conditions[] = "LOWER(status) IN ('pending', 'extracted', 'draft')";
+            } elseif ($s === 'issued' || $s === 'completed') {
+                $conditions[] = "LOWER(status) IN ('issued', 'completed')";
+            } else {
+                $conditions[] = "LOWER(status) = ?";
+                $params[] = $s;
+            }
         }
 
         if (!empty($dateFrom)) {

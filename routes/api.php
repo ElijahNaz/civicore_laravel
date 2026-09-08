@@ -97,6 +97,9 @@ Route::middleware('web')->group(function () {
         Route::get('/issuances/download/{id}',            [IssuanceController::class, 'download']);
         Route::get('/issuances/view/{id}',                [IssuanceController::class, 'view']);
         Route::post('/issuances',                         [IssuanceController::class, 'store']);
+        Route::post('/issuances/{id}/request-print',      [IssuanceController::class, 'requestPrint']);
+        Route::post('/issuances/{id}/approve-print',      [IssuanceController::class, 'approvePrint']);
+        Route::post('/issuances/{id}/reject-print',       [IssuanceController::class, 'rejectPrint']);
         Route::put('/issuances/{id}',                     [IssuanceController::class, 'update']);
         Route::delete('/issuances/{id}',                  [IssuanceController::class, 'destroy']);
         Route::post('/issuances/{id}/undo',               [IssuanceController::class, 'undo']);
@@ -143,6 +146,7 @@ Route::middleware('web')->group(function () {
             Route::post('/templates/config',            [TemplateController::class, 'updateConfig']);
 
             // Portal Settings
+            Route::get('/settings',                     [SettingController::class, 'index']);
             Route::post('/settings',                    [SettingController::class, 'update']);
 
             // Announcements Management
