@@ -969,16 +969,6 @@ class DocumentController extends Controller
         $doc = $documents[0];
         $metadata = json_decode($doc->metadata ?? '[]', true) ?: [];
         $status = strtolower($doc->status ?? 'pending');
-        
-        // Always return the original upload. OCR data is for indexing and review only.
-        $mimetype = $metadata['mimetype'] ?? null;
-        if (!$mimetype) {
-            $ext = pathinfo($metadata['originalName'] ?? 'file.png', PATHINFO_EXTENSION);
-            $mimetype = match(strtolower($ext)) {
-                'png' => 'image/png', 'jpg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp',
-                'gif' => 'image/gif', 'pdf' => 'application/pdf', default => 'application/octet-stream'
-            };
-        }
 
         if (empty($doc->file_path) || !\Storage::disk('public')->exists($doc->file_path)) {
             $docTypeTitle = ucfirst($doc->type ?? 'Civil Registry') . ' Record';
@@ -999,9 +989,23 @@ class DocumentController extends Controller
         }
 
         $fullPath = \Storage::disk('public')->path($doc->file_path);
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+
+        $mimetype = \Illuminate\Support\Facades\File::mimeType($fullPath)
+            ?: ($metadata['mimetype'] ?? null);
+
+        if (!$mimetype) {
+            $mimetype = match ($ext) {
+                'png' => 'image/png',
+                'jpg', 'jpeg' => 'image/jpeg',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif',
+                'pdf' => 'application/pdf',
+                default => 'application/octet-stream',
+            };
+        }
 
         // If it's a PDF and we're asking for the raw preview, prefer generated page images.
-        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
         if ($request->has('raw') && $ext === 'pdf') {
             $dir = dirname($fullPath);
             $base = pathinfo($fullPath, PATHINFO_FILENAME);
@@ -1025,7 +1029,7 @@ class DocumentController extends Controller
 
         return response()->file($fullPath, [
             'Content-Type' => $mimetype,
-            'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? $doc->name ?? 'document') . '"'
+            'Content-Disposition' => $disposition . '; filename="' . ($metadata['originalName'] ?? $doc->name ?? basename($fullPath)) . '"'
         ]);
     }
 
