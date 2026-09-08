@@ -4,6 +4,8 @@ import {
     InboxIcon,
     MagnifyingGlassIcon,
     LinkIcon,
+    PaperClipIcon,
+    QrCodeIcon,
     SparklesIcon,
     UserIcon,
     CalendarIcon,
@@ -13,10 +15,12 @@ import {
     XMarkIcon,
     ExclamationTriangleIcon,
     ClockIcon,
-    DocumentTextIcon
+    DocumentTextIcon,
+    ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import AttachDocumentModal from './AttachDocumentModal';
+import TicketScannerModal from './TicketScannerModal';
 
 export default function PendingRequests({ showAlert, refreshCounter, viewSelectors, counter }) {
     const [tickets, setTickets] = useState([]);
@@ -27,8 +31,28 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
     const [statusFilter, setStatusFilter] = useState('pending');
     const [isLoading, setIsLoading] = useState(false);
 
+    const prevCountRef = React.useRef(0);
+
+    const playNotificationSound = () => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        } catch (e) {}
+    };
+
     // Modal triggers
     const [isAttachOpen, setIsAttachOpen] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [isDeclineOpen, setIsDeclineOpen] = useState(false);
     const [declineReason, setDeclineReason] = useState('');
     const [declinePreset, setDeclinePreset] = useState('');
@@ -49,8 +73,12 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
         wife_first_name: '', wife_middle_name: '', wife_last_name: '', date_of_marriage: '', place_of_marriage: ''
     });
 
+    const sanitizeName = (val) => val ? val.replace(/[^a-zA-Z\s\.\,\'\-\ñ\Ñ\u00C0-\u024F]/g, '') : '';
+
     const handleWalkinDetailChange = (field, val) => {
-        setWalkinDetails(prev => ({ ...prev, [field]: val }));
+        const isName = field.includes('name') && !field.includes('place') && !field.includes('date');
+        const cleanVal = isName ? sanitizeName(val) : val;
+        setWalkinDetails(prev => ({ ...prev, [field]: cleanVal }));
     };
 
     // Caching (SWR) on mount / purpose or status filter change
@@ -96,7 +124,22 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                 })
             ]);
 
-            setTickets(ticketsRes.data);
+            const prevCount = prevCountRef.current;
+            const newTickets = ticketsRes.data;
+            if (prevCount > 0 && newTickets.length > prevCount) {
+                const latest = newTickets[0];
+                playNotificationSound();
+                if (showAlert && latest) {
+                    showAlert({
+                        title: 'New Request Received!',
+                        message: `Ticket ${latest.ticket_number} (${latest.client_name}) was added to the digital inbox.`,
+                        type: 'info'
+                    });
+                }
+            }
+            prevCountRef.current = newTickets.length;
+
+            setTickets(newTickets);
             setStats(statsRes.data);
 
             sessionStorage.setItem(`civicore_pending_tickets_${purposeFilter}_${statusFilter}`, JSON.stringify(ticketsRes.data));
@@ -259,32 +302,43 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
                 {/* Left: Pending Tickets List */}
                 <div className="lg:col-span-1 bg-white/70 backdrop-blur-xl border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col h-full overflow-hidden">
-                    <div className="flex justify-between items-center mb-4">
+                    {/* Header Title Row */}
+                    <div className="flex items-center justify-between mb-3">
                         <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-                            <InboxIcon className="w-5 h-5 text-[#d4a574]" />
-                            Digital Inbox
+                            <InboxIcon className="w-5 h-5 text-[#d4a574] shrink-0" />
+                            <span>Digital Inbox</span>
                             <span className="bg-[#d4a574]/20 text-[#c49a67] px-2 py-0.5 rounded-full text-xs font-bold leading-none">
                                 {tickets.length}
                             </span>
                         </h3>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setIsWalkinModalOpen(true)}
-                                className="px-3 py-1.5 bg-[#0f172a] text-[#d4a574] rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
-                            >
-                                + Walk-in
-                            </button>
-                            <button
-                                onClick={() => fetchPendingTickets(false)}
-                                className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-650 transition-colors"
-                                title="Reload inbox"
-                            >
-                                <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => fetchPendingTickets(false)}
+                            className="p-1.5 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-650 transition-colors shrink-0"
+                            title="Reload inbox"
+                        >
+                            <ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                        </button>
                     </div>
 
-                    <div className="space-y-3 mb-4">
+                    {/* Dedicated Action Buttons Row Below */}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                        <button
+                            onClick={() => setIsScannerOpen(true)}
+                            className="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-150 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
+                            title="Scan Ticket QR Code"
+                        >
+                            <QrCodeIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <span>Scan QR</span>
+                        </button>
+                        <button
+                            onClick={() => setIsWalkinModalOpen(true)}
+                            className="px-3 py-2 bg-[#0f172a] text-[#d4a574] rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-2xs whitespace-nowrap"
+                        >
+                            <span>+ Walk-in</span>
+                        </button>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
                         <div className="relative">
                             <MagnifyingGlassIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
@@ -297,27 +351,33 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                         </div>
 
                         {/* Filters Row */}
-                        <div className="flex gap-2 mb-4">
-                            <select
-                                value={statusFilter}
-                                onChange={e => setStatusFilter(e.target.value)}
-                                className="flex-1 px-3 py-2 text-xs font-black uppercase tracking-wider border border-slate-200 rounded-xl bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/20 cursor-pointer"
-                            >
-                                <option value="pending">Inbox</option>
-                                <option value="ready_for_pickup">Waiting</option>
-                                <option value="completed">Completed</option>
-                            </select>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="relative">
+                                <select
+                                    value={statusFilter}
+                                    onChange={e => setStatusFilter(e.target.value)}
+                                    className="w-full appearance-none pl-3 pr-7 py-2 text-xs font-black uppercase tracking-wider border border-slate-200 rounded-xl bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/20 cursor-pointer truncate"
+                                >
+                                    <option value="pending">Inbox</option>
+                                    <option value="ready_for_pickup">Waiting</option>
+                                    <option value="completed">Completed</option>
+                                </select>
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
 
-                            <select
-                                value={purposeFilter}
-                                onChange={e => setPurposeFilter(e.target.value)}
-                                className="flex-1 px-3 py-2 text-xs font-black uppercase tracking-wider border border-slate-200 rounded-xl bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/20 cursor-pointer"
-                            >
-                                <option value="all">All Purposes</option>
-                                <option value="birth">Birth</option>
-                                <option value="death">Death</option>
-                                <option value="marriage">Marriage</option>
-                            </select>
+                            <div className="relative">
+                                <select
+                                    value={purposeFilter}
+                                    onChange={e => setPurposeFilter(e.target.value)}
+                                    className="w-full appearance-none pl-3 pr-7 py-2 text-xs font-black uppercase tracking-wider border border-slate-200 rounded-xl bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#d4a574]/20 cursor-pointer truncate"
+                                >
+                                    <option value="all">All Purposes</option>
+                                    <option value="birth">Birth</option>
+                                    <option value="death">Death</option>
+                                    <option value="marriage">Marriage</option>
+                                </select>
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
                         </div>
                     </div>
 
@@ -525,7 +585,7 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                                         onClick={() => setIsAttachOpen(true)}
                                         className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
                                     >
-                                        <LinkIcon className="w-4 h-4" />
+                                        <PaperClipIcon className="w-4 h-4" />
                                         {selectedTicket.request_status === 'ready_for_pickup' ? 'Change Attached File' : 'Attach File'}
                                     </button>
                                     {selectedTicket.request_status === 'ready_for_pickup' && (
@@ -588,7 +648,7 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                                         <input
                                             type="text"
                                             value={walkinName}
-                                            onChange={e => setWalkinName(e.target.value)}
+                                            onChange={e => setWalkinName(sanitizeName(e.target.value))}
                                             placeholder="e.g. Juan Dela Cruz"
                                             className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#d4a574]/50"
                                         />
@@ -868,6 +928,15 @@ export default function PendingRequests({ showAlert, refreshCounter, viewSelecto
                     </div>
                 )}
             </AnimatePresence>
+
+            <TicketScannerModal
+                isOpen={isScannerOpen}
+                onClose={() => setIsScannerOpen(false)}
+                onTicketSelect={(ticket) => {
+                    setSelectedTicket(ticket);
+                    setIsScannerOpen(false);
+                }}
+            />
         </div>
     );
 }

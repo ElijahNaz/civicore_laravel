@@ -123,13 +123,17 @@ class UserController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'first_name' => 'required|string|max:255',
-            'middle_name'=> 'nullable|string|max:255',
-            'last_name'  => 'required|string|max:255',
+            'first_name' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
+            'middle_name'=> ['nullable', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
+            'last_name'  => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
             'email'      => 'required|email|unique:users,email',
             'password'   => 'required|string|min:7',
             'role'       => 'required|in:Admin,SuperAdmin',
             'avatar'     => 'nullable|string',
+        ], [
+            'first_name.regex'  => 'First name cannot contain numbers or invalid special characters.',
+            'middle_name.regex' => 'Middle name cannot contain numbers or invalid special characters.',
+            'last_name.regex'   => 'Last name cannot contain numbers or invalid special characters.',
         ]);
 
         if ($validator->fails()) {
@@ -228,9 +232,9 @@ class UserController extends Controller
 
         // Validation Rules
         $rules = [
-            'first_name' => 'required|string|max:255',
-            'middle_name'=> 'nullable|string|max:255',
-            'last_name'  => 'required|string|max:255',
+            'first_name' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
+            'middle_name'=> ['nullable', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
+            'last_name'  => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z\s\.\,\'\-\x{00F1}\x{00D1}\x{00C0}-\x{024F}]+$/u'],
             'avatar'     => 'nullable|string', // Base64 expected
         ];
 
@@ -240,7 +244,11 @@ class UserController extends Controller
             $rules['role']  = 'required|in:Admin,SuperAdmin';
         }
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $rules, [
+            'first_name.regex'  => 'First name cannot contain numbers or invalid special characters.',
+            'middle_name.regex' => 'Middle name cannot contain numbers or invalid special characters.',
+            'last_name.regex'   => 'Last name cannot contain numbers or invalid special characters.',
+        ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()->first()], 400);

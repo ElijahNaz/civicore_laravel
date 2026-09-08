@@ -1231,7 +1231,8 @@ def process_ocr_gemini(data: dict):
     
     if doc_type_clean == 'marriage' or doc_type_clean == 'marriage_license':
         prompt = """
-        You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Marriage).
+        You are an expert system for reading Philippine Civil Registry documents (specifically Certificate of Marriage / Marriage License).
+        CRITICAL SAFETY REQUIREMENT: You MUST verify if the provided image is an official Philippine Civil Registry Document (Birth, Death, or Marriage Certificate). If the image is NOT a civil registry document (for example: a photo of a person, animal, vehicle, landscape, random text, meme, or blank paper), set "is_valid_document": false and set "document_validation_error" to a clear message describing why it was rejected.
         Please extract the data from this image and return it in a clean JSON format.
         Return ONLY the JSON object. Do not include any markdown formatting or extra text outside the JSON.
         
@@ -1254,16 +1255,62 @@ def process_ocr_gemini(data: dict):
           "barangay": null,
           "date_of_marriage": null,
           "place_of_marriage": null,
+          "time_of_marriage": null,
           
           "husband_first_name": null,
           "husband_middle_name": null,
           "husband_last_name": null,
           "husband_suffix": null,
+          "husband_dob": null,
+          "husband_age": null,
+          "husband_place_of_birth": null,
+          "husband_citizenship": null,
+          "husband_residence": null,
+          "husband_religion": null,
+          "husband_civil_status": null,
+          "husband_father_name": null,
+          "husband_father_citizenship": null,
+          "husband_mother_maiden_name": null,
+          "husband_mother_citizenship": null,
+          "husband_consent_person": null,
+          "husband_consent_relationship": null,
+          "husband_consent_residence": null,
           
           "wife_first_name": null,
           "wife_middle_name": null,
           "wife_last_name": null,
-          "wife_suffix": null
+          "wife_suffix": null,
+          "wife_dob": null,
+          "wife_age": null,
+          "wife_place_of_birth": null,
+          "wife_citizenship": null,
+          "wife_residence": null,
+          "wife_religion": null,
+          "wife_civil_status": null,
+          "wife_father_name": null,
+          "wife_father_citizenship": null,
+          "wife_mother_maiden_name": null,
+          "wife_mother_citizenship": null,
+          "wife_consent_person": null,
+          "wife_consent_relationship": null,
+          "wife_consent_residence": null,
+          
+          "marriage_license_no": null,
+          "marriage_license_issued_on": null,
+          "marriage_license_issued_at": null,
+          "solemnizing_officer_name": null,
+          "solemnizing_officer_title": null,
+          "solemnizing_officer_religion_sect": null,
+          "solemnizing_officer_registry_no": null,
+          "solemnizing_officer_expiry": null,
+          
+          "witness_1_name": null,
+          "witness_2_name": null,
+          "prepared_by_name": null,
+          "prepared_by_date": null,
+          "registered_by_name": null,
+          "registered_by_date": null,
+          "remarks": null
         }
         """
     elif doc_type_clean == 'death':
@@ -1299,6 +1346,11 @@ def process_ocr_gemini(data: dict):
           "date_of_death": null,
           "date_of_birth": null,
           "age": null,
+          "age_completed_years": null,
+          "age_months": null,
+          "age_days": null,
+          "age_hours": null,
+          "age_minutes": null,
           "place_of_death": null,
           "civil_status": null,
           "religion": null,
@@ -1306,17 +1358,52 @@ def process_ocr_gemini(data: dict):
           "residence": null,
           "occupation": null,
           
-          "father_first_name": null,
-          "father_middle_name": null,
-          "father_last_name": null,
-          "father_suffix": null,
+          "father_name": null,
+          "mother_maiden_name": null,
           
-          "mother_maiden_first_name": null,
-          "mother_maiden_middle_name": null,
-          "mother_maiden_last_name": null,
-          "mother_maiden_suffix": null,
+          "cause_of_death": null,
+          "cause_of_death_immediate": null,
+          "cause_of_death_antecedent": null,
+          "cause_of_death_underlying": null,
+          "other_significant_conditions": null,
+          "maternal_condition": null,
+          "manner_of_death": null,
+          "place_of_external_cause": null,
+          "autopsy": null,
           
-          "cause_of_death": null
+          "attendant_type": null,
+          "attendant_other": null,
+          "attendant_duration_from": null,
+          "attendant_duration_to": null,
+          
+          "certifying_officer_name": null,
+          "certifying_officer_title": null,
+          "certifying_officer_address": null,
+          "certifying_officer_date": null,
+          "reviewed_by_name": null,
+          
+          "corpse_disposal": null,
+          "burial_permit_number": null,
+          "burial_permit_date_issued": null,
+          "transfer_permit_number": null,
+          "transfer_permit_date_issued": null,
+          "cemetery_address": null,
+          
+          "informant_name": null,
+          "informant_relationship": null,
+          "informant_address": null,
+          "informant_date": null,
+          
+          "prepared_by_name": null,
+          "prepared_by_title": null,
+          "prepared_by_date": null,
+          "received_by_name": null,
+          "received_by_title": null,
+          "received_by_date": null,
+          "registered_by_name": null,
+          "registered_by_title": null,
+          "registered_by_date": null,
+          "remarks": null
         }
         """
     else:

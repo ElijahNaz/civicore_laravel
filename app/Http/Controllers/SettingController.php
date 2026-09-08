@@ -10,6 +10,21 @@ use App\Models\User;
 class SettingController extends Controller
 {
     /**
+     * Get all portal settings.
+     */
+    public function index()
+    {
+        $settings = Setting::all()->pluck('value', 'key')->toArray();
+
+        // Defaults
+        if (!isset($settings['ticket_limits_enabled'])) {
+            $settings['ticket_limits_enabled'] = '1';
+        }
+
+        return response()->json(['success' => true, 'settings' => $settings]);
+    }
+
+    /**
      * Update settings. Only allowed for SuperAdmins/Admins depending on rules.
      * We'll allow any logged-in valid staff (Admin, SuperAdmin) to update portal settings.
      */
@@ -23,9 +38,10 @@ class SettingController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'opening_hours'       => 'nullable|string|max:255',
-            'announcement_active' => 'nullable|boolean',
-            'announcement_text'   => 'nullable|string|max:500',
+            'opening_hours'         => 'nullable|string|max:255',
+            'announcement_active'   => 'nullable|boolean',
+            'announcement_text'     => 'nullable|string|max:500',
+            'ticket_limits_enabled' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -53,6 +69,14 @@ class SettingController extends Controller
             Setting::updateOrCreate(
                 ['key' => 'announcement_text'],
                 ['value' => $request->input('announcement_text')]
+            );
+        }
+
+        // Ticket Rate Limits Enable/Disable
+        if ($request->has('ticket_limits_enabled')) {
+            Setting::updateOrCreate(
+                ['key' => 'ticket_limits_enabled'],
+                ['value' => $request->input('ticket_limits_enabled') ? '1' : '0']
             );
         }
 

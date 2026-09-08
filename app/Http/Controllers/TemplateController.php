@@ -135,46 +135,105 @@ class TemplateController extends Controller
     /**
      * Get a preview image of a PDF template page
      */
+    /**
+     * Get a preview image of a PDF template page
+     */
     public function getPreview(Request $request)
     {
         $fileName = $request->query('file');
+        $type = $request->query('type');
         $page = (int) $request->query('page', 1);
 
-        if (!$fileName) {
-            return response()->json(['error' => 'File parameter is required'], 400);
+        if (!$fileName && !$type) {
+            return response()->json(['error' => 'File or type parameter is required'], 400);
         }
 
-        $filePath = base_path('Templates' . DIRECTORY_SEPARATOR . $fileName);
-        if (!File::exists($filePath)) {
-            return response()->json(['error' => 'File not found at ' . $filePath], 404);
-        }
+        $directory = base_path('Templates');
 
-        // Check if we already have the split images
-        $baseName = pathinfo($fileName, PATHINFO_FILENAME);
-        $previewPath = base_path('Templates' . DIRECTORY_SEPARATOR . "{$baseName}_page_{$page}.jpg");
-
-        if (!File::exists($previewPath)) {
-            // Call Python OCR server to split PDF
-            try {
-                $response = Http::timeout(60)->post('http://127.0.0.1:5000/split', [
-                    'file_path' => $filePath
-                ]);
-
-                if ($response->failed()) {
-                    Log::error("Failed to split PDF: " . $response->body());
-                    return response()->json(['error' => 'Failed to split PDF via OCR server'], 500);
-                }
-            } catch (\Exception $e) {
-                Log::error("OCR server unreachable: " . $e->getMessage());
-                return response()->json(['error' => 'OCR server unreachable: ' . $e->getMessage()], 500);
+        // 1. If type is passed or fileName matches category key (birth, death, marriage)
+        $effectiveType = strtolower($type ?: $fileName);
+        if (in_array($effectiveType, ['birth', 'death', 'marriage', 'marriage_license'])) {
+            $pathFromService = \App\Services\TemplateConfigService::getTemplatePath($effectiveType);
+            if ($pathFromService && File::exists($pathFromService)) {
+                return response()->file($pathFromService);
             }
         }
 
-        if (File::exists($previewPath)) {
-            return response()->file($previewPath);
+        // 2. Direct file path match in Templates folder
+        if ($fileName) {
+            $directPath = base_path('Templates' . DIRECTORY_SEPARATOR . $fileName);
+            if (File::exists($directPath)) {
+                $ext = strtolower(pathinfo($directPath, PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    return response()->file($directPath);
+                }
+            }
+
+            // 3. Search for existing split page images matching filename or base name (handling typos)
+            $baseName = pathinfo($fileName, PATHINFO_FILENAME);
+            $cleanBase = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($baseName));
+
+            $allFiles = File::exists($directory) ? File::files($directory) : [];
+            foreach ($allFiles as $f) {
+                $fName = $f->getFilename();
+                $fExt = strtolower($f->getExtension());
+                if (!in_array($fExt, ['jpg', 'jpeg', 'png', 'webp'])) continue;
+
+                $fClean = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($fName));
+                
+                // Match page number and base name substring or typo match (e.g. tempalte vs template)
+                if (str_contains($fName, "_page_{$page}") || str_contains($fName, "page_{$page}")) {
+                    if (str_contains($fClean, substr($cleanBase, 0, 10)) || str_contains($cleanBase, substr($fClean, 0, 10))) {
+                        return response()->file($f->getPathname());
+                    }
+                }
+            }
+
+            // 4. Try Python OCR server to split PDF if it's a PDF
+            if (File::exists($directPath) && strtolower(pathinfo($directPath, PATHINFO_EXTENSION)) === 'pdf') {
+                try {
+                    $response = Http::timeout(10)->post('http://127.0.0.1:5000/split', [
+                        'file_path' => $directPath
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warn("OCR server split unavailable: " . $e->getMessage());
+                }
+
+                $previewPath = base_path('Templates' . DIRECTORY_SEPARATOR . "{$baseName}_page_{$page}.jpg");
+                if (File::exists($previewPath)) {
+                    return response()->file($previewPath);
+                }
+            }
         }
 
-        return response()->json(['error' => 'Preview image generation failed for ' . $previewPath], 500);
+        // 5. Fallback: try finding ANY template image matching type in Templates directory
+        if (!empty($effectiveType)) {
+            $allFiles = File::exists($directory) ? File::files($directory) : [];
+            foreach ($allFiles as $f) {
+                $fExt = strtolower($f->getExtension());
+                if (!in_array($fExt, ['jpg', 'jpeg', 'png', 'webp'])) continue;
+                $fLower = strtolower($f->getFilename());
+                if (str_contains($fLower, $effectiveType) || ($effectiveType === 'marriage' && str_contains($fLower, 'marriage'))) {
+                    return response()->file($f->getPathname());
+                }
+            }
+        }
+
+        // 6. Final fallback: Return an elegant SVG certificate backdrop
+        $title = ucfirst($effectiveType ?: 'Civil Registry') . ' Form Template';
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1100" viewBox="0 0 800 1100" fill="none">
+            <rect width="800" height="1100" fill="#ffffff"/>
+            <rect x="20" y="20" width="760" height="1060" fill="none" stroke="#0f172a" stroke-width="3"/>
+            <rect x="28" y="28" width="744" height="1044" fill="none" stroke="#94a3b8" stroke-width="1"/>
+            <text x="400" y="80" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#0f172a" text-anchor="middle">' . strtoupper($title) . '</text>
+            <text x="400" y="110" font-family="Arial, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">OFFICIAL REPUBLIC OF THE PHILIPPINES CIVIL REGISTRY FORM</text>
+            <line x1="40" y1="130" x2="760" y2="130" stroke="#cbd5e1" stroke-width="2"/>
+        </svg>';
+
+        return response($svg, 200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Disposition' => 'inline; filename="template_fallback.svg"'
+        ]);
     }
 }
 

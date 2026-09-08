@@ -202,6 +202,7 @@ export default function ExportReportModal({ isOpen, onClose }) {
                             >
                                 <option value="all">All Statuses</option>
                                 <option value="Processed">Processed / Registered</option>
+                                <option value="Issued">Issued / Completed</option>
                                 <option value="Pending">Pending / Draft</option>
                             </select>
                         </div>

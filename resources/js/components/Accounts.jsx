@@ -12,9 +12,50 @@ import { AVATAR_LIBRARY } from './AvatarLibrary.js';
 
 const Accounts = () => {
     const { showAlert } = useModal();
+    const sanitizeName = (val) => val ? val.replace(/[^a-zA-Z\s\.\,\'\-\ñ\Ñ\u00C0-\u024F]/g, '') : '';
     const [isLoading, setIsLoading] = useState(true);
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [ticketLimitsEnabled, setTicketLimitsEnabled] = useState(true);
+    const [isUpdatingLimits, setIsUpdatingLimits] = useState(false);
+
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch('/api/settings', { credentials: 'include' });
+            const data = await res.json();
+            if (data.settings && data.settings.ticket_limits_enabled !== undefined) {
+                setTicketLimitsEnabled(data.settings.ticket_limits_enabled !== '0');
+            }
+        } catch (e) {
+            console.error("Failed to fetch settings:", e);
+        }
+    };
+
+    const handleToggleLimits = async (newVal) => {
+        setIsUpdatingLimits(true);
+        setTicketLimitsEnabled(newVal);
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ ticket_limits_enabled: newVal ? 1 : 0 })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showAlert({
+                    title: 'Settings Updated',
+                    message: newVal ? 'Ticket request rate limits are now ENABLED.' : 'Ticket request rate limits are now DISABLED for testing mode.',
+                    type: 'success'
+                });
+            }
+        } catch (e) {
+            console.error("Failed to update limits setting:", e);
+            setTicketLimitsEnabled(!newVal);
+        } finally {
+            setIsUpdatingLimits(false);
+        }
+    };
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
     const [newUserFormData, setNewUserFormData] = useState({ first_name: '', middle_name: '', last_name: '', email: '', role: 'Admin', password: '', avatar: null });
     const [newUserAvatarPreview, setNewUserAvatarPreview] = useState(null);
@@ -361,6 +402,7 @@ const Accounts = () => {
             setIsLoading(false);
         }
         fetchUsers(!cachedUsers);
+        fetchSettings();
     }, []);
 
     // Set first user as default selection when data loads
@@ -476,7 +518,7 @@ const Accounts = () => {
             className="space-y-6 max-w-7xl mx-auto"
         >
             {/* Header */}
-            <motion.div variants={itemVariants} className="flex justify-between items-center mb-2">
+            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
                         <ShieldCheckIcon className="w-8 h-8 text-[#d4a574]" />
@@ -484,17 +526,42 @@ const Accounts = () => {
                     </h2>
                     <p className="text-slate-500 font-medium text-sm mt-1">
                         {JSON.parse(sessionStorage.getItem('user') || '{}').role === 'SuperAdmin'
-                            ? 'Manage personnel access and permission levels.'
+                            ? 'Manage personnel access, rate limits, and permission levels.'
                             : 'View and manage your account security settings.'}
                     </p>
                 </div>
                 {JSON.parse(sessionStorage.getItem('user') || '{}').role === 'SuperAdmin' && (
-                    <button
-                        onClick={() => setIsAddUserModalOpen(true)}
-                        className="flex items-center gap-2 bg-[#0f172a] text-white hover:bg-slate-800 transition-colors px-4 py-2 rounded-xl text-sm font-bold shadow-sm"
-                    >
-                        <PlusIcon className="w-4 h-4" /> New Account
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Testing Mode Rate Limit Toggle */}
+                        <div className="flex items-center gap-3 bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                    ⚡ Rate Limits (Testing Mode)
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-medium">
+                                    {ticketLimitsEnabled ? '1/day & 3/week ENFORCED' : 'Limits OFF (Testing Mode)'}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={isUpdatingLimits}
+                                onClick={() => handleToggleLimits(!ticketLimitsEnabled)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${ticketLimitsEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                                title={ticketLimitsEnabled ? 'Click to disable limits for testing' : 'Click to enable limits'}
+                            >
+                                <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${ticketLimitsEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                                />
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setIsAddUserModalOpen(true)}
+                            className="flex items-center gap-2 bg-[#0f172a] text-white hover:bg-slate-800 transition-colors px-4 py-2 rounded-xl text-sm font-bold shadow-sm"
+                        >
+                            <PlusIcon className="w-4 h-4" /> New Account
+                        </button>
+                    </div>
                 )}
             </motion.div>
 
@@ -844,20 +911,20 @@ const Accounts = () => {
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                                                 First Name <span className="text-rose-500 text-lg leading-none">*</span>
                                             </label>
-                                            <input required pattern="^[A-Za-z\s\-]+$" title="Only letters, spaces, and hyphens" type="text" value={newUserFormData.first_name} onChange={e => setNewUserFormData({ ...newUserFormData, first_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. John" />
+                                            <input required type="text" value={newUserFormData.first_name} onChange={e => setNewUserFormData({ ...newUserFormData, first_name: sanitizeName(e.target.value) })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. John" />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                                                 Last Name <span className="text-rose-500 text-lg leading-none">*</span>
                                             </label>
-                                            <input required pattern="^[A-Za-z\s\-]+$" title="Only letters, spaces, and hyphens" type="text" value={newUserFormData.last_name} onChange={e => setNewUserFormData({ ...newUserFormData, last_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. Doe" />
+                                            <input required type="text" value={newUserFormData.last_name} onChange={e => setNewUserFormData({ ...newUserFormData, last_name: sanitizeName(e.target.value) })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. Doe" />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                                             Middle Name <span className="text-slate-400 text-[10px] lowercase font-normal">(Optional)</span>
                                         </label>
-                                        <input pattern="^[A-Za-z\s\-]*$" title="Only letters, spaces, and hyphens" type="text" value={newUserFormData.middle_name} onChange={e => setNewUserFormData({ ...newUserFormData, middle_name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. Smith" />
+                                        <input type="text" value={newUserFormData.middle_name} onChange={e => setNewUserFormData({ ...newUserFormData, middle_name: sanitizeName(e.target.value) })} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#d4a574]/30 focus:border-[#d4a574] outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white transition-colors" placeholder="e.g. Smith" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
@@ -1222,7 +1289,7 @@ const Accounts = () => {
                                                 required
                                                 type="text"
                                                 value={editProfileFormData.first_name}
-                                                onChange={e => setEditProfileFormData({ ...editProfileFormData, first_name: e.target.value })}
+                                                onChange={e => setEditProfileFormData({ ...editProfileFormData, first_name: sanitizeName(e.target.value) })}
                                                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] outline-none text-sm font-bold text-slate-700 transition-all"
                                                 placeholder="e.g. John"
                                             />
@@ -1233,7 +1300,7 @@ const Accounts = () => {
                                                 required
                                                 type="text"
                                                 value={editProfileFormData.last_name}
-                                                onChange={e => setEditProfileFormData({ ...editProfileFormData, last_name: e.target.value })}
+                                                onChange={e => setEditProfileFormData({ ...editProfileFormData, last_name: sanitizeName(e.target.value) })}
                                                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] outline-none text-sm font-bold text-slate-700 transition-all"
                                                 placeholder="e.g. Doe"
                                             />
@@ -1244,7 +1311,7 @@ const Accounts = () => {
                                         <input
                                             type="text"
                                             value={editProfileFormData.middle_name}
-                                            onChange={e => setEditProfileFormData({ ...editProfileFormData, middle_name: e.target.value })}
+                                            onChange={e => setEditProfileFormData({ ...editProfileFormData, middle_name: sanitizeName(e.target.value) })}
                                             className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-[#d4a574]/10 focus:border-[#d4a574] outline-none text-sm font-bold text-slate-700 transition-all"
                                             placeholder="e.g. Smith"
                                         />

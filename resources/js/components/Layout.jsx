@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,15 +16,36 @@ import { useData } from './DataContext.jsx';
 import SaveToasts from './SaveToasts.jsx';
 import ActionCenter from './ActionCenter.jsx';
 import Avatar from './Avatar.jsx';
+import MobileDeviceLayout from './MobileDeviceLayout.jsx';
 
 const Layout = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    // Detect screen width for dedicated Mobile / Tablet device layout
+    const [isMobileDevice, setIsMobileDevice] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < 1024;
+    });
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobileDevice(window.innerWidth < 1024);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     const { backgroundTasks } = useData();
     const location = useLocation();
     const navigate = useNavigate();
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+    const user = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+
+    // If viewport width is inside mobile or tablet range (< 1024px), use dedicated MobileDeviceLayout
+    if (isMobileDevice) {
+        return <MobileDeviceLayout>{children}</MobileDeviceLayout>;
+    }
 
     // SuperAdmin → all items
     // Admin   → Dashboard, Documents, Issuances, Accounts
@@ -53,16 +74,12 @@ const Layout = ({ children }) => {
                 method: 'POST',
                 credentials: 'include'
             });
-            // Give a tiny delay for visual confirmation of the animation
             await new Promise(r => setTimeout(r, 600));
-        } catch (e) {
-            // Ignore errors
-        }
+        } catch (e) {}
+        localStorage.removeItem('user');
         sessionStorage.clear();
         navigate('/');
     };
-
-
 
     return (
         <div className="h-screen w-screen bg-slate-50 flex relative overflow-hidden">
@@ -70,37 +87,9 @@ const Layout = ({ children }) => {
             <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
             <div className="fixed bottom-[-10%] right-[-5%] w-[30%] h-[40%] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none z-0"></div>
             <div className="fixed top-[20%] right-[10%] w-[25%] h-[25%] bg-[#d4a574]/15 rounded-full blur-[90px] pointer-events-none z-0"></div>
-            {/* Mobile Header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-slate-900 z-50 flex items-center px-4 gap-3 shadow-lg">
-                <button
-                    onClick={toggleSidebar}
-                    className="cursor-pointer text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        {sidebarOpen ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                        )}
-                    </svg>
-                </button>
-                <span className="text-white font-semibold text-sm">Civil Registry Naic</span>
-            </div>
-
-            {/* Mobile Overlay */}
-            {sidebarOpen && (
-                <div
-                    className="md:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 transition-opacity"
-                    onClick={closeSidebar}
-                />
-            )}
-
+            
             {/* Sidebar */}
-            <aside className={`
-                fixed inset-y-0 left-0 z-50 w-64 bg-[#0f172a] text-slate-300 flex flex-col border-r border-slate-800
-                transform transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
-                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static md:shrink-0
-            `}>
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-[#0f172a] text-slate-300 flex flex-col border-r border-slate-800 shadow-2xl md:shadow-none translate-x-0 md:static md:shrink-0">
                 {/* Header branding */}
                 <div className="p-6 text-white border-b border-slate-800/40 bg-[#0f172a]/90 flex items-center gap-4 group">
                     <div className="w-12 h-12 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-500">
@@ -160,9 +149,9 @@ const Layout = ({ children }) => {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col min-w-0 bg-transparent h-screen pt-14 md:pt-0 relative z-10 w-full overflow-hidden">
+            <main className="flex-1 flex flex-col min-w-0 bg-transparent h-screen relative z-10 w-full overflow-hidden">
                 {/* Top Bar - Desktop */}
-                <header className="hidden md:flex items-center justify-between h-[3.75rem] px-6 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm/50 backdrop-blur-md bg-white/90">
+                <header className="flex items-center justify-between h-[3.75rem] px-6 bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm/50 backdrop-blur-md bg-white/90">
                     <h1 id="pageTitle" className="text-xl font-bold text-slate-800 tracking-tight">
                         {menuItems.find(m => m.path === location.pathname)?.label || 'Dashboard'}
                     </h1>
@@ -204,7 +193,7 @@ const Layout = ({ children }) => {
                 </header>
 
                 {/* Page Content */}
-                <div className="flex-1 p-3 md:p-5 overflow-x-hidden overflow-y-auto relative w-full h-[calc(100vh-3.75rem)]">
+                <div className="flex-1 p-5 overflow-x-hidden overflow-y-auto relative w-full h-[calc(100vh-3.75rem)]">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={location.pathname}

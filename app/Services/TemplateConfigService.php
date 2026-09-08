@@ -107,7 +107,9 @@ class TemplateConfigService
                 ['key' => 'date_of_death', 'x' => 0.55, 'y' => 0.15, 'w' => 0.20, 'h' => 0.015],
                 ['key' => 'date_of_birth', 'x' => 0.20, 'y' => 0.175, 'w' => 0.20, 'h' => 0.015],
                 ['key' => 'age', 'x' => 0.55, 'y' => 0.175, 'w' => 0.15, 'h' => 0.015],
-                ['key' => 'place_of_death', 'x' => 0.25, 'y' => 0.20, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'place_of_death_hospital', 'x' => 0.25, 'y' => 0.20, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'place_of_death_city', 'x' => 0.52, 'y' => 0.20, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'place_of_death_province', 'x' => 0.74, 'y' => 0.20, 'w' => 0.20, 'h' => 0.015],
                 ['key' => 'civil_status', 'x' => 0.20, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
                 ['key' => 'religion', 'x' => 0.45, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
                 ['key' => 'citizenship', 'x' => 0.70, 'y' => 0.225, 'w' => 0.15, 'h' => 0.015],
@@ -123,30 +125,96 @@ class TemplateConfigService
                 ['key' => 'mother_maiden_last_name', 'x' => 0.65, 'y' => 0.35, 'w' => 0.15, 'h' => 0.015],
 
                 // MEDICAL CERTIFICATE
-                ['key' => 'cause_of_death', 'x' => 0.25, 'y' => 0.42, 'w' => 0.60, 'h' => 0.030],
+                ['key' => 'cause_of_death_a', 'x' => 0.25, 'y' => 0.40, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'cause_of_death_b', 'x' => 0.25, 'y' => 0.42, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'cause_of_death_c', 'x' => 0.25, 'y' => 0.44, 'w' => 0.60, 'h' => 0.015],
+                ['key' => 'maternal_condition', 'x' => 0.25, 'y' => 0.47, 'w' => 0.30, 'h' => 0.015],
+                ['key' => 'manner_of_death', 'x' => 0.60, 'y' => 0.47, 'w' => 0.25, 'h' => 0.015],
+
+                // ATTENDANT & INFORMANT
+                ['key' => 'attendant_type', 'x' => 0.20, 'y' => 0.52, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'attendant_name', 'x' => 0.50, 'y' => 0.52, 'w' => 0.35, 'h' => 0.015],
+                ['key' => 'attendant_title', 'x' => 0.20, 'y' => 0.55, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'attendant_address', 'x' => 0.50, 'y' => 0.55, 'w' => 0.35, 'h' => 0.015],
+                ['key' => 'informant_name', 'x' => 0.25, 'y' => 0.62, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'informant_relationship', 'x' => 0.55, 'y' => 0.62, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'informant_address', 'x' => 0.25, 'y' => 0.65, 'w' => 0.55, 'h' => 0.015],
+                ['key' => 'informant_date', 'x' => 0.25, 'y' => 0.68, 'w' => 0.20, 'h' => 0.015],
+
+                // REGISTRAR & REMARKS
+                ['key' => 'prepared_by_name', 'x' => 0.25, 'y' => 0.72, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'prepared_by_title', 'x' => 0.25, 'y' => 0.735, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'prepared_by_date', 'x' => 0.25, 'y' => 0.75, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'registered_by_name', 'x' => 0.60, 'y' => 0.72, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'registered_by_title', 'x' => 0.60, 'y' => 0.735, 'w' => 0.25, 'h' => 0.015],
+                ['key' => 'registered_by_date', 'x' => 0.60, 'y' => 0.75, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'remarks', 'x' => 0.17, 'y' => 0.80, 'w' => 0.70, 'h' => 0.070],
             ];
         }
 
         if ($type === 'marriage' || $type === 'marriage_license') {
             return [
                 // REGISTRY DETAILS
-                ['key' => 'registry_number', 'x' => 0.63, 'y' => 0.08, 'w' => 0.20, 'h' => 0.015],
-                ['key' => 'province', 'x' => 0.22, 'y' => 0.075, 'w' => 0.34, 'h' => 0.015],
-                ['key' => 'city_municipality', 'x' => 0.28, 'y' => 0.09, 'w' => 0.20, 'h' => 0.015],
+                ['key' => 'province', 'x' => 0.12, 'y' => 0.075, 'w' => 0.48, 'h' => 0.015],
+                ['key' => 'city_municipality', 'x' => 0.14, 'y' => 0.091, 'w' => 0.46, 'h' => 0.015],
+                ['key' => 'registry_number', 'x' => 0.66, 'y' => 0.070, 'w' => 0.28, 'h' => 0.025],
 
-                // HUSBAND
-                ['key' => 'husband_first_name', 'x' => 0.25, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
-                ['key' => 'husband_middle_name', 'x' => 0.45, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
-                ['key' => 'husband_last_name', 'x' => 0.65, 'y' => 0.14, 'w' => 0.15, 'h' => 0.015],
+                // HUSBAND (Left Column)
+                ['key' => 'husband_first_name', 'x' => 0.17, 'y' => 0.122, 'w' => 0.11, 'h' => 0.014],
+                ['key' => 'husband_middle_name', 'x' => 0.29, 'y' => 0.122, 'w' => 0.11, 'h' => 0.014],
+                ['key' => 'husband_last_name', 'x' => 0.41, 'y' => 0.122, 'w' => 0.12, 'h' => 0.014],
+                ['key' => 'husband_dob', 'x' => 0.17, 'y' => 0.168, 'w' => 0.25, 'h' => 0.014],
+                ['key' => 'husband_age', 'x' => 0.45, 'y' => 0.168, 'w' => 0.08, 'h' => 0.014],
+                ['key' => 'husband_place_of_birth', 'x' => 0.17, 'y' => 0.200, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_citizenship', 'x' => 0.31, 'y' => 0.230, 'w' => 0.22, 'h' => 0.014],
+                ['key' => 'husband_residence', 'x' => 0.17, 'y' => 0.260, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_religion', 'x' => 0.17, 'y' => 0.290, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_civil_status', 'x' => 0.17, 'y' => 0.320, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_father_name', 'x' => 0.17, 'y' => 0.345, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_father_citizenship', 'x' => 0.17, 'y' => 0.375, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_mother_maiden_name', 'x' => 0.17, 'y' => 0.400, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_mother_citizenship', 'x' => 0.17, 'y' => 0.430, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_consent_person', 'x' => 0.17, 'y' => 0.455, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_consent_relationship', 'x' => 0.17, 'y' => 0.485, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'husband_consent_residence', 'x' => 0.17, 'y' => 0.510, 'w' => 0.36, 'h' => 0.014],
 
-                // WIFE
-                ['key' => 'wife_first_name', 'x' => 0.25, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
-                ['key' => 'wife_middle_name', 'x' => 0.45, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
-                ['key' => 'wife_last_name', 'x' => 0.65, 'y' => 0.22, 'w' => 0.15, 'h' => 0.015],
+                // WIFE (Right Column)
+                ['key' => 'wife_first_name', 'x' => 0.58, 'y' => 0.122, 'w' => 0.11, 'h' => 0.014],
+                ['key' => 'wife_middle_name', 'x' => 0.70, 'y' => 0.122, 'w' => 0.11, 'h' => 0.014],
+                ['key' => 'wife_last_name', 'x' => 0.82, 'y' => 0.122, 'w' => 0.12, 'h' => 0.014],
+                ['key' => 'wife_dob', 'x' => 0.58, 'y' => 0.168, 'w' => 0.25, 'h' => 0.014],
+                ['key' => 'wife_age', 'x' => 0.86, 'y' => 0.168, 'w' => 0.08, 'h' => 0.014],
+                ['key' => 'wife_place_of_birth', 'x' => 0.58, 'y' => 0.200, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_citizenship', 'x' => 0.72, 'y' => 0.230, 'w' => 0.22, 'h' => 0.014],
+                ['key' => 'wife_residence', 'x' => 0.58, 'y' => 0.260, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_religion', 'x' => 0.58, 'y' => 0.290, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_civil_status', 'x' => 0.58, 'y' => 0.320, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_father_name', 'x' => 0.58, 'y' => 0.345, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_father_citizenship', 'x' => 0.58, 'y' => 0.375, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_mother_maiden_name', 'x' => 0.58, 'y' => 0.400, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_mother_citizenship', 'x' => 0.58, 'y' => 0.430, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_consent_person', 'x' => 0.58, 'y' => 0.455, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_consent_relationship', 'x' => 0.58, 'y' => 0.485, 'w' => 0.36, 'h' => 0.014],
+                ['key' => 'wife_consent_residence', 'x' => 0.58, 'y' => 0.510, 'w' => 0.36, 'h' => 0.014],
 
                 // MARRIAGE DETAILS
-                ['key' => 'date_of_marriage', 'x' => 0.25, 'y' => 0.30, 'w' => 0.25, 'h' => 0.015],
-                ['key' => 'place_of_marriage', 'x' => 0.60, 'y' => 0.30, 'w' => 0.30, 'h' => 0.015],
+                ['key' => 'place_of_marriage', 'x' => 0.22, 'y' => 0.542, 'w' => 0.72, 'h' => 0.014],
+                ['key' => 'date_of_marriage', 'x' => 0.22, 'y' => 0.570, 'w' => 0.35, 'h' => 0.014],
+                ['key' => 'time_of_marriage', 'x' => 0.72, 'y' => 0.570, 'w' => 0.22, 'h' => 0.014],
+                ['key' => 'marriage_license_no', 'x' => 0.22, 'y' => 0.690, 'w' => 0.20, 'h' => 0.014],
+                ['key' => 'solemnizing_officer_name', 'x' => 0.05, 'y' => 0.745, 'w' => 0.35, 'h' => 0.014],
+                ['key' => 'solemnizing_officer_title', 'x' => 0.42, 'y' => 0.745, 'w' => 0.20, 'h' => 0.014],
+                ['key' => 'witness_1_name', 'x' => 0.05, 'y' => 0.785, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'witness_2_name', 'x' => 0.50, 'y' => 0.785, 'w' => 0.42, 'h' => 0.014],
+
+                // REGISTRAR & REMARKS
+                ['key' => 'prepared_by_name', 'x' => 0.05, 'y' => 0.835, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'prepared_by_title', 'x' => 0.05, 'y' => 0.850, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'prepared_by_date', 'x' => 0.05, 'y' => 0.865, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'registered_by_name', 'x' => 0.52, 'y' => 0.835, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'registered_by_title', 'x' => 0.52, 'y' => 0.850, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'registered_by_date', 'x' => 0.52, 'y' => 0.865, 'w' => 0.42, 'h' => 0.014],
+                ['key' => 'remarks', 'x' => 0.05, 'y' => 0.900, 'w' => 0.90, 'h' => 0.035],
             ];
         }
         
@@ -156,16 +224,27 @@ class TemplateConfigService
     public static function getTemplatePath($type)
     {
         $type = strtolower($type);
+        
+        $candidates = [
+            public_path("Templates/{$type}.jpg"),
+            public_path("Templates/{$type}.png"),
+            public_path("Templates/{$type}.jpeg"),
+            public_path("Templates/{$type}.pdf"),
+        ];
+
         if ($type === 'birth') {
-            return base_path('Templates/certificate of live birth template_page_1.jpg');
+            $candidates[] = base_path('Templates/certificate of live birth template_page_1.jpg');
         } elseif ($type === 'death') {
-            return base_path('Templates/Certificate of death template_page_1.jpg');
+            $candidates[] = base_path('Templates/Certificate of death template_page_1.jpg');
         } elseif ($type === 'marriage' || $type === 'marriage_license') {
-            // Handle the specific typo in the existing filename
-            $path1 = base_path('Templates/certificate of marriage template_page_1.jpg');
-            $path2 = base_path('Templates/certificate of marriage tempalte_page_1.jpg');
-            if (file_exists($path1)) return $path1;
-            if (file_exists($path2)) return $path2;
+            $candidates[] = base_path('Templates/certificate of marriage template_page_1.jpg');
+            $candidates[] = base_path('Templates/certificate of marriage tempalte_page_1.jpg');
+        }
+
+        foreach ($candidates as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
         }
         
         return null;

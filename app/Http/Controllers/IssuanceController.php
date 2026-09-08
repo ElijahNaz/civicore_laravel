@@ -258,6 +258,83 @@ class IssuanceController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function requestPrint(Request $request, $id)
+    {
+        $userId = $request->session()->get('user_id');
+        $dbUser = $userId ? \App\Models\User::find($userId) : null;
+        $userName = $dbUser ? $dbUser->name : $request->session()->get('user_name', 'Staff User');
+
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        $orNumber = $request->input('or_number');
+        if (empty($orNumber)) {
+            $orNumber = 'OR-' . date('Ymd') . '-' . str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+        }
+
+        $updateData = [
+            'status' => 'Pending Approval',
+            'or_number' => $orNumber,
+            'print_remarks' => $request->input('print_remarks', ''),
+            'requested_by' => $userName,
+            'updated_at' => now(),
+        ];
+
+        if ($request->has('ticket_id') && $request->input('ticket_id')) {
+            $updateData['ticket_number'] = DB::table('tickets')->where('id', $request->input('ticket_id'))->value('ticket_number');
+        }
+
+        DB::table('issuances')->where('id', $id)->update($updateData);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function approvePrint(Request $request, $id)
+    {
+        $userId = $request->session()->get('user_id');
+        $dbUser = $userId ? \App\Models\User::find($userId) : null;
+        if (!$dbUser || $dbUser->role !== 'SuperAdmin') {
+            return response()->json(['error' => 'SuperAdmin privileges required.'], 403);
+        }
+
+        $userName = $dbUser->name;
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        DB::table('issuances')->where('id', $id)->update([
+            'status' => 'Approved',
+            'approved_by' => $userName,
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function rejectPrint(Request $request, $id)
+    {
+        $userId = $request->session()->get('user_id');
+        $dbUser = $userId ? \App\Models\User::find($userId) : null;
+        if (!$dbUser || $dbUser->role !== 'SuperAdmin') {
+            return response()->json(['error' => 'SuperAdmin privileges required.'], 403);
+        }
+
+        $record = DB::table('issuances')->where('id', $id)->first();
+        if (!$record) {
+            return response()->json(['error' => 'Issuance not found'], 404);
+        }
+
+        DB::table('issuances')->where('id', $id)->update([
+            'status' => 'Active',
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
     public function nextCertNumber($type)
     {
         // Determine prefix based on type
